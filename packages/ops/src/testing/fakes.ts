@@ -28,8 +28,14 @@ import {
   type SessionStatus,
   type SessionUpdate,
   type Store,
+  type TemplateRegistry,
+  type TemplateRunner,
   type TokenGenerator,
 } from "@asem/core";
+import {
+  createTemplateRegistry,
+  FakeTemplateRunner,
+} from "@asem/runtime";
 import type { OpsDeps } from "../deps.ts";
 
 // --- FileSystem -----------------------------------------------------------
@@ -412,6 +418,20 @@ export const noopRedactor: Redactor = { redact: (value) => value };
 
 // --- Bundle ---------------------------------------------------------------
 
+/**
+ * A {@link TemplateRegistry} backed by the runtime's builtin templates. The
+ * registry/sequence-execution logic itself is exercised in `@asem/runtime`;
+ * operation tests only need a real resolution path for `herdr`/`claude`.
+ */
+export function makeTemplateRegistry(): TemplateRegistry {
+  return createTemplateRegistry();
+}
+
+/** A fresh fake {@link TemplateRunner} (records command/write/wait traces). */
+export function makeTemplateRunner(): TemplateRunner {
+  return new FakeTemplateRunner();
+}
+
 /** Build a full {@link OpsDeps} bundle of fakes; override any port per test. */
 export function makeOpsDeps(overrides: Partial<OpsDeps> = {}): OpsDeps {
   return {
@@ -420,6 +440,8 @@ export function makeOpsDeps(overrides: Partial<OpsDeps> = {}): OpsDeps {
     configLoader: new FakeConfigLoader(),
     scopeResolver: new FakeScopeResolver(),
     currentSessionResolver: new FakeCurrentSessionResolver(),
+    templateRegistry: makeTemplateRegistry(),
+    templateRunner: makeTemplateRunner(),
     livenessProbe: new FakeLivenessProbe(),
     clock: new FakeClock(),
     idGenerator: new FakeIdGenerator(),

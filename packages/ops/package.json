@@ -15,6 +15,7 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@asem/core": "workspace:*"
+    "@asem/core": "workspace:*",
+    "@asem/runtime": "workspace:*"
   }
 }

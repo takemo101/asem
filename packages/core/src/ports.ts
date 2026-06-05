@@ -76,6 +76,12 @@ export interface CommandResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+  /**
+   * Deterministic handle for a backgrounded process. Set only when the request
+   * had `background: true`. Part of the fake runner contract owned by
+   * `@asem/runtime`; real runners may also populate it.
+   */
+  backgroundHandle?: string;
 }
 
 /**

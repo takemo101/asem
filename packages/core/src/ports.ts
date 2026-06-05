@@ -125,11 +125,22 @@ export interface FileSystem {
   realpath(path: string): Promise<string>;
 }
 
+/**
+ * Outcome of discovering and parsing `.asem.yaml`.
+ *
+ * A discriminated result rather than `Config | null` so callers can distinguish
+ * "no config found" (`config_not_found`) from "found but unparseable"
+ * (`invalid_config`) and surface the right structured error (see
+ * implementation principle 1: parse, don't merely check).
+ */
+export type ConfigDiscovery =
+  | { kind: "found"; config: Config; configPath: string }
+  | { kind: "not_found" }
+  | { kind: "invalid"; configPath: string; issues: readonly string[] };
+
 /** Loads and parses `.asem.yaml`, walking upward from a start directory. */
 export interface ConfigLoader {
-  load(
-    startDir: string,
-  ): Promise<{ config: Config; configPath: string } | null>;
+  load(startDir: string): Promise<ConfigDiscovery>;
 }
 
 /** Resolves the Effective Scope for a working directory. */
@@ -141,6 +152,12 @@ export interface ScopeResolver {
 export interface CurrentSessionRef {
   sessionId: string;
   token: string;
+  /**
+   * Effective Scope the current-session file was registered in, when known.
+   * Operations compare it against the freshly resolved scope to detect a
+   * `scope_mismatch` (e.g. a stale current-session pointer in another worktree).
+   */
+  scope?: EffectiveScope;
 }
 
 /** Resolves the current Session within a scope (env or current-session file). */

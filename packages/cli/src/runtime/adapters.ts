@@ -18,10 +18,13 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   configSchema,
   type Clock,
+  type CommandRequest,
+  type CommandResult,
   type Config,
   type ConfigDiscovery,
   type ConfigLoader,
@@ -37,9 +40,11 @@ import {
   type ScopeResolver,
   type Session,
   type SessionStatus,
+  type TemplateRunner,
   type TokenGenerator,
 } from "@asem/core";
 import { currentSessionFileFor } from "@asem/ops";
+import { SequenceTimeoutError } from "@asem/runtime";
 
 // --- FileSystem -----------------------------------------------------------
 
@@ -276,3 +281,83 @@ export const storedStatusLivenessProbe: LivenessProbe = {
   check: (session: Session): Promise<SessionStatus> =>
     Promise.resolve(session.status),
 };
+
+// --- TemplateRunner -------------------------------------------------------
+
+/**
+ * Node-backed {@link TemplateRunner}: the real shell/file/clock side of command
+ * sequence execution. The sequence engine (`@asem/runtime`) drives it through
+ * this port, so default tests use the fake runner instead (testability rules).
+ *
+ * A timeout kills the child and throws {@link SequenceTimeoutError}, which the
+ * engine maps to a structured `timeout` error. Backgrounded commands are
+ * detached and return a pid handle without being awaited.
+ */
+export class NodeTemplateRunner implements TemplateRunner {
+  constructor(private readonly fs: FileSystem = new NodeFileSystem()) {}
+
+  run(request: CommandRequest): Promise<CommandResult> {
+    return new Promise<CommandResult>((resolve, reject) => {
+      const child = spawn(request.command, {
+        shell: true,
+        cwd: request.cwd,
+        env:
+          request.env === undefined
+            ? process.env
+            : { ...process.env, ...request.env },
+        detached: request.background ?? false,
+      });
+
+      if (request.background === true) {
+        const handle = child.pid === undefined ? "bg" : String(child.pid);
+        child.unref();
+        resolve({ stdout: "", stderr: "", exitCode: 0, backgroundHandle: handle });
+        return;
+      }
+
+      let stdout = "";
+      let stderr = "";
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      const finish = (fn: () => void): void => {
+        if (settled) return;
+        settled = true;
+        if (timer !== undefined) clearTimeout(timer);
+        fn();
+      };
+
+      child.stdout?.on("data", (chunk) => {
+        stdout += String(chunk);
+      });
+      child.stderr?.on("data", (chunk) => {
+        stderr += String(chunk);
+      });
+
+      if (request.timeoutMs !== undefined) {
+        const timeoutMs = request.timeoutMs;
+        timer = setTimeout(() => {
+          child.kill("SIGKILL");
+          finish(() => reject(new SequenceTimeoutError(timeoutMs)));
+        }, timeoutMs);
+      }
+
+      child.on("error", (error) => finish(() => reject(error)));
+      child.on("close", (code) =>
+        finish(() => resolve({ stdout, stderr, exitCode: code ?? 0 })),
+      );
+    });
+  }
+
+  async writeFile(
+    path: string,
+    contents: string,
+    options?: { mode?: number },
+  ): Promise<void> {
+    await this.fs.writeFileAtomic(path, contents, options);
+  }
+
+  async wait(ms: number): Promise<void> {
+    await delay(ms);
+  }
+}

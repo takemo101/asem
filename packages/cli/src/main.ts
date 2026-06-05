@@ -10,6 +10,7 @@ import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { OpsDeps } from "@asem/ops";
+import { createTemplateRegistry } from "@asem/runtime";
 import { openSqliteStore } from "@asem/store";
 import { processIo } from "./io.ts";
 import { runCli } from "./run.ts";
@@ -19,6 +20,7 @@ import {
   FileCurrentSessionResolver,
   GitScopeResolver,
   NodeFileSystem,
+  NodeTemplateRunner,
   passthroughRedactor,
   randomTokenGenerator,
   storedStatusLivenessProbe,
@@ -39,6 +41,10 @@ export async function createRuntimeDeps(): Promise<OpsDeps> {
     configLoader: new FileConfigLoader(fs),
     scopeResolver: new GitScopeResolver(fs),
     currentSessionResolver: new FileCurrentSessionResolver(fs),
+    // Builtin templates only for now; project-local templates from `.asem.yaml`
+    // are layered in by a later slice.
+    templateRegistry: createTemplateRegistry(),
+    templateRunner: new NodeTemplateRunner(fs),
     livenessProbe: storedStatusLivenessProbe,
     clock: systemClock,
     idGenerator: uuidIdGenerator,

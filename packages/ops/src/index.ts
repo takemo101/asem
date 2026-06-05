@@ -43,6 +43,7 @@ export {
 // Operation handlers
 export { initProject } from "./operations/init-project.ts";
 export { initSession } from "./operations/init-session.ts";
+export { createSession } from "./operations/create-session.ts";
 export { listSessions } from "./operations/list-sessions.ts";
 export { getSession } from "./operations/get-session.ts";
 export { listMessages } from "./operations/list-messages.ts";

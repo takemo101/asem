@@ -17,6 +17,8 @@ import type {
   Redactor,
   ScopeResolver,
   Store,
+  TemplateRegistry,
+  TemplateRunner,
   TokenGenerator,
 } from "@asem/core";
 
@@ -27,6 +29,10 @@ export interface OpsDeps {
   configLoader: ConfigLoader;
   scopeResolver: ScopeResolver;
   currentSessionResolver: CurrentSessionResolver;
+  /** Resolves mux/agent templates (builtin + project-local) by name. */
+  templateRegistry: TemplateRegistry;
+  /** Executes command-sequence side effects (run/write/wait) for the runtime. */
+  templateRunner: TemplateRunner;
   livenessProbe: LivenessProbe;
   clock: Clock;
   idGenerator: IdGenerator;

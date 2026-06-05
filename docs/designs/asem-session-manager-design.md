@@ -552,11 +552,18 @@ Recommended dependency direction:
            ├─> @asem/store
            └─> @asem/runtime
 
-@asem/ops     ─> @asem/core
+@asem/ops ─┬─> @asem/core
+           └─> @asem/runtime
+
 @asem/runtime ─> @asem/core
 @asem/store   ─> @asem/core
 @asem/core    ─> no project package dependencies
 ```
+
+`@asem/ops` depends on `@asem/runtime` for the pure template schema, the
+`SequenceEngine`, and the redactor. This does not import concrete I/O: the
+runtime executes only through the injected `TemplateRunner` port, so create/
+send/close operations reuse one sequence engine instead of re-implementing it.
 
 Operation handlers live in `@asem/ops` by default. `@asem/core` owns operation contracts and port interfaces only. `@asem/ops` must use injected deps for store, runtime, filesystem, config, current-session resolution, liveness probing, logging, time, ids, and token generation. CLI, MCP, and TUI must not duplicate semantic logic.
 

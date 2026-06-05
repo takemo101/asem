@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# asem runtime state (token-bearing files; never commit)
+.asem/sessions/
+.asem/current-session*.json
+.asem/tokens/
+
+# Logs
+*.log
+
+# OS / editor
+.DS_Store

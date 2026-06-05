@@ -1,0 +1,20 @@
+{
+  "name": "@asem/ops",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "asem shared operation handlers over injected ports (scaffold)",
+  "main": "src/index.ts",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@asem/core": "workspace:*"
+  }
+}

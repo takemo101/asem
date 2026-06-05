@@ -1,0 +1,19 @@
+{
+  "name": "asem",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local agent session manager (monorepo root)",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test",
+    "check": "bun run typecheck && bun run test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
+  }
+}

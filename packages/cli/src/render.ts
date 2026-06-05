@@ -1,0 +1,139 @@
+/**
+ * Human/JSON rendering for CLI operation results.
+ *
+ * Rendering is pure: each function maps an operation value (or a structured
+ * {@link OperationError}) to plain lines the caller writes through {@link CliIo}.
+ * No domain decisions live here — the CLI only formats what `@asem/ops` returns.
+ */
+import {
+  shellEscape,
+  type InitSessionOutput,
+  type Message,
+  type OperationError,
+  type Session,
+} from "@asem/core";
+
+/** Render a structured error as `error: <code>: <message>` plus detail lines. */
+export function renderError(error: OperationError): string[] {
+  const lines = [`error: ${error.code}: ${error.message}`];
+  if (error.details !== undefined) {
+    for (const [key, value] of Object.entries(error.details)) {
+      lines.push(`  ${key}: ${formatDetail(value)}`);
+    }
+  }
+  return lines;
+}
+
+function formatDetail(value: unknown): string {
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
+}
+
+// --- sessions --------------------------------------------------------------
+
+/** One Session as a compact, scannable row. */
+function sessionRow(session: Session): string {
+  const parent = session.parentSessionId ?? "-";
+  return [
+    session.id,
+    session.status,
+    session.name,
+    `${session.agent}/${session.mux}`,
+    `parent=${parent}`,
+  ].join("  ");
+}
+
+export function renderSessionList(sessions: readonly Session[]): string[] {
+  if (sessions.length === 0) {
+    return ["no sessions in scope"];
+  }
+  return sessions.map(sessionRow);
+}
+
+/** Full Session detail. `tokenHash` is intentionally omitted from output. */
+export function renderSessionDetail(
+  session: Session,
+  attachHint?: string,
+): string[] {
+  const lines = [
+    `id:            ${session.id}`,
+    `name:          ${session.name}`,
+    `status:        ${session.status}`,
+    `agent:         ${session.agent}`,
+    `mux:           ${session.mux}`,
+    `parent:        ${session.parentSessionId ?? "-"}`,
+    `cwd:           ${session.cwd}`,
+    `worktree_root: ${session.worktreeRoot}`,
+    `session_dir:   ${session.sessionDir}`,
+    `created_at:    ${session.createdAt}`,
+    `updated_at:    ${session.updatedAt}`,
+    `closed_at:     ${session.closedAt ?? "-"}`,
+  ];
+  if (attachHint !== undefined) {
+    lines.push(`attach_hint:   ${attachHint}`);
+  }
+  return lines;
+}
+
+// --- attach ----------------------------------------------------------------
+
+/**
+ * Render the human attach guidance for a Session. The CLI never computes attach
+ * commands itself; it renders the `attachHint` the operation surfaced. When no
+ * hint is available yet (mux templates land in a later slice) it shows the mux
+ * coordinates so a human can attach manually. This stays CLI-human only and
+ * introduces no MCP attach semantics.
+ */
+export function renderAttach(session: Session, attachHint?: string): string[] {
+  if (attachHint !== undefined && attachHint.length > 0) {
+    return [`to attach to ${session.name} (${session.id}), run:`, attachHint];
+  }
+  return [
+    `no attach hint available for ${session.name} (${session.id})`,
+    `mux:     ${session.mux}`,
+    `mux_ref: ${JSON.stringify(session.muxRef)}`,
+  ];
+}
+
+// --- messages --------------------------------------------------------------
+
+function messageRow(message: Message): string {
+  const from = message.fromSessionId ?? "-";
+  const base = `${message.createdAt}  ${from} → ${message.toSessionId}  [${message.kind}]  ${message.body}`;
+  if (message.deliveryError !== null) {
+    return `${base}  ! ${message.deliveryError}`;
+  }
+  if (message.deliveredAt === null) {
+    return `${base}  (undelivered)`;
+  }
+  return base;
+}
+
+export function renderMessageList(messages: readonly Message[]): string[] {
+  if (messages.length === 0) {
+    return ["no messages in scope"];
+  }
+  return messages.map(messageRow);
+}
+
+// --- init / init-session ---------------------------------------------------
+
+export function renderInit(configPath: string): string[] {
+  return [`initialized asem project (${configPath})`];
+}
+
+/**
+ * Shell exports for the registered current Session. Values are shell-escaped so
+ * the block is safe to `eval "$(asem init-session ...)"`. The raw token appears
+ * only here, on stdout for the caller to consume — never in logs (the operation
+ * is given no token to log).
+ */
+export function renderInitSessionExports(output: InitSessionOutput): string[] {
+  const { session, token } = output;
+  return [
+    `export AS_SESSION_ID=${shellEscape(session.id)}`,
+    `export AS_SESSION_TOKEN=${shellEscape(token)}`,
+    `export AS_WORKSPACE_ID=${shellEscape(session.workspaceId)}`,
+    `export AS_WORKTREE_ROOT=${shellEscape(session.worktreeRoot)}`,
+  ];
+}

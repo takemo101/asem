@@ -1,14 +1,23 @@
 #!/usr/bin/env bun
 /**
- * `@asem/cli` — the installed `asem` binary.
+ * `@asem/cli` — the installed `asem` binary and its public projection API.
  *
- * Scaffold only (MIK-001). Command parsing and human rendering land in a later
- * slice. The CLI is a surface projection: it parses flags, calls shared
- * `@asem/ops` handlers, and renders results. It must not duplicate semantic
- * operation logic or redefine domain types.
+ * The CLI is a thin surface projection: it parses flags into typed operation
+ * inputs, calls shared `@asem/ops` handlers with injected deps, and renders the
+ * result. It owns no use-case semantics. The runtime composition root (real
+ * SQLite + I/O adapters) is loaded only when this file runs as the binary, so
+ * importing the package — and every default test — never pulls in SQLite/shell.
  */
-import type { OperationResult } from "@asem/core";
+export { runCli, EXIT_OK, EXIT_ERROR, EXIT_USAGE } from "./run.ts";
+export type { RunCliOptions } from "./run.ts";
+export { parseArgs } from "./parse.ts";
+export type { CliCommand, ParseResult } from "./parse.ts";
+export { BufferIo, processIo } from "./io.ts";
+export type { CliIo } from "./io.ts";
 
 export const PACKAGE_NAME = "@asem/cli";
 
-export type { OperationResult };
+if (import.meta.main) {
+  const { main } = await import("./main.ts");
+  process.exit(await main(process.argv.slice(2)));
+}

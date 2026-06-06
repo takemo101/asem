@@ -96,6 +96,23 @@ export function renderAttach(session: Session, attachHint?: string): string[] {
   ];
 }
 
+// --- create ----------------------------------------------------------------
+
+/**
+ * Render the outcome of `session create`. The Session is launched and persisted
+ * by the operation; the CLI only reports the new running Session. `status` is
+ * process/connection state ("running"), never a work outcome.
+ */
+export function renderCreatedSession(session: Session): string[] {
+  return [
+    `created ${session.name} (${session.id})`,
+    `status: ${session.status}`,
+    `agent:  ${session.agent}`,
+    `mux:    ${session.mux}`,
+    `parent: ${session.parentSessionId ?? "-"}`,
+  ];
+}
+
 // --- close / delete --------------------------------------------------------
 
 /**

@@ -14,6 +14,8 @@ const ROOT_USAGE = [
   "  init --workspace <id>            initialize an asem project in this worktree",
   "  init-session --name <name> --mux-ref <json> [--agent <a>] [--mux <m>] [--root|--parent <id>]",
   "                                   register the current agent as a Session and print shell exports",
+  "  session create <name> --prompt <text> [--agent <a>] [--mux <m>] [--cwd <dir>] [--root|--parent <id>] [--json]",
+  "                                   create and launch a new child Session",
   "  session list [--status <s>] [--parent <id>] [--refresh] [--json]",
   "                                   list Sessions in the current scope",
   "  session get <id> [--refresh] [--json]",

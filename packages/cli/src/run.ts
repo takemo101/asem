@@ -10,6 +10,7 @@
 import type { OperationError, OperationResult, OpsDeps } from "@asem/ops";
 import {
   closeSession,
+  createSession,
   deleteSession,
   getSession,
   initProject,
@@ -25,6 +26,7 @@ import { parseArgs } from "./parse.ts";
 import {
   renderAttach,
   renderClosedSession,
+  renderCreatedSession,
   renderDeletedSession,
   renderError,
   renderInit,
@@ -96,6 +98,8 @@ async function dispatch(
       return runInit(command, env);
     case "init-session":
       return runInitSession(command, env);
+    case "session-create":
+      return runSessionCreate(command, env);
     case "session-list":
       return runSessionList(command, env);
     case "session-get":
@@ -167,6 +171,34 @@ async function runInitSession(
       return;
     }
     emit(io, renderInitSessionExports(value));
+  });
+}
+
+async function runSessionCreate(
+  command: Extract<CliCommand, { type: "session-create" }>,
+  { cwd, deps, io }: DispatchEnv,
+): Promise<number> {
+  // Pure delegation: the CLI maps flags to the create_session input and renders
+  // the result. Parent resolution, template selection, launch, cleanup, and the
+  // "never persist a failed create" ordering all live in the operation.
+  const result = await createSession(
+    deps,
+    {
+      name: command.name,
+      prompt: command.prompt,
+      ...(command.agent !== undefined ? { agent: command.agent } : {}),
+      ...(command.mux !== undefined ? { mux: command.mux } : {}),
+      ...(command.cwd !== undefined ? { cwd: command.cwd } : {}),
+      ...(command.parentSessionId !== undefined
+        ? { parentSessionId: command.parentSessionId }
+        : {}),
+      ...(command.root !== undefined ? { root: command.root } : {}),
+    },
+    { cwd },
+  );
+  return render(io, result, (value) => {
+    if (command.json) emitJson(io, value.session);
+    else emit(io, renderCreatedSession(value.session));
   });
 }
 

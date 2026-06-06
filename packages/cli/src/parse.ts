@@ -27,6 +27,17 @@ export type CliCommand =
       json: boolean;
     }
   | {
+      type: "session-create";
+      name: string;
+      prompt: string;
+      agent?: string;
+      mux?: string;
+      cwd?: string;
+      parentSessionId?: string;
+      root?: boolean;
+      json: boolean;
+    }
+  | {
       type: "session-list";
       filter?: SessionListFilter;
       refresh: boolean;
@@ -214,6 +225,67 @@ function parseInitSession(args: string[]): ParseResult {
   return { kind: "command", command };
 }
 
+/**
+ * `asem session create <name> --prompt <text> [--agent <a>] [--mux <m>]
+ * [--cwd <dir>] [--root|--parent <id>] [--json]`.
+ *
+ * This is a pure surface projection over the shared `create_session` operation:
+ * it maps flags to the operation input and renders the result. Parent behavior
+ * (`--root` vs `--parent <id>` vs the current-Session fallback) is decided by
+ * the operation's truth table, so the CLI only forwards the chosen flags and
+ * rejects the one combination that is meaningless here — `--root` with
+ * `--parent` — mirroring `init-session`.
+ */
+function parseSessionCreate(args: string[]): ParseResult {
+  const flags = parseFlags(args, {
+    booleans: ["root", "json"],
+    values: ["name", "prompt", "agent", "mux", "cwd", "parent"],
+  });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { values, booleans, positionals } = flags.value;
+
+  // The name accepts the documented positional or `--name`, mirroring
+  // `message send`'s positional/flag duality.
+  const name = values.get("name") ?? positionals[0];
+  if (name === undefined || name.length === 0) {
+    return invalid(
+      "session name is required (use `asem session create <name> --prompt <text>`)",
+    );
+  }
+  if (positionals.length > 1) {
+    return invalid("unexpected extra arguments", {
+      extra: positionals.slice(1),
+    });
+  }
+
+  const prompt = values.get("prompt");
+  if (prompt === undefined) {
+    return invalid("a prompt is required (use `--prompt <text>`)");
+  }
+
+  const isRoot = booleans.has("root");
+  const parent = values.get("parent");
+  if (isRoot && parent !== undefined) {
+    return invalid("--root and --parent are mutually exclusive");
+  }
+  const agent = values.get("agent");
+  const mux = values.get("mux");
+  const cwd = values.get("cwd");
+
+  const command: CliCommand = {
+    type: "session-create",
+    name,
+    prompt,
+    json: booleans.has("json"),
+    ...(agent !== undefined ? { agent } : {}),
+    ...(mux !== undefined ? { mux } : {}),
+    ...(cwd !== undefined ? { cwd } : {}),
+    ...(parent !== undefined ? { parentSessionId: parent } : {}),
+    ...(isRoot ? { root: true } : {}),
+  };
+  return { kind: "command", command };
+}
+
 function parseSessionList(args: string[]): ParseResult {
   const flags = parseFlags(args, {
     booleans: ["refresh", "json"],
@@ -353,8 +425,10 @@ function parseSession(args: string[]): ParseResult {
   switch (sub) {
     case undefined:
       return invalid(
-        "missing session subcommand (list | get | attach | close | delete)",
+        "missing session subcommand (create | list | get | attach | close | delete)",
       );
+    case "create":
+      return parseSessionCreate(rest);
     case "list":
       return parseSessionList(rest);
     case "get":
@@ -367,7 +441,7 @@ function parseSession(args: string[]): ParseResult {
       return parseSessionDelete(rest);
     default:
       return invalid(`unknown session subcommand: ${sub}`, {
-        expected: ["list", "get", "attach", "close", "delete"],
+        expected: ["create", "list", "get", "attach", "close", "delete"],
       });
   }
 }

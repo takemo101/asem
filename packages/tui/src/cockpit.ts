@@ -22,6 +22,7 @@ import type { Message, OperationResult, Session } from "@asem/core";
 import {
   closeSession,
   deleteSession,
+  getSession,
   listMessages,
   listSessions,
   loadWorkspaceSnapshot,
@@ -89,6 +90,34 @@ export async function loadCockpitSnapshot(
       messages: messages.value.messages,
     },
   };
+}
+
+/** Ports the attach-hint loader needs (the `get_session` read subset). */
+export type AttachHintDeps = Pick<
+  OpsDeps,
+  | "store"
+  | "configLoader"
+  | "scopeResolver"
+  | "templateRegistryFactory"
+  | "livenessProbe"
+  | "clock"
+>;
+
+/**
+ * Load the operator attach hint for a Session through `get_session` — the same
+ * shared `@asem/ops` path the CLI uses, so the TUI hands the host the *same*
+ * hint instead of re-deriving attach commands. Returns `null` when no hint is
+ * available (unknown Session, no attach template, or incomplete mux refs) so the
+ * host falls back to safe manual guidance. A failed read (e.g. the Session was
+ * removed) is treated as "no hint" — attach is best-effort operator guidance.
+ */
+export async function loadAttachHint(
+  deps: AttachHintDeps,
+  ctx: OpContext,
+  sessionId: string,
+): Promise<string | null> {
+  const result = await getSession(deps, { id: sessionId }, ctx);
+  return result.ok ? (result.value.attachHint ?? null) : null;
 }
 
 /** Deps the cockpit env resolver needs (config + scope discovery). */

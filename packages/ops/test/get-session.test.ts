@@ -91,4 +91,56 @@ describe("getSession", () => {
     const stored = await store.getSessionById(scopeA, s.id);
     expect(stored!.status).toBe("exited");
   });
+
+  describe("attach hint", () => {
+    test("surfaces the herdr attach command from the captured mux ref", async () => {
+      const store = new FakeStore();
+      const s = makeSession({ mux: "herdr", muxRef: { pane_id: "w-7" } });
+      store.sessions.push(s);
+
+      const result = expectOk(
+        await getSession(depsWith(store), { id: s.id }, CTX),
+      );
+      expect(result.attachHint).toBe("herdr agent attach 'w-7'");
+    });
+
+    test("surfaces the tmux multi-step attach as one line", async () => {
+      const store = new FakeStore();
+      const s = makeSession({
+        mux: "tmux",
+        muxRef: { session_name: "main", window_id: "@1", pane_id: "%2" },
+      });
+      store.sessions.push(s);
+
+      const result = expectOk(
+        await getSession(depsWith(store), { id: s.id }, CTX),
+      );
+      expect(result.attachHint).toBe(
+        "tmux select-window -t '@1' && tmux select-pane -t '%2' && tmux attach-session -t 'main'",
+      );
+    });
+
+    test("omits the hint when the captured mux ref is incomplete", async () => {
+      const store = new FakeStore();
+      // herdr's attach references `pane_id`, which this ref lacks → no hint.
+      const s = makeSession({ mux: "herdr", muxRef: { tab_id: "t-1" } });
+      store.sessions.push(s);
+
+      const result = expectOk(
+        await getSession(depsWith(store), { id: s.id }, CTX),
+      );
+      expect(result.attachHint).toBeUndefined();
+    });
+
+    test("omits the hint when the mux template is unknown", async () => {
+      const store = new FakeStore();
+      const s = makeSession({ mux: "no-such-mux", muxRef: { pane_id: "w-7" } });
+      store.sessions.push(s);
+
+      const result = expectOk(
+        await getSession(depsWith(store), { id: s.id }, CTX),
+      );
+      expect(result.attachHint).toBeUndefined();
+    });
+  });
 });

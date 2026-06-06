@@ -18,6 +18,7 @@ import {
   type CockpitEffectOutcome,
   type EffectDeps,
   executeCockpitEffect,
+  loadAttachHint,
   loadCockpitSnapshot,
   resolveCockpitEnv,
 } from "./cockpit.ts";
@@ -130,8 +131,14 @@ export class CockpitApp {
     if (effect.kind === "attach") {
       const session = this.session(effect.sessionId);
       if (session !== null) {
-        // Leave the TUI, run the attach command, then refresh on return.
-        await this.host.attach({ session, attachHint: null });
+        // Resolve the attach hint through the same shared `get_session` path the
+        // CLI uses, then leave the TUI, run it, and refresh on return.
+        const attachHint = await loadAttachHint(
+          this.deps,
+          { cwd: this.cwdFor(effect.sessionId) },
+          effect.sessionId,
+        );
+        await this.host.attach({ session, attachHint });
       }
       const error = await this.refresh();
       this.setStatus(

@@ -321,6 +321,17 @@ describe("runCli session attach", () => {
     expect(io.outText()).toContain("tmux");
   });
 
+  test("renders the rendered attach hint when the mux ref supplies one", async () => {
+    const store = new FakeStore();
+    const s = makeSession({ mux: "herdr", muxRef: { pane_id: "w-7" } });
+    store.sessions.push(s);
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(["session", "attach", s.id], deps);
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("herdr agent attach 'w-7'");
+  });
+
   test("attach of an unknown id surfaces session_not_found (exit 1)", async () => {
     const { code, io } = await run(["session", "attach", "ghost"]);
     expect(code).toBe(EXIT_ERROR);

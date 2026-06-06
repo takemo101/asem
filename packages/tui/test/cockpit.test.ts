@@ -3,7 +3,11 @@ import { describe, expect, test } from "bun:test";
 // no real store, multiplexer, or agent (design test matrix: "TUI view-model |
 // fake @asem/ops and store snapshots").
 import { FakeStore, makeOpsDeps } from "../../ops/src/testing/fakes.ts";
-import { executeCockpitEffect, loadCockpitSnapshot } from "../src/index.ts";
+import {
+  executeCockpitEffect,
+  loadCockpitSnapshot,
+  resolveCockpitEnv,
+} from "../src/index.ts";
 import { expectErr, expectOk, makeMessage, makeSession } from "./helpers.ts";
 
 const CTX = { cwd: "/repo/a" };
@@ -46,6 +50,44 @@ describe("loadCockpitSnapshot", () => {
     );
     // Sanity: the happy-path deps still load fine.
     expectOk(await loadCockpitSnapshot(deps, CTX));
+  });
+
+  test("workspace mode loads Sessions across worktree roots", async () => {
+    const store = new FakeStore();
+    store.sessions.push(
+      makeSession({ id: "here", worktreeRoot: "/repo/a" }),
+      makeSession({
+        id: "sibling",
+        worktreeRoot: "/repo/b",
+        workspaceId: "ws_1",
+      }),
+    );
+    const deps = makeOpsDeps({ store });
+    const snap = expectOk(await loadCockpitSnapshot(deps, CTX, "workspace"));
+    expect(snap.sessions.map((s) => s.id).sort()).toEqual(["here", "sibling"]);
+  });
+});
+
+describe("resolveCockpitEnv", () => {
+  test("builds the env from the resolved context and config defaults", async () => {
+    const deps = makeOpsDeps();
+    const env = expectOk(await resolveCockpitEnv(deps, CTX.cwd, "workspace"));
+    expect(env.scopeMode).toBe("workspace");
+    expect(env.workspaceId).toBe("ws_1");
+    expect(env.worktreeRoot).toBe("/repo/a");
+    expect(env.defaultMux).toBe("herdr");
+    expect(env.defaultAgent).toBe("claude");
+  });
+
+  test("surfaces config errors unchanged", async () => {
+    const { FakeConfigLoader } = await import("../../ops/src/testing/fakes.ts");
+    const deps = makeOpsDeps({
+      configLoader: new FakeConfigLoader({ kind: "not_found" }),
+    });
+    expectErr(
+      await resolveCockpitEnv(deps, CTX.cwd, "worktree"),
+      "config_not_found",
+    );
   });
 });
 

@@ -16,14 +16,22 @@ import type { Session } from "@asem/core";
 
 export const PACKAGE_NAME = "@asem/tui";
 
-// Ops edge: snapshot loading and effect execution
+// App orchestration: controller + interactive loop
+export { CockpitApp, runCockpit, type StepResult } from "./app.ts";
+// Ops edge: snapshot loading, env resolution, and effect execution
 export {
   type CockpitEffectOutcome,
   type EffectDeps,
+  type EnvDeps,
   executeCockpitEffect,
   loadCockpitSnapshot,
+  resolveCockpitEnv,
   type SnapshotDeps,
 } from "./cockpit.ts";
+// Host seam (terminal driver interface) + built-in ANSI host
+export type { AttachRequest, CockpitHost } from "./host.ts";
+// Keyboard mapping
+export { type KeyEvent, keyToAction } from "./keymap.ts";
 export {
   badgeCount,
   incomingMessages,
@@ -34,6 +42,14 @@ export {
   seedBaseline,
 } from "./messages.ts";
 export { contextView, detailView } from "./tabs.ts";
+export {
+  AnsiCockpitHost,
+  type AnsiHostOptions,
+  decodeKeys,
+  renderFrame,
+  type TtyInput,
+  type TtyOutput,
+} from "./terminal-host.ts";
 // Pure projections
 export {
   buildSessionTree,
@@ -42,6 +58,19 @@ export {
 } from "./tree.ts";
 // View-model types
 export * from "./types.ts";
+// Render projection (the component layer)
+export {
+  type CockpitView,
+  KEYBAR,
+  type KeybarItem,
+  type LeftPaneView,
+  type LeftRow,
+  type ModalView,
+  renderCockpitView,
+  STATUS_SYMBOLS,
+  TAB_TITLES,
+  type TabHeader,
+} from "./view.ts";
 
 // Functional core: state, selectors, reducer
 export {

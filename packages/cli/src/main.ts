@@ -28,6 +28,7 @@ import {
   systemClock,
   uuidIdGenerator,
 } from "./runtime/adapters.ts";
+import { runTuiCommand } from "./tui.ts";
 
 /** Assemble the full {@link OpsDeps} bundle backed by the global SQLite DB. */
 export async function createRuntimeDeps(): Promise<OpsDeps> {
@@ -61,6 +62,16 @@ export async function main(argv: string[]): Promise<number> {
   if (argv[0] === "mcp") {
     await runMcpStdio({ cwd: process.cwd(), deps });
     return 0;
+  }
+  // The TUI needs a real terminal host, so it is launched from the composition
+  // root rather than the pure dispatch table (mirroring `asem mcp`).
+  if (argv[0] === "tui") {
+    return runTuiCommand({
+      args: argv.slice(1),
+      cwd: process.cwd(),
+      deps,
+      io: processIo,
+    });
   }
   return runCli({ argv, cwd: process.cwd(), deps, io: processIo });
 }

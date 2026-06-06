@@ -166,6 +166,27 @@ export class FakeStore implements Store {
       .map((s) => ({ ...s }));
   }
 
+  async listSessionsByWorkspace(
+    workspaceId: string,
+    filter?: SessionListFilter,
+  ): Promise<Session[]> {
+    return this.sessions
+      .filter((s) => s.workspaceId === workspaceId)
+      .filter((s) => filter?.status === undefined || s.status === filter.status)
+      .filter((s) => {
+        if (filter === undefined || filter.parentSessionId === undefined) {
+          return true;
+        }
+        return s.parentSessionId === filter.parentSessionId;
+      })
+      .sort((a, b) =>
+        a.worktreeRoot === b.worktreeRoot
+          ? byCreatedThenId(a, b)
+          : a.worktreeRoot.localeCompare(b.worktreeRoot),
+      )
+      .map((s) => ({ ...s }));
+  }
+
   async updateSession(
     scope: EffectiveScope,
     id: string,
@@ -216,6 +237,22 @@ export class FakeStore implements Store {
   ): Promise<Message[]> {
     return this.messages
       .filter((m) => inScope(m, scope))
+      .filter(
+        (m) =>
+          filter?.toSessionId === undefined ||
+          m.toSessionId === filter.toSessionId,
+      )
+      .filter((m) => filter?.undelivered !== true || m.deliveredAt === null)
+      .sort(byCreatedThenId)
+      .map((m) => ({ ...m }));
+  }
+
+  async listMessagesByWorkspace(
+    workspaceId: string,
+    filter?: MessageListFilter,
+  ): Promise<Message[]> {
+    return this.messages
+      .filter((m) => m.workspaceId === workspaceId)
       .filter(
         (m) =>
           filter?.toSessionId === undefined ||

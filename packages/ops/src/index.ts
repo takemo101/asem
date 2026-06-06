@@ -43,6 +43,10 @@ export {
   reportParent,
   sendMessage,
 } from "./operations/send-message.ts";
+export {
+  loadWorkspaceSnapshot,
+  type WorkspaceSnapshotOutput,
+} from "./operations/workspace-snapshot.ts";
 // Runtime path / layout helpers
 export {
   configPathFor,

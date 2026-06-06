@@ -1,0 +1,20 @@
+# Lefthook pre-commit checks for asem.
+#
+# Mirrors the root scripts so contributors run the same baseline locally as the
+# documented checks in AGENTS.md (`bun run typecheck`, `bun run test`,
+# `bun run check`). Hooks always invoke the root scripts rather than duplicating
+# package-specific command details.
+#
+# Note: in asem `check` already runs `lint && typecheck && test`
+# (see package.json), so it is a superset of `typecheck` and `test`. To avoid
+# running duplicate `tsc`/`bun test` invocations concurrently (which can race on
+# shared test/build outputs), these commands run sequentially (parallel: false).
+pre-commit:
+  parallel: false
+  commands:
+    typecheck:
+      run: bun run typecheck
+    test:
+      run: bun run test
+    check:
+      run: bun run check

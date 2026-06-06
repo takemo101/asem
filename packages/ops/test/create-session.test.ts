@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { type ConfigDiscovery, hashToken } from "@asem/core";
+import { type ConfigDiscovery, type ConfigLoader, hashToken } from "@asem/core";
 import { FakeTemplateRunner } from "@asem/runtime";
 import { createSession, TOKEN_FILE_MODE } from "../src/index.ts";
 import {
@@ -462,5 +462,188 @@ describe("createSession — project-local templates from .asem.yaml", () => {
     await expect(createSession(d, ROOT_INPUT, CTX)).rejects.toThrow();
     expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
     expect(d.store.sessions).toHaveLength(0);
+  });
+});
+
+describe("createSession — effective create cwd scope (MIK-025)", () => {
+  // The caller runs in scopeA but targets the sibling Worktree Root scopeB via
+  // `input.cwd`. Config, scope, parent/token checks, templates, and the launch
+  // cwd must all resolve from the target, so the Session lands in scopeB.
+  const SIBLING_CWD = scopeB.worktreeRoot;
+  const SIBLING_SESSION_DIR = `${scopeB.worktreeRoot}/.asem/sessions/${FIRST_ID}`;
+  const SIBLING_LAUNCH_PATH = `${SIBLING_SESSION_DIR}/launch.sh`;
+
+  /**
+   * Deps whose scope resolver derives Effective Scope from the cwd it is given
+   * (the default {@link FakeScopeResolver} with no fixed scope), so resolving
+   * with the target cwd reproduces scopeB and a caller cwd reproduces scopeA.
+   */
+  function siblingDeps(
+    overrides: {
+      runner?: FakeTemplateRunner;
+      store?: FakeStore;
+      configLoader?: ConfigLoader;
+      currentSessionResolver?: FakeCurrentSessionResolver;
+    } = {},
+  ) {
+    const fs = new FakeFileSystem();
+    const logger = new MemoryLogger();
+    const runner = overrides.runner ?? happyRunner();
+    const store = overrides.store ?? new FakeStore();
+    const bundle = makeOpsDeps({
+      fs,
+      logger,
+      store,
+      templateRunner: runner,
+      scopeResolver: new FakeScopeResolver(),
+      ...(overrides.configLoader
+        ? { configLoader: overrides.configLoader }
+        : {}),
+      ...(overrides.currentSessionResolver
+        ? { currentSessionResolver: overrides.currentSessionResolver }
+        : {}),
+    });
+    return { ...bundle, fs, logger, runner, store };
+  }
+
+  /** A current Session row registered in the target Worktree Root (scopeB). */
+  function currentInSiblingScope() {
+    return makeSession({
+      id: "cur_b",
+      name: "current",
+      workspaceId: scopeB.workspaceId,
+      worktreeRoot: scopeB.worktreeRoot,
+      cwd: scopeB.worktreeRoot,
+      sessionDir: `${scopeB.worktreeRoot}/.asem/sessions/cur_b`,
+      tokenHash: hashToken(CURRENT_TOKEN),
+    });
+  }
+
+  test("scopes the Session row to the target Worktree Root, not the caller's", async () => {
+    const d = siblingDeps();
+    const { session } = expectOk(
+      await createSession(d, { ...ROOT_INPUT, cwd: SIBLING_CWD }, CTX),
+    );
+
+    // The row carries the target scope and runtime layout, not the caller's.
+    expect(session.worktreeRoot).toBe(scopeB.worktreeRoot);
+    expect(session.workspaceId).toBe(scopeB.workspaceId);
+    expect(session.cwd).toBe(SIBLING_CWD);
+    expect(session.sessionDir).toBe(SIBLING_SESSION_DIR);
+
+    // It is visible in the target scope and absent from the caller scope.
+    expect(await d.store.getSessionByName(scopeB, "reviewer-1")).not.toBeNull();
+    expect(await d.store.getSessionByName(scopeA, "reviewer-1")).toBeNull();
+
+    // The launch script injects the target worktree root and changes into the
+    // target cwd before starting the agent.
+    const script = d.fs.files.get(SIBLING_LAUNCH_PATH)!.contents;
+    expect(script).toContain(
+      `export AS_WORKTREE_ROOT='${scopeB.worktreeRoot}'`,
+    );
+    expect(script).toContain(`export AS_PROJECT_ROOT='${scopeB.worktreeRoot}'`);
+    expect(script).toContain(`cd '${SIBLING_CWD}'`);
+  });
+
+  test("verifies the implicit current-Session parent in the target scope", async () => {
+    const store = new FakeStore();
+    store.sessions.push(currentInSiblingScope());
+    const d = siblingDeps({
+      store,
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: "cur_b",
+        token: CURRENT_TOKEN,
+      }),
+    });
+
+    // No parent flag: the parent is resolved + token-verified in scopeB. Were
+    // scope taken from the caller (scopeA), this lookup would miss the row.
+    const { session } = expectOk(
+      await createSession(
+        d,
+        { name: "child", prompt: "p", cwd: SIBLING_CWD },
+        CTX,
+      ),
+    );
+    expect(session.parentSessionId).toBe("cur_b");
+    expect(session.worktreeRoot).toBe(scopeB.worktreeRoot);
+  });
+
+  test("authenticates the agent-origin current Session in the target scope", async () => {
+    const store = new FakeStore();
+    store.sessions.push(currentInSiblingScope());
+    const d = siblingDeps({
+      store,
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: "cur_b",
+        token: CURRENT_TOKEN,
+      }),
+    });
+
+    // Agent-origin create must prove a current token in the *target* scope even
+    // for an explicit `--root`. A caller-scope check would fail with
+    // session_not_found because cur_b only exists in scopeB.
+    const { session } = expectOk(
+      await createSession(
+        d,
+        { ...ROOT_INPUT, cwd: SIBLING_CWD },
+        { cwd: scopeA.worktreeRoot, origin: "agent" },
+      ),
+    );
+    expect(session.worktreeRoot).toBe(scopeB.worktreeRoot);
+    expect(session.parentSessionId).toBeNull();
+  });
+
+  test("loads project-local templates from the target cwd config", async () => {
+    // The target cwd's `.asem.yaml` overrides the builtin herdr mux; the caller
+    // cwd keeps the default builtin config. Resolving config from the create cwd
+    // means the project-local template is the one that runs.
+    const targetConfig = makeConfig({
+      mux: {
+        default: "herdr",
+        templates: {
+          herdr: {
+            create: [
+              {
+                type: "run",
+                command: "my-mux create --cwd {{cwd_shell}}",
+                capture: [{ name: "pane_id", regex: "pane=(.+)", group: 1 }],
+              },
+            ],
+            run_in_pane: [
+              { type: "run", command: "my-mux run {{pane_id_shell}}" },
+            ],
+          },
+        },
+      },
+    });
+    const configLoader: ConfigLoader = {
+      async load(startDir: string): Promise<ConfigDiscovery> {
+        return startDir === SIBLING_CWD
+          ? {
+              kind: "found",
+              config: targetConfig,
+              configPath: `${SIBLING_CWD}/.asem.yaml`,
+            }
+          : {
+              kind: "found",
+              config: makeConfig(),
+              configPath: `${scopeA.worktreeRoot}/.asem.yaml`,
+            };
+      },
+    };
+    const runner = new FakeTemplateRunner({
+      commands: [{ stdout: "pane=p9" }],
+    });
+    const d = siblingDeps({ runner, configLoader });
+
+    const { session } = expectOk(
+      await createSession(d, { ...ROOT_INPUT, cwd: SIBLING_CWD }, CTX),
+    );
+
+    // The target cwd's project-local sequence ran, not the builtin herdr one.
+    expect(d.runner.commands[0]!.command).toContain("my-mux create");
+    expect(session.muxRef).toEqual({ pane_id: "p9" });
+    expect(session.worktreeRoot).toBe(scopeB.worktreeRoot);
   });
 });

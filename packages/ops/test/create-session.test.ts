@@ -18,6 +18,9 @@ const CTX = { cwd: scopeA.worktreeRoot };
 // FakeIdGenerator / FakeTokenGenerator are deterministic: first id/token below.
 const FIRST_ID = "s_0001";
 const FIRST_TOKEN = "tok_0001";
+// Raw token whose hash a seeded current Session stores, so the implicit-parent
+// path can verify it (MIK-023).
+const CURRENT_TOKEN = "tok-current";
 const SESSION_DIR = `${scopeA.worktreeRoot}/.asem/sessions/${FIRST_ID}`;
 const PROMPT_PATH = `${SESSION_DIR}/prompt.md`;
 const LAUNCH_PATH = `${SESSION_DIR}/launch.sh`;
@@ -152,14 +155,20 @@ describe("createSession — parent resolution truth table", () => {
     expect(d.store.sessions).toHaveLength(0);
   });
 
-  test("no parent flag falls back to the current Session", async () => {
+  test("no parent flag falls back to the verified current Session", async () => {
     const store = new FakeStore();
-    store.sessions.push(makeSession({ id: "cur_1", name: "current" }));
+    store.sessions.push(
+      makeSession({
+        id: "cur_1",
+        name: "current",
+        tokenHash: hashToken(CURRENT_TOKEN),
+      }),
+    );
     const d = deps({
       store,
       currentSessionResolver: new FakeCurrentSessionResolver({
         sessionId: "cur_1",
-        token: "ignored",
+        token: CURRENT_TOKEN,
       }),
     });
 
@@ -167,6 +176,48 @@ describe("createSession — parent resolution truth table", () => {
       await createSession(d, { name: "child", prompt: "p" }, CTX),
     );
     expect(session.parentSessionId).toBe("cur_1");
+  });
+
+  test("no parent flag with an invalid current-Session token returns invalid_session_token and no side effects", async () => {
+    const store = new FakeStore();
+    store.sessions.push(
+      makeSession({
+        id: "cur_1",
+        name: "current",
+        tokenHash: hashToken(CURRENT_TOKEN),
+      }),
+    );
+    const d = deps({
+      store,
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: "cur_1",
+        token: "wrong-token",
+      }),
+    });
+
+    const result = await createSession(d, { name: "child", prompt: "p" }, CTX);
+    expectErr(result, "invalid_session_token");
+
+    // Verification happens before any side effects: no extra row, no panes, no
+    // Session dir/files for the doomed create.
+    expect(d.store.sessions).toHaveLength(1);
+    expect(d.runner.commands).toHaveLength(0);
+    expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
+    expect(d.fs.files.has(PROMPT_PATH)).toBe(false);
+    expect(d.fs.files.has(LAUNCH_PATH)).toBe(false);
+  });
+
+  test("no parent flag with a current Session missing from the store returns parent_session_not_found", async () => {
+    const d = deps({
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: "ghost",
+        token: CURRENT_TOKEN,
+      }),
+    });
+    const result = await createSession(d, { name: "child", prompt: "p" }, CTX);
+    expectErr(result, "parent_session_not_found");
+    expect(d.store.sessions).toHaveLength(0);
+    expect(d.runner.commands).toHaveLength(0);
   });
 
   test("no parent flag and no current Session returns current_session_not_found", async () => {

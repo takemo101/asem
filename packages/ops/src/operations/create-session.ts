@@ -46,6 +46,7 @@ import {
   type TemplateRegistryFactory,
   type TemplateRunner,
   type TokenGenerator,
+  verifyToken,
 } from "@asem/core";
 import {
   type AgentTemplate,
@@ -322,8 +323,15 @@ export async function createSession(
  * |-----------------------------------------|-----------------------------------------|
  * | `--root` / `--no-parent`                | root Session (`null`)                   |
  * | `--parent <id>`                         | explicit parent, verified in scope      |
- * | no flag + current Session exists        | current Session as parent               |
+ * | no flag + current Session exists        | verified current Session as parent      |
  * | no flag + no current Session            | `current_session_not_found`             |
+ *
+ * Explicit `--parent <id>` is a human/local-trust selection and is only checked
+ * for scope membership. The implicit no-flag path instead adopts the *current*
+ * Session as parent, which the design treats as a verified-current-Session
+ * operation: its token is verified against the stored hash before it is used, so
+ * a stale/forged current-session pointer fails with `invalid_session_token`
+ * before any filesystem/mux/store side effects (MIK-023).
  */
 async function resolveParent(
   deps: Pick<CreateSessionDeps, "store" | "currentSessionResolver">,
@@ -351,7 +359,10 @@ async function resolveParent(
     return ok(parent.id);
   }
 
-  // No parent flag: fall back to the current Session.
+  // No parent flag: fall back to the current Session. Adopting the current
+  // Session implicitly is a verified-current-Session operation, so its token is
+  // verified before use — and because resolveParent runs before any filesystem,
+  // mux, or store side effects, a bad token fails the whole create cleanly.
   const ref = await deps.currentSessionResolver.resolve(scope);
   if (ref === null) {
     return err(
@@ -376,6 +387,15 @@ async function resolveParent(
       operationError(
         "parent_session_not_found",
         "current Session is not registered in this scope",
+        { parentSessionId: ref.sessionId },
+      ),
+    );
+  }
+  if (!verifyToken(ref.token, parent.tokenHash)) {
+    return err(
+      operationError(
+        "invalid_session_token",
+        "current Session token failed verification",
         { parentSessionId: ref.sessionId },
       ),
     );

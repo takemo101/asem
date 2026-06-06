@@ -5,6 +5,13 @@
  * present in `.gitignore` so token/log state never enters Git (ADR 0001). It is
  * idempotent: an existing config is left untouched and only missing ignore rules
  * are appended.
+ *
+ * Both files are written at the resolved Worktree Root — the same root normal
+ * Effective Scope resolution uses — not the raw shell cwd. Running `asem init`
+ * from a subdirectory must protect the worktree-local runtime paths where
+ * Session directories, token files, and the current-session pointer are later
+ * written (implementation principle 8); otherwise token-bearing state would
+ * land outside the generated ignore coverage.
  */
 import {
   err,
@@ -16,6 +23,7 @@ import {
   type OperationResult,
   ok,
   operationError,
+  type ScopeResolver,
 } from "@asem/core";
 import {
   configPathFor,
@@ -72,7 +80,7 @@ function ensureGitignoreRules(existing: string | null): string | null {
 }
 
 export async function initProject(
-  deps: { fs: FileSystem; logger?: Logger },
+  deps: { fs: FileSystem; scopeResolver: ScopeResolver; logger?: Logger },
   rawInput: InitProjectInput,
 ): Promise<OperationResult<InitProjectOutput>> {
   const parsed = initProjectInputSchema.safeParse(rawInput);
@@ -85,14 +93,18 @@ export async function initProject(
   }
   const { cwd, workspaceId } = parsed.data;
 
-  const configPath = configPathFor(cwd);
+  // Initialize the Worktree Root, not the raw cwd, so the generated ignore
+  // rules cover the worktree-local paths runtime token/log state uses.
+  const worktreeRoot = await deps.scopeResolver.resolveWorktreeRoot(cwd);
+
+  const configPath = configPathFor(worktreeRoot);
   const configExists = await deps.fs.exists(configPath);
   if (!configExists) {
     await deps.fs.writeFileAtomic(configPath, renderConfigYaml(workspaceId));
     deps.logger?.info("created .asem.yaml", { configPath });
   }
 
-  const gitignorePath = gitignorePathFor(cwd);
+  const gitignorePath = gitignorePathFor(worktreeRoot);
   const gitignoreExists = await deps.fs.exists(gitignorePath);
   const existing = gitignoreExists
     ? await deps.fs.readFile(gitignorePath)

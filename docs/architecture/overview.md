@@ -26,7 +26,7 @@ mikan と同じく local-first な設計を採用します。ただし source of
 |---|---|---|---|
 | `@asem/core` | pure domain / schema / port contracts | なし | Session / Message / Config schema、scope types、operation input/output、port interfaces、token hash、pure shell escaping helper |
 | `@asem/runtime` | template runtime | injected command/file/clock/logger ports | template registry、template interpolation、sequence execution、capture、fake runner contract、core shell escaping helper の利用 |
-| `@asem/store` | persistence adapter | SQLite | migrations、row mapping、Session / Message CRUD、scoped transaction primitives |
+| `@asem/store` | persistence adapter | SQLite | migrations、row mapping、Session / Message CRUD、scoped transaction primitives、workspace-wide read primitives (`*ByWorkspace`) for the TUI `--scope workspace` view |
 | `@asem/ops` | shared operation handlers | injected ports only | auth/scope checks、create/send/close/delete/list use-cases、operation-level cleanup semantics |
 | `@asem/cli` | installed human CLI | stdin/stdout/stderr、shell | command parsing、human rendering、`asem mcp` / `asem tui` 起動 |
 | `@asem/mcp` | AI-facing control surface | MCP stdio | MCP tool projection、shared operation handlers への委譲 |

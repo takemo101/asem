@@ -5,7 +5,13 @@ import type {
   OperationResult,
   Session,
 } from "@asem/core";
-import type { CockpitEnv } from "../src/index.ts";
+import type {
+  AttachRequest,
+  CockpitEnv,
+  CockpitHost,
+  CockpitView,
+  KeyEvent,
+} from "../src/index.ts";
 
 /** Assert an OperationResult is ok and return its value. */
 export function expectOk<T>(result: OperationResult<T>): T {
@@ -73,6 +79,44 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
     closedAt: null,
     ...overrides,
   };
+}
+
+/**
+ * A scripted {@link CockpitHost} for app tests: it replays a queue of keys,
+ * records every drawn frame, and logs attach requests. No real terminal, no real
+ * multiplexer (testability rules).
+ */
+export class FakeHost implements CockpitHost {
+  readonly frames: CockpitView[] = [];
+  readonly attaches: AttachRequest[] = [];
+  closed = false;
+  private readonly keys: (KeyEvent | null)[];
+
+  constructor(keys: (KeyEvent | null)[] = []) {
+    this.keys = [...keys];
+  }
+
+  draw(view: CockpitView): void {
+    this.frames.push(view);
+  }
+
+  nextKey(): Promise<KeyEvent | null> {
+    // Exhausted scripts end input (treated as quit by the app loop).
+    return Promise.resolve(this.keys.length === 0 ? null : this.keys.shift()!);
+  }
+
+  async attach(request: AttachRequest): Promise<void> {
+    this.attaches.push(request);
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+
+  /** The most recently drawn frame, or undefined when nothing was drawn. */
+  lastFrame(): CockpitView | undefined {
+    return this.frames[this.frames.length - 1];
+  }
 }
 
 /** Build a Message with deterministic defaults; override any field per test. */

@@ -9,6 +9,12 @@
  * Session token; the destructive ones only arrive here after the view-model's
  * confirmation gate, and `delete` is sent with `force: true` accordingly.
  *
+ * Scope: in `worktree` mode every read uses the worktree-isolated
+ * `list_sessions` / `list_messages`. In `workspace` mode the snapshot is the
+ * workspace-wide `load_workspace_snapshot`, and cross-worktree effects are run
+ * against the target Session's own worktree (the caller picks the `cwd`); the
+ * scope broadening stays confined to those reads (implementation principle 7).
+ *
  * Tests exercise this with fake `@asem/ops` deps (the `@asem/ops` in-memory
  * fakes), never a real store, multiplexer, or agent.
  */
@@ -18,11 +24,18 @@ import {
   deleteSession,
   listMessages,
   listSessions,
+  loadWorkspaceSnapshot,
   type OpContext,
   type OpsDeps,
+  resolveContext,
   sendMessage,
 } from "@asem/ops";
-import type { CockpitEffect, CockpitSnapshot } from "./types.ts";
+import type {
+  CockpitEffect,
+  CockpitEnv,
+  CockpitScopeMode,
+  CockpitSnapshot,
+} from "./types.ts";
 
 /** Ports the snapshot loader needs (a subset of {@link OpsDeps}). */
 export type SnapshotDeps = Pick<
@@ -36,15 +49,31 @@ export type SnapshotDeps = Pick<
 >;
 
 /**
- * Load the cockpit snapshot for the current Effective Scope via the shared
- * `list_sessions` and `list_messages` operations. An optional liveness pass
- * (`ctx.refreshLiveness`) refreshes process state without inferring outcome. Any
- * structured error from either read is propagated unchanged.
+ * Load the cockpit snapshot for the current scope. In `worktree` mode this is
+ * the worktree-isolated `list_sessions` / `list_messages`; in `workspace` mode
+ * it is the workspace-wide `load_workspace_snapshot`, whose rows the view-model
+ * groups by `worktree_root`. An optional liveness pass (`ctx.refreshLiveness`)
+ * refreshes process state without inferring outcome. Any structured error from
+ * the underlying reads is propagated unchanged.
  */
 export async function loadCockpitSnapshot(
   deps: SnapshotDeps,
   ctx: OpContext,
+  scopeMode: CockpitScopeMode = "worktree",
 ): Promise<OperationResult<CockpitSnapshot>> {
+  if (scopeMode === "workspace") {
+    const snapshot = await loadWorkspaceSnapshot(deps, ctx);
+    return snapshot.ok
+      ? {
+          ok: true,
+          value: {
+            sessions: snapshot.value.sessions,
+            messages: snapshot.value.messages,
+          },
+        }
+      : snapshot;
+  }
+
   const sessions = await listSessions(deps, { filter: undefined }, ctx);
   if (!sessions.ok) {
     return sessions;
@@ -58,6 +87,40 @@ export async function loadCockpitSnapshot(
     value: {
       sessions: sessions.value.sessions,
       messages: messages.value.messages,
+    },
+  };
+}
+
+/** Deps the cockpit env resolver needs (config + scope discovery). */
+export type EnvDeps = Pick<OpsDeps, "configLoader" | "scopeResolver">;
+
+/**
+ * Resolve the immutable {@link CockpitEnv} for a `cwd` and scope mode from the
+ * project context: scope identifiers, config path, and the config-derived mux /
+ * agent defaults shown on the Context tab. Surfaces `config_not_found` /
+ * `invalid_config` unchanged so the host can report them like any other CLI
+ * error.
+ */
+export async function resolveCockpitEnv(
+  deps: EnvDeps,
+  cwd: string,
+  scopeMode: CockpitScopeMode,
+): Promise<OperationResult<CockpitEnv>> {
+  const contextResult = await resolveContext(deps, cwd);
+  if (!contextResult.ok) {
+    return contextResult;
+  }
+  const { config, configPath, scope } = contextResult.value;
+  return {
+    ok: true,
+    value: {
+      scopeMode,
+      workspaceId: scope.workspaceId,
+      worktreeRoot: scope.worktreeRoot,
+      cwd,
+      configPath,
+      defaultMux: config.mux.default,
+      defaultAgent: config.agent.default,
     },
   };
 }
@@ -81,13 +144,18 @@ export type EffectDeps = OpsDeps;
  * - `close` → `close_session`;
  * - `delete` → `delete_session` with `force: true` (the view-model already
  *   required confirmation);
- * - `refresh` → reload the snapshot;
+ * - `refresh` → reload the snapshot (honoring `scopeMode`);
  * - `attach` / `quit` → host-local, no operation, surfaced for the host to act.
+ *
+ * `ctx.cwd` selects the Effective Scope the mutation runs in. In `workspace`
+ * mode the caller sets it to the target Session's worktree root so cross-worktree
+ * operations resolve to the right scope.
  */
 export async function executeCockpitEffect(
   deps: EffectDeps,
   ctx: OpContext,
   effect: CockpitEffect,
+  scopeMode: CockpitScopeMode = "worktree",
 ): Promise<OperationResult<CockpitEffectOutcome>> {
   switch (effect.kind) {
     case "send": {
@@ -124,7 +192,7 @@ export async function executeCockpitEffect(
         : result;
     }
     case "refresh": {
-      const result = await loadCockpitSnapshot(deps, ctx);
+      const result = await loadCockpitSnapshot(deps, ctx, scopeMode);
       return result.ok
         ? { ok: true, value: { kind: "refreshed", snapshot: result.value } }
         : result;

@@ -131,6 +131,15 @@ asem tui --scope workspace
 - In `workspace` scope, TUI operations on other worktrees are allowed because the human explicitly chose a workspace-wide view.
 - There is no `--scope all` in MVP.
 
+The workspace-wide read is the single sanctioned scope broadening (implementation
+principle 7). It is confined to two `@asem/store` primitives
+(`listSessionsByWorkspace` / `listMessagesByWorkspace`, bounded by `workspace_id`
+only) and one `@asem/ops` reader (`load_workspace_snapshot`); the cockpit groups
+the result by `worktree_root`. A cross-worktree operation in `workspace` scope is
+run with `cwd` set to the target Session's `worktree_root`, so the shared
+operation re-resolves to that Session's Effective Scope rather than bypassing
+scope checks.
+
 ## Config design
 
 Config file:
@@ -581,7 +590,30 @@ Command:
 asem tui
 ```
 
-Implementation choice: OpenTUI.
+Implementation choice: a renderer-agnostic cockpit core behind a `CockpitHost`
+seam, with a built-in ANSI terminal host shipping first and OpenTUI as a planned
+swap behind the same seam.
+
+The cockpit is split so the renderer stays replaceable and the behavior stays
+testable without a TTY (implementation principle 13):
+
+- pure view-model (`createCockpitState` / `dispatchCockpit` / selectors) — state,
+  navigation, tabs, ephemeral badges, send/confirm flow;
+- pure render projection (`renderCockpitView` → `CockpitView`) — the "component"
+  layer the host paints, asserted directly in tests instead of via terminal
+  snapshots;
+- pure key mapping (`keyToAction`) — modal-aware keybindings including the send
+  modal's multiline editing;
+- an app/controller (`CockpitApp`) that sequences the reducer, carries out the
+  single emitted `@asem/ops` effect, and drives the host;
+- the `CockpitHost` seam: the only TTY-touching part. The built-in
+  `AnsiCockpitHost` (no rendering dependency) implements it now; a richer
+  renderer such as OpenTUI can replace it without changing any tested logic.
+
+Default tests drive the app through a scripted fake host and the `@asem/ops`
+in-memory fakes — no real terminal and no real multiplexer. Attach is modeled
+through the host seam (`host.attach`), so a real mux is optional and skipped by
+default.
 
 ### TUI purpose
 

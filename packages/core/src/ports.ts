@@ -37,6 +37,16 @@ export interface Store {
     scope: EffectiveScope,
     filter?: SessionListFilter,
   ): Promise<Session[]>;
+  /**
+   * List every Session sharing a `workspace_id`, across worktree roots. This is
+   * the one sanctioned scope-broadening read (implementation principle 7): the
+   * TUI `--scope workspace` view groups the result by `worktree_root`. Normal
+   * worktree-isolated operations must use {@link listSessions} instead.
+   */
+  listSessionsByWorkspace(
+    workspaceId: string,
+    filter?: SessionListFilter,
+  ): Promise<Session[]>;
   updateSession(
     scope: EffectiveScope,
     id: string,
@@ -50,6 +60,15 @@ export interface Store {
   insertMessage(message: Message): Promise<void>;
   listMessages(
     scope: EffectiveScope,
+    filter?: MessageListFilter,
+  ): Promise<Message[]>;
+  /**
+   * List every Message sharing a `workspace_id`, across worktree roots. The
+   * workspace-wide companion to {@link listMessages}, used only by the TUI
+   * `--scope workspace` view; normal reads stay worktree-isolated.
+   */
+  listMessagesByWorkspace(
+    workspaceId: string,
     filter?: MessageListFilter,
   ): Promise<Message[]>;
   markMessageDelivered(

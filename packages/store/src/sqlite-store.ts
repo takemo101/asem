@@ -148,6 +148,39 @@ export class SqliteStore implements Store {
     return rows.map(parseSessionRow);
   }
 
+  async listSessionsByWorkspace(
+    workspaceId: string,
+    filter?: SessionListFilter,
+  ): Promise<Session[]> {
+    // Workspace-wide read: bounded by workspace_id only, never worktree_root
+    // (the sanctioned `--scope workspace` broadening, implementation
+    // principle 7). Ordered by worktree_root first so callers can group rows.
+    const clauses = ["workspace_id = ?"];
+    const params: SQLQueryBindings[] = [workspaceId];
+
+    if (filter?.status !== undefined) {
+      clauses.push("status = ?");
+      params.push(filter.status);
+    }
+    if (filter && filter.parentSessionId !== undefined) {
+      if (filter.parentSessionId === null) {
+        clauses.push("parent_session_id is null");
+      } else {
+        clauses.push("parent_session_id = ?");
+        params.push(filter.parentSessionId);
+      }
+    }
+
+    const rows = this.db
+      .query(
+        `select * from sessions
+         where ${clauses.join(" and ")}
+         order by worktree_root asc, created_at asc, id asc`,
+      )
+      .all(...params) as SessionRow[];
+    return rows.map(parseSessionRow);
+  }
+
   async updateSession(
     scope: EffectiveScope,
     id: string,
@@ -231,6 +264,34 @@ export class SqliteStore implements Store {
     // `inbox` is an ops-level concept (self-addressed history): ops resolves the
     // current Session and passes it as `toSessionId`. The store has no notion of
     // a "current Session", so it intentionally does not act on `inbox` here.
+
+    const rows = this.db
+      .query(
+        `select * from messages
+         where ${clauses.join(" and ")}
+         order by created_at asc, id asc`,
+      )
+      .all(...params) as MessageRow[];
+    return rows.map(parseMessageRow);
+  }
+
+  async listMessagesByWorkspace(
+    workspaceId: string,
+    filter?: MessageListFilter,
+  ): Promise<Message[]> {
+    // Workspace-wide read: bounded by workspace_id only (the `--scope workspace`
+    // companion to listMessages). Chronological order matches listMessages so
+    // the cockpit's per-Session Message views read the same way.
+    const clauses = ["workspace_id = ?"];
+    const params: SQLQueryBindings[] = [workspaceId];
+
+    if (filter?.toSessionId !== undefined) {
+      clauses.push("to_session_id = ?");
+      params.push(filter.toSessionId);
+    }
+    if (filter?.undelivered === true) {
+      clauses.push("delivered_at is null");
+    }
 
     const rows = this.db
       .query(

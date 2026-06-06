@@ -9,6 +9,7 @@
 import {
   type Clock,
   type ConfigLoader,
+  type CurrentSessionResolver,
   err,
   type ListSessionsInput,
   type ListSessionsOutput,
@@ -20,7 +21,7 @@ import {
   type ScopeResolver,
   type Store,
 } from "@asem/core";
-import { resolveContext } from "../context.ts";
+import { authenticateAgentOrigin, resolveContext } from "../context.ts";
 import type { OpContext } from "../deps.ts";
 import { refreshLivenessAll } from "./liveness.ts";
 
@@ -28,6 +29,7 @@ type ListSessionsDeps = {
   store: Store;
   configLoader: ConfigLoader;
   scopeResolver: ScopeResolver;
+  currentSessionResolver: CurrentSessionResolver;
   livenessProbe: LivenessProbe;
   clock: Clock;
 };
@@ -51,6 +53,11 @@ export async function listSessions(
     return contextResult;
   }
   const { scope } = contextResult.value;
+
+  const auth = await authenticateAgentOrigin(deps, scope, ctx);
+  if (!auth.ok) {
+    return auth;
+  }
 
   const stored = await deps.store.listSessions(scope, parsed.data.filter);
   const sessions = ctx.refreshLiveness

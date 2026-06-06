@@ -129,13 +129,13 @@ export async function sendMessage(
   let senderToken: string | null = null;
   if (ctx.origin !== "operator") {
     const ref = await deps.currentSessionResolver.resolve(scope);
-    if (ref !== null) {
+    if (ctx.origin === "agent" || ref !== null) {
       const auth = await authenticateCurrentSession(deps, scope);
       if (!auth.ok) {
         return auth;
       }
       sender = auth.value;
-      senderToken = ref.token;
+      senderToken = ref?.token ?? null;
     }
   }
 

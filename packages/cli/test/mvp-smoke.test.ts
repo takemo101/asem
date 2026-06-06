@@ -423,6 +423,14 @@ describe("MVP smoke — MCP tool projection", () => {
 
   test("projects shared operations over the same store", async () => {
     const w = await seedWorld();
+    // MCP is agent-originated, so give the tool calls a verified current
+    // Session. The tools themselves receive no token argument; they rely on the
+    // current-session resolver just like an already-running agent would.
+    w.currentSession.ref = {
+      sessionId: w.ids.reviewer,
+      token: w.tokens.reviewer,
+      scope: SCOPE,
+    };
     const ctx = { cwd: CWD, deps: w.base };
 
     const listed = mcpValue<{ sessions: Session[] }>(

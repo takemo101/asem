@@ -92,16 +92,17 @@ export async function closeSession(
   }
   const { config, scope } = contextResult.value;
 
-  // Auth: agent-originated calls present a current Session and must verify its
-  // token; human local-trust calls have none and close under local trust.
+  // Auth: MCP/agent-origin calls must verify the current Session. Human
+  // local-trust calls keep the previous behavior: if a pointer is present,
+  // verify it; if none is present, close under local trust.
   const ref = await deps.currentSessionResolver.resolve(scope);
   let currentToken: string | null = null;
-  if (ref !== null) {
+  if (ctx.origin === "agent" || ref !== null) {
     const auth = await authenticateCurrentSession(deps, scope);
     if (!auth.ok) {
       return auth;
     }
-    currentToken = ref.token;
+    currentToken = ref?.token ?? null;
   }
 
   // Scoped lookup enforces same-scope close: a sibling-worktree Session is not

@@ -58,7 +58,11 @@ import {
   renderAgentCommand,
   SequenceEngine,
 } from "@asem/runtime";
-import { resolveContext, sameScope } from "../context.ts";
+import {
+  authenticateCurrentSession,
+  resolveContext,
+  sameScope,
+} from "../context.ts";
 import type { OpContext } from "../deps.ts";
 import { joinPath, sessionDirFor, TOKEN_FILE_MODE } from "../paths.ts";
 
@@ -136,6 +140,16 @@ export async function createSession(
   }
   const { config, scope } = contextResult.value;
   const cwd = input.cwd ?? ctx.cwd;
+
+  // MCP/agent-origin create calls must prove a current Session token even when
+  // the requested parent mode is explicit `--parent` or `--root`. CLI human
+  // local-trust calls leave origin unset and keep the documented local behavior.
+  if (ctx.origin === "agent") {
+    const auth = await authenticateCurrentSession(deps, scope);
+    if (!auth.ok) {
+      return auth;
+    }
+  }
 
   // Fail fast on a same-scope name collision before any side effects so a
   // doomed create never spawns an orphan pane.

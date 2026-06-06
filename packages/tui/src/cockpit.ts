@@ -98,6 +98,7 @@ export type AttachHintDeps = Pick<
   | "store"
   | "configLoader"
   | "scopeResolver"
+  | "currentSessionResolver"
   | "templateRegistryFactory"
   | "livenessProbe"
   | "clock"

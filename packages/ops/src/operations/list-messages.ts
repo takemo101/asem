@@ -25,7 +25,11 @@ import {
   type ScopeResolver,
   type Store,
 } from "@asem/core";
-import { authenticateCurrentSession, resolveContext } from "../context.ts";
+import {
+  authenticateAgentOrigin,
+  authenticateCurrentSession,
+  resolveContext,
+} from "../context.ts";
 import type { OpContext } from "../deps.ts";
 
 type ListMessagesDeps = {
@@ -54,6 +58,11 @@ export async function listMessages(
     return contextResult;
   }
   const { scope } = contextResult.value;
+
+  const auth = await authenticateAgentOrigin(deps, scope, ctx);
+  if (!auth.ok) {
+    return auth;
+  }
 
   const filter = parsed.data.filter;
   let storeFilter: MessageListFilter | undefined = filter;

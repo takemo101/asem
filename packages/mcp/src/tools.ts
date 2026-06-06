@@ -237,63 +237,81 @@ const tools = {
     definition: toolDefinitions.init_session,
     handler: (args, { cwd, deps }) =>
       parsed(initSessionInputSchema, args, async (input) =>
-        operationResult(await initSession(deps, input, { cwd })),
+        operationResult(
+          await initSession(deps, input, { cwd, origin: "agent" }),
+        ),
       ),
   },
   create_session: {
     definition: toolDefinitions.create_session,
     handler: (args, { cwd, deps }) =>
       parsed(createSessionInputSchema, args, async (input) =>
-        operationResult(await createSession(deps, input, { cwd })),
+        operationResult(
+          await createSession(deps, input, { cwd, origin: "agent" }),
+        ),
       ),
   },
   list_sessions: {
     definition: toolDefinitions.list_sessions,
     handler: (args, { cwd, deps }) =>
       parsed(listSessionsInputSchema, args, async (input) =>
-        operationResult(await listSessions(deps, input, { cwd })),
+        operationResult(
+          await listSessions(deps, input, { cwd, origin: "agent" }),
+        ),
       ),
   },
   get_session: {
     definition: toolDefinitions.get_session,
     handler: (args, { cwd, deps }) =>
       parsed(getSessionInputSchema, args, async (input) =>
-        operationResult(await getSession(deps, input, { cwd })),
+        operationResult(
+          await getSession(deps, input, { cwd, origin: "agent" }),
+        ),
       ),
   },
   close_session: {
     definition: toolDefinitions.close_session,
     handler: (args, { cwd, deps }) =>
       parsed(getSessionInputSchema, args, async (input) =>
-        operationResult(await closeSession(deps, input, { cwd })),
+        operationResult(
+          await closeSession(deps, input, { cwd, origin: "agent" }),
+        ),
       ),
   },
   delete_session: {
     definition: toolDefinitions.delete_session,
     handler: (args, { cwd, deps }) =>
       parsed(deleteSessionInputSchema, args, async (input) =>
-        operationResult(await deleteSession(deps, input, { cwd })),
+        operationResult(
+          await deleteSession(deps, input, { cwd, origin: "agent" }),
+        ),
       ),
   },
   send_message: {
     definition: toolDefinitions.send_message,
     handler: (args, { cwd, deps }) =>
       parsed(sendMessageInputSchema, args, async (input) =>
-        operationResult(await sendMessage(deps, input, { cwd })),
+        operationResult(
+          await sendMessage(deps, input, { cwd, origin: "agent" }),
+        ),
       ),
   },
   report_parent: {
     definition: toolDefinitions.report_parent,
     handler: (args, { cwd, deps }) =>
       parsed(reportParentInputSchema, args, async (input) =>
-        operationResult(await reportParent(deps, input, { cwd })),
+        operationResult(
+          await reportParent(deps, input, { cwd, origin: "agent" }),
+        ),
       ),
   },
   list_messages: {
     definition: toolDefinitions.list_messages,
     handler: (args, { cwd, deps }) =>
       parsed(listMessagesInputSchema, args, async (input) =>
-        operationResult(await listMessages(deps, input, { cwd })),
+        operationResult(
+          await listMessages(deps, input, { cwd, origin: "agent" }),
+        ),
       ),
   },
 } satisfies Record<string, ToolSpec>;

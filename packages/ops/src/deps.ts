@@ -51,16 +51,20 @@ export interface OpsDeps {
  * discovery and scope resolution; `refreshLiveness` opts a read into a
  * lightweight liveness pass (list/get only).
  *
- * `origin` is set by a surface that is inherently the human operator (the TUI)
- * to force the human local-trust path: the operation acts with no source
- * attribution instead of adopting whatever current-Session pointer happens to
- * live in the resolved worktree. It is part of the surface-built context, never
- * parsed from external MCP/CLI input, so an agent cannot set it to send
- * anonymously. When unset, messaging auto-detects origin from the current-
- * Session pointer (agent-originated when one resolves, human when none does).
+ * `origin` is set by trusted composition roots, never parsed from external
+ * command/tool input:
+ * - `operator` is used by human TUI sends to force the human local-trust path:
+ *   the operation acts with no source attribution instead of adopting whatever
+ *   current-Session pointer happens to live in the resolved worktree.
+ * - `agent` is used by the MCP stdio surface: scoped reads and mutations must
+ *   verify the current Session token instead of falling back to human local
+ *   trust.
+ *
+ * When unset, CLI/direct ops keep the MVP local-trust default and messaging
+ * auto-detects origin from the current-Session pointer.
  */
 export interface OpContext {
   cwd: string;
   refreshLiveness?: boolean;
-  origin?: "operator";
+  origin?: "operator" | "agent";
 }

@@ -19,6 +19,7 @@ import {
   type Clock,
   type Config,
   type ConfigLoader,
+  type CurrentSessionResolver,
   err,
   type GetSessionInput,
   type GetSessionOutput,
@@ -34,7 +35,7 @@ import {
   type TemplateRegistryFactory,
 } from "@asem/core";
 import { muxTemplateSchema, renderAttachHint } from "@asem/runtime";
-import { resolveContext } from "../context.ts";
+import { authenticateAgentOrigin, resolveContext } from "../context.ts";
 import type { OpContext } from "../deps.ts";
 import { refreshLiveness } from "./liveness.ts";
 
@@ -42,6 +43,7 @@ type GetSessionDeps = {
   store: Store;
   configLoader: ConfigLoader;
   scopeResolver: ScopeResolver;
+  currentSessionResolver: CurrentSessionResolver;
   templateRegistryFactory: TemplateRegistryFactory;
   livenessProbe: LivenessProbe;
   clock: Clock;
@@ -66,6 +68,11 @@ export async function getSession(
     return contextResult;
   }
   const { config, scope } = contextResult.value;
+
+  const auth = await authenticateAgentOrigin(deps, scope, ctx);
+  if (!auth.ok) {
+    return auth;
+  }
 
   const stored = await deps.store.getSessionById(scope, parsed.data.id);
   if (stored === null) {

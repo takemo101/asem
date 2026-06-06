@@ -10,7 +10,9 @@
  *
  *   1. resolve config + Effective Scope;
  *   2. resolve the sender (agent-originated calls verify the current Session's
- *      token; human local-trust calls send with no source attribution);
+ *      token; human local-trust calls send with no source attribution — and an
+ *      operator surface forces that human path via `ctx.origin === "operator"`,
+ *      so it never adopts the resolved worktree's current-Session pointer);
  *   3. resolve the target Session — scoped, so a Session in a sibling worktree
  *      is simply not found (this is how same-scope sender/target is enforced);
  *   4. record the Message row truthfully, then attempt delivery;
@@ -117,17 +119,24 @@ export async function sendMessage(
   const { config, scope } = contextResult.value;
 
   // Auth: agent-originated calls present a current Session and must verify its
-  // token; human local-trust calls have none and send with no attribution.
-  const ref = await deps.currentSessionResolver.resolve(scope);
+  // token; human local-trust calls have none and send with no attribution. An
+  // operator surface (`ctx.origin === "operator"`, set by the TUI) forces the
+  // human path: it never resolves the current-Session pointer, so a workspace-
+  // scope send into a sibling worktree is recorded operator-originated rather
+  // than silently impersonating that worktree's current Session (MIK-022;
+  // ADR 0003).
   let sender: Session | null = null;
   let senderToken: string | null = null;
-  if (ref !== null) {
-    const auth = await authenticateCurrentSession(deps, scope);
-    if (!auth.ok) {
-      return auth;
+  if (ctx.origin !== "operator") {
+    const ref = await deps.currentSessionResolver.resolve(scope);
+    if (ref !== null) {
+      const auth = await authenticateCurrentSession(deps, scope);
+      if (!auth.ok) {
+        return auth;
+      }
+      sender = auth.value;
+      senderToken = ref.token;
     }
-    sender = auth.value;
-    senderToken = ref.token;
   }
 
   // Same effective scope is enforced for sender and target: the target lookup

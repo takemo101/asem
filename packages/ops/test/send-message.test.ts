@@ -112,6 +112,37 @@ describe("sendMessage — same-worktree delivery", () => {
     expect(message.fromSessionId).toBe(me.id);
     expect(message.deliveredAt).not.toBeNull();
   });
+
+  test("operator origin sends with no attribution even when a current Session resolves", async () => {
+    // The resolved worktree has its own current-Session pointer (an agent), but
+    // an operator surface (TUI) must not adopt it: `ctx.origin === "operator"`
+    // forces the human local-trust path, recording the Message with no source
+    // attribution rather than silently impersonating that Session (MIK-022).
+    const store = new FakeStore();
+    const target = makeTarget();
+    const me = seedCurrent(store);
+    store.sessions.push(target);
+    const d = deps({
+      store,
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: me.id,
+        token: CURRENT_TOKEN,
+      }),
+    });
+
+    const { message } = expectOk(
+      await sendMessage(
+        d,
+        { toSessionId: target.id, body: "from operator" },
+        { ...CTX, origin: "operator" },
+      ),
+    );
+    // Recorded operator-originated: no impersonation of the current Session.
+    expect(message.fromSessionId).toBeNull();
+    expect(message.formattedBody).toBe("[asem message]\nfrom operator");
+    expect(d.store.messages[0]!.fromSessionId).toBeNull();
+    expect(message.deliveredAt).not.toBeNull();
+  });
 });
 
 describe("sendMessage — auth & scope", () => {

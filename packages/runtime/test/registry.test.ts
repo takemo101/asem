@@ -1,5 +1,23 @@
 import { describe, expect, test } from "bun:test";
-import { createTemplateRegistry } from "../src/index.ts";
+import type { Config } from "@asem/core";
+import {
+  createTemplateRegistry,
+  createTemplateRegistryFactory,
+} from "../src/index.ts";
+
+/** A `.asem.yaml`-shaped Config with the given project-local template maps. */
+function configWith(
+  templates: {
+    mux?: Record<string, unknown>;
+    agent?: Record<string, unknown>;
+  } = {},
+): Config {
+  return {
+    workspace: { id: "ws_1" },
+    mux: { default: "herdr", templates: templates.mux ?? {} },
+    agent: { default: "claude", templates: templates.agent ?? {} },
+  };
+}
 
 describe("createTemplateRegistry", () => {
   test("resolves builtin mux templates through the typed path", () => {
@@ -65,5 +83,41 @@ describe("createTemplateRegistry", () => {
       muxTemplates: { broken: { create: [{ type: "unknown_step" }] } },
     });
     expect(() => registry.getMuxTemplate("broken")).toThrow();
+  });
+});
+
+/** Read `command` off a port-typed (opaque) agent template result. */
+function agentCommand(template: unknown): string | undefined {
+  return (template as { command?: string } | undefined)?.command;
+}
+
+describe("createTemplateRegistryFactory", () => {
+  test("layers a config's project-local templates over the builtins", () => {
+    const factory = createTemplateRegistryFactory();
+    const registry = factory.forConfig(
+      configWith({
+        mux: { custom: { send: [{ type: "run", command: "send-it" }] } },
+        agent: {
+          claude: { command: "claude-custom", prompt_delivery: "stdin" },
+        },
+      }),
+    );
+    // Project-local definition resolves...
+    expect(registry.getMuxTemplate("custom")).toBeDefined();
+    // ...overrides a builtin of the same name (factory returns the `TemplateRegistry`
+    // port, whose values are opaque to callers that re-parse them)...
+    expect(agentCommand(registry.getAgentTemplate("claude"))).toBe(
+      "claude-custom",
+    );
+    // ...and builtins not overridden remain available.
+    expect(registry.getMuxTemplate("herdr")).toBeDefined();
+  });
+
+  test("keeps builtins available when project-local maps are empty", () => {
+    const factory = createTemplateRegistryFactory();
+    const registry = factory.forConfig(configWith());
+    expect(registry.getMuxTemplate("herdr")).toBeDefined();
+    expect(agentCommand(registry.getAgentTemplate("claude"))).toBe("claude");
+    expect(registry.getMuxTemplate("nope")).toBeUndefined();
   });
 });

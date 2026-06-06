@@ -17,7 +17,7 @@ import type {
   Redactor,
   ScopeResolver,
   Store,
-  TemplateRegistry,
+  TemplateRegistryFactory,
   TemplateRunner,
   TokenGenerator,
 } from "@asem/core";
@@ -29,8 +29,13 @@ export interface OpsDeps {
   configLoader: ConfigLoader;
   scopeResolver: ScopeResolver;
   currentSessionResolver: CurrentSessionResolver;
-  /** Resolves mux/agent templates (builtin + project-local) by name. */
-  templateRegistry: TemplateRegistry;
+  /**
+   * Builds a registry that resolves mux/agent templates (builtin +
+   * project-local) by name for a resolved {@link Config}. Operations construct
+   * the registry from the config discovered for their `cwd`, so project-local
+   * `.asem.yaml` templates participate in the same resolution path as builtins.
+   */
+  templateRegistryFactory: TemplateRegistryFactory;
   /** Executes command-sequence side effects (run/write/wait) for the runtime. */
   templateRunner: TemplateRunner;
   livenessProbe: LivenessProbe;

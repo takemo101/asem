@@ -10,6 +10,7 @@
 import type {
   CommandRunner,
   TemplateRegistry,
+  TemplateRegistryFactory,
   TemplateRunner,
 } from "@asem/core";
 
@@ -55,6 +56,7 @@ export {
 // Template registry
 export {
   createTemplateRegistry,
+  createTemplateRegistryFactory,
   type TemplateRegistryOptions,
   type TypedTemplateRegistry,
 } from "./template/registry.ts";
@@ -95,4 +97,9 @@ export {
 
 // Test harness: virtual time & fake runner
 export { VirtualClock } from "./testing/virtual-clock.ts";
-export type { CommandRunner, TemplateRegistry, TemplateRunner };
+export type {
+  CommandRunner,
+  TemplateRegistry,
+  TemplateRegistryFactory,
+  TemplateRunner,
+};

@@ -9,6 +9,7 @@ import {
   FakeScopeResolver,
   FakeStore,
   MemoryLogger,
+  makeConfig,
   makeOpsDeps,
 } from "../src/testing/fakes.ts";
 import { expectErr, expectOk, makeSession, scopeA, scopeB } from "./helpers.ts";
@@ -313,5 +314,102 @@ describe("createSession — template + name validation", () => {
       CTX,
     );
     expectErr(result, "config_not_found");
+  });
+});
+
+describe("createSession — project-local templates from .asem.yaml", () => {
+  /** A FakeConfigLoader returning a `found` config carrying given templates. */
+  function configLoaderWith(config: ReturnType<typeof makeConfig>) {
+    return new FakeConfigLoader({
+      kind: "found",
+      config,
+      configPath: `${scopeA.worktreeRoot}/.asem.yaml`,
+    } satisfies ConfigDiscovery);
+  }
+
+  test("a project-local mux template overrides the builtin used by create", async () => {
+    // Project-local `herdr` replaces the builtin: a distinct create command and
+    // a regex capture instead of the builtin JSONPath shape.
+    const config = makeConfig({
+      mux: {
+        default: "herdr",
+        templates: {
+          herdr: {
+            create: [
+              {
+                type: "run",
+                command: "my-mux create --cwd {{cwd_shell}}",
+                capture: [{ name: "pane_id", regex: "pane=(.+)", group: 1 }],
+              },
+            ],
+            run_in_pane: [
+              {
+                type: "run",
+                command: "my-mux run {{pane_id_shell}} {{launch_cmd_shell}}",
+              },
+            ],
+          },
+        },
+      },
+    });
+    // The project-local create command emits the regex-captured pane id.
+    const runner = new FakeTemplateRunner({
+      commands: [{ stdout: "pane=p9" }],
+    });
+    const d = { ...deps({ runner }), configLoader: configLoaderWith(config) };
+
+    const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
+
+    // The project-local sequences ran, not the builtin herdr ones.
+    expect(d.runner.commands[0]!.command).toContain("my-mux create");
+    // `pane_id` flows through shell escaping (`{{pane_id_shell}}`).
+    expect(d.runner.commands[1]!.command).toContain("my-mux run 'p9'");
+    expect(session.muxRef).toEqual({ pane_id: "p9" });
+  });
+
+  test("a project-local agent template overrides the builtin launch command", async () => {
+    const config = makeConfig({
+      agent: {
+        default: "claude",
+        templates: {
+          claude: { command: "claude-custom", prompt_delivery: "arg" },
+        },
+      },
+    });
+    const d = { ...deps(), configLoader: configLoaderWith(config) };
+
+    expectOk(await createSession(d, ROOT_INPUT, CTX));
+
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+    expect(script).toContain(`claude-custom "$(cat '${PROMPT_PATH}')"`);
+  });
+
+  test("builtin templates remain available when project-local maps are empty", async () => {
+    // Default makeConfig() carries empty template maps; the builtin herdr/claude
+    // must still resolve through the factory.
+    const d = { ...deps(), configLoader: configLoaderWith(makeConfig()) };
+
+    expectOk(await createSession(d, ROOT_INPUT, CTX));
+
+    expect(d.runner.commands[0]!.command).toContain("herdr tab create");
+    expect(d.fs.files.get(LAUNCH_PATH)!.contents).toContain(
+      `claude "$(cat '${PROMPT_PATH}')"`,
+    );
+  });
+
+  test("an invalid project-local template is rejected (schema-validated before use)", async () => {
+    const config = makeConfig({
+      mux: {
+        default: "herdr",
+        templates: { herdr: { create: [{ type: "unknown_step" }] } },
+      },
+    });
+    const d = { ...deps(), configLoader: configLoaderWith(config) };
+
+    // The registry parses project-local definitions; a malformed one throws as a
+    // configuration defect before any filesystem side effects.
+    await expect(createSession(d, ROOT_INPUT, CTX)).rejects.toThrow();
+    expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
+    expect(d.store.sessions).toHaveLength(0);
   });
 });

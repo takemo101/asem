@@ -43,7 +43,7 @@ import {
   type Session,
   type Store,
   shellEscape,
-  type TemplateRegistry,
+  type TemplateRegistryFactory,
   type TemplateRunner,
   type TokenGenerator,
 } from "@asem/core";
@@ -67,7 +67,7 @@ type CreateSessionDeps = {
   configLoader: ConfigLoader;
   scopeResolver: ScopeResolver;
   currentSessionResolver: CurrentSessionResolver;
-  templateRegistry: TemplateRegistry;
+  templateRegistryFactory: TemplateRegistryFactory;
   templateRunner: TemplateRunner;
   clock: Clock;
   idGenerator: IdGenerator;
@@ -157,10 +157,13 @@ export async function createSession(
   const parentSessionId = parentResult.value;
 
   // --- Resolve templates (fail fast, before any filesystem side effects) ---
+  // Layer this config's project-local templates over the builtins, so a
+  // `.asem.yaml` mux/agent definition resolves through the same typed path.
+  const templateRegistry = deps.templateRegistryFactory.forConfig(config);
   const mux = input.mux ?? config.mux.default;
   const agent = input.agent ?? config.agent.default;
 
-  const rawMux = deps.templateRegistry.getMuxTemplate(mux);
+  const rawMux = templateRegistry.getMuxTemplate(mux);
   if (rawMux === undefined) {
     return err(
       operationError("mux_template_not_found", "mux template not found", {
@@ -168,7 +171,7 @@ export async function createSession(
       }),
     );
   }
-  const rawAgent = deps.templateRegistry.getAgentTemplate(agent);
+  const rawAgent = templateRegistry.getAgentTemplate(agent);
   if (rawAgent === undefined) {
     return err(
       operationError("agent_template_not_found", "agent template not found", {

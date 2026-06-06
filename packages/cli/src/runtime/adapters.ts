@@ -207,11 +207,11 @@ export class GitScopeResolver implements ScopeResolver {
   async resolve(cwd: string, config: Config): Promise<EffectiveScope> {
     return {
       workspaceId: config.workspace.id,
-      worktreeRoot: await this.worktreeRoot(cwd),
+      worktreeRoot: await this.resolveWorktreeRoot(cwd),
     };
   }
 
-  private async worktreeRoot(cwd: string): Promise<string> {
+  async resolveWorktreeRoot(cwd: string): Promise<string> {
     const top = this.gitToplevel(cwd);
     return this.fs.realpath(top ?? cwd);
   }

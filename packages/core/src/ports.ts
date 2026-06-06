@@ -168,6 +168,13 @@ export interface ConfigLoader {
 /** Resolves the Effective Scope for a working directory. */
 export interface ScopeResolver {
   resolve(cwd: string, config: Config): Promise<EffectiveScope>;
+  /**
+   * Resolve only the Worktree Root for a working directory — the same root
+   * {@link resolve} embeds in the Effective Scope, but without needing a config.
+   * `asem init` uses this so it writes `.asem.yaml`/`.gitignore` at the worktree
+   * root (where runtime token-bearing paths later live), not the raw shell cwd.
+   */
+  resolveWorktreeRoot(cwd: string): Promise<string>;
 }
 
 /** A pointer to the current Session plus its raw token for authentication. */

@@ -349,6 +349,10 @@ export class FakeScopeResolver implements ScopeResolver {
       }
     );
   }
+
+  async resolveWorktreeRoot(cwd: string): Promise<string> {
+    return this.scope?.worktreeRoot ?? cwd;
+  }
 }
 
 /** Returns a configurable current-session ref (or `null`). */

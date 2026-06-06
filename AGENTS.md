@@ -83,7 +83,9 @@ Use fake/injected dependencies for:
 
 Fake runner tests should verify command order, `cwd`, `env`, timeout/background flags, stdout/stderr/exit-code scripting, capture success/failure, virtual time, failure injection, cleanup behavior, and secret redaction.
 
-Real herdr/tmux/zellij integration tests are optional and must skip when binaries are unavailable.
+A cross-package fake-runtime smoke suite (`packages/cli/test/mvp-smoke.test.ts`) drives the full `init` → `init-session` → `create-session` → `list`/`get` → `send-message` → `report-parent` → `message-list` → `close` → `delete` spine over one shared in-memory store, then projects it through MCP, the TUI cockpit, and the CLI; it also asserts token-bearing files are mode `0600` under ignored paths and that raw tokens never reach logs. A docs scan (`packages/cli/test/docs-links.test.ts`) checks relative Markdown links and placeholders. Both run in the default `bun run test`.
+
+Real herdr/tmux/zellij integration tests are optional and must skip when binaries are unavailable; the `@asem/runtime` suites are gated behind `ASEM_MUX_INTEGRATION=1` / `ASEM_AGENT_INTEGRATION=1`.
 
 ## Security and state rules
 

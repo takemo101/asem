@@ -4,7 +4,7 @@
  * This is one of asem's most important correctness boundaries (implementation
  * principle 5: never persist failed create rows). The flow is strictly ordered:
  *
- *   1. resolve config / scope;
+ *   1. resolve config / scope from the effective create cwd (`input.cwd ?? ctx.cwd`);
  *   2. resolve the parent (truth table below);
  *   3. resolve mux + agent templates (fail fast, no side effects);
  *   4. create the Session dir under `.asem/sessions/<id>/`;
@@ -134,12 +134,18 @@ export async function createSession(
   }
   const input = parsed.data;
 
-  const contextResult = await resolveContext(deps, ctx.cwd);
+  // Resolve config and Effective Scope from the *create* cwd, not the caller's.
+  // A create can target a sibling Worktree Root via `input.cwd`; deriving config,
+  // scope, parent/token checks, project-local templates, and the launch cwd from
+  // this single effective cwd keeps the Session row scoped to where it is
+  // actually created (MIK-025).
+  const cwd = input.cwd ?? ctx.cwd;
+
+  const contextResult = await resolveContext(deps, cwd);
   if (!contextResult.ok) {
     return contextResult;
   }
   const { config, scope } = contextResult.value;
-  const cwd = input.cwd ?? ctx.cwd;
 
   // MCP/agent-origin create calls must prove a current Session token even when
   // the requested parent mode is explicit `--parent` or `--root`. CLI human

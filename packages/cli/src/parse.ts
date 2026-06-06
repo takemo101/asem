@@ -34,7 +34,14 @@ export type CliCommand =
     }
   | { type: "session-get"; id: string; refresh: boolean; json: boolean }
   | { type: "session-attach"; id: string; json: boolean }
-  | { type: "message-list"; filter?: MessageListFilter; json: boolean };
+  | { type: "message-list"; filter?: MessageListFilter; json: boolean }
+  | {
+      type: "message-send";
+      toSessionId: string;
+      body: string;
+      json: boolean;
+    }
+  | { type: "report-parent"; body: string; json: boolean };
 
 /** Outcome of parsing `argv`: a command, a help request, or a structured error. */
 export type ParseResult =
@@ -317,16 +324,82 @@ function parseMessageList(args: string[]): ParseResult {
   };
 }
 
+function parseMessageSend(args: string[]): ParseResult {
+  const flags = parseFlags(args, {
+    booleans: ["json"],
+    values: ["to", "body"],
+  });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { values, booleans, positionals } = flags.value;
+
+  // The target accepts a positional id or `--to <id>`, mirroring `message list`.
+  const to = values.get("to") ?? positionals[0];
+  if (to === undefined || to.length === 0) {
+    return invalid(
+      "target session id is required (use `asem message send <session-id> --body <text>`)",
+    );
+  }
+  if (positionals.length > 1) {
+    return invalid("unexpected extra arguments", {
+      extra: positionals.slice(1),
+    });
+  }
+  const body = values.get("body");
+  if (body === undefined) {
+    return invalid("message body is required (use `--body <text>`)");
+  }
+  return {
+    kind: "command",
+    command: {
+      type: "message-send",
+      toSessionId: to,
+      body,
+      json: booleans.has("json"),
+    },
+  };
+}
+
 function parseMessage(args: string[]): ParseResult {
   const [sub, ...rest] = args;
   switch (sub) {
     case undefined:
-      return invalid("missing message subcommand (list)");
+      return invalid("missing message subcommand (list | send)");
     case "list":
       return parseMessageList(rest);
+    case "send":
+      return parseMessageSend(rest);
     default:
       return invalid(`unknown message subcommand: ${sub}`, {
-        expected: ["list"],
+        expected: ["list", "send"],
+      });
+  }
+}
+
+function parseReportParent(args: string[]): ParseResult {
+  const flags = parseFlags(args, { booleans: ["json"], values: ["body"] });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { values, booleans } = flags.value;
+
+  const body = values.get("body");
+  if (body === undefined) {
+    return invalid("report body is required (use `asem report parent --body <text>`)");
+  }
+  return {
+    kind: "command",
+    command: { type: "report-parent", body, json: booleans.has("json") },
+  };
+}
+
+function parseReport(args: string[]): ParseResult {
+  const [sub, ...rest] = args;
+  switch (sub) {
+    case undefined:
+      return invalid("missing report subcommand (parent)");
+    case "parent":
+      return parseReportParent(rest);
+    default:
+      return invalid(`unknown report subcommand: ${sub}`, {
+        expected: ["parent"],
       });
   }
 }
@@ -357,9 +430,11 @@ export function parseArgs(argv: readonly string[]): ParseResult {
       return parseSession(rest);
     case "message":
       return parseMessage(rest);
+    case "report":
+      return parseReport(rest);
     default:
       return invalid(`unknown command: ${command}`, {
-        expected: ["init", "init-session", "session", "message"],
+        expected: ["init", "init-session", "session", "message", "report"],
       });
   }
 }

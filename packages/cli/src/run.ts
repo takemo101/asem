@@ -14,6 +14,8 @@ import {
   initSession,
   listMessages,
   listSessions,
+  reportParent,
+  sendMessage,
 } from "@asem/ops";
 import type { CliCommand } from "./parse.ts";
 import { parseArgs } from "./parse.ts";
@@ -24,6 +26,7 @@ import {
   renderInit,
   renderInitSessionExports,
   renderMessageList,
+  renderSentMessage,
   renderSessionDetail,
   renderSessionList,
 } from "./render.ts";
@@ -97,6 +100,10 @@ async function dispatch(
       return runSessionAttach(command, env);
     case "message-list":
       return runMessageList(command, env);
+    case "message-send":
+      return runMessageSend(command, env);
+    case "report-parent":
+      return runReportParent(command, env);
   }
 }
 
@@ -217,5 +224,31 @@ async function runMessageList(
   return render(io, result, (value) => {
     if (command.json) emitJson(io, value.messages);
     else emit(io, renderMessageList(value.messages));
+  });
+}
+
+async function runMessageSend(
+  command: Extract<CliCommand, { type: "message-send" }>,
+  { cwd, deps, io }: DispatchEnv,
+): Promise<number> {
+  const result = await sendMessage(
+    deps,
+    { toSessionId: command.toSessionId, body: command.body },
+    { cwd },
+  );
+  return render(io, result, (value) => {
+    if (command.json) emitJson(io, value.message);
+    else emit(io, renderSentMessage(value.message));
+  });
+}
+
+async function runReportParent(
+  command: Extract<CliCommand, { type: "report-parent" }>,
+  { cwd, deps, io }: DispatchEnv,
+): Promise<number> {
+  const result = await reportParent(deps, { body: command.body }, { cwd });
+  return render(io, result, (value) => {
+    if (command.json) emitJson(io, value.message);
+    else emit(io, renderSentMessage(value.message));
   });
 }

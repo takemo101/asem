@@ -270,3 +270,70 @@ describe("runCli message list", () => {
     expect(io.outText()).not.toContain("done");
   });
 });
+
+describe("runCli message send", () => {
+  test("delegates to send_message and renders the delivered result", async () => {
+    const store = new FakeStore();
+    // A deliverable herdr target (its builtin `send` sequence resolves pane_id).
+    const target = makeSession({
+      name: "reviewer-1",
+      mux: "herdr",
+      muxRef: { pane_id: "pane-1" },
+    });
+    store.sessions.push(target);
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(
+      ["message", "send", target.id, "--body", "ping"],
+      deps,
+    );
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain(target.id);
+    expect(io.outText()).toContain("delivered at");
+    // The operation — not the CLI — recorded the Message.
+    expect(store.messages).toHaveLength(1);
+    expect(store.messages[0]!.body).toBe("ping");
+  });
+
+  test("an unknown target surfaces session_not_found (exit 1)", async () => {
+    const { io, code } = await run([
+      "message",
+      "send",
+      "ghost",
+      "--body",
+      "x",
+    ]);
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("session_not_found");
+  });
+});
+
+describe("runCli report parent", () => {
+  test("delivers a report to the current Session's parent", async () => {
+    const store = new FakeStore();
+    const parent = makeSession({
+      name: "parent",
+      mux: "herdr",
+      muxRef: { pane_id: "pane-9" },
+    });
+    store.sessions.push(parent);
+    // Seed a current Session whose token verifies and whose parent is `parent`.
+    const me = seedCurrentSession(store);
+    me.parentSessionId = parent.id;
+    const { deps } = makeCliFixture({ store, current: { sessionId: me.id } });
+
+    const { io, code } = await run(["report", "parent", "--body", "wip"], deps);
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("report");
+    expect(io.outText()).toContain(parent.id);
+    expect(store.messages).toHaveLength(1);
+    expect(store.messages[0]!.kind).toBe("report");
+    expect(store.messages[0]!.formattedBody).toContain("[asem report from");
+  });
+
+  test("no current Session surfaces current_session_not_found (exit 1)", async () => {
+    const { io, code } = await run(["report", "parent", "--body", "x"]);
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("current_session_not_found");
+  });
+});

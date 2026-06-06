@@ -219,3 +219,65 @@ describe("parseArgs message", () => {
     expect(errorCode(["message", "list", "--to"])).toBe("invalid_input");
   });
 });
+
+describe("parseArgs message send", () => {
+  test("maps a positional target id and --body", () => {
+    expect(command(["message", "send", "s_1", "--body", "ping"])).toEqual({
+      type: "message-send",
+      toSessionId: "s_1",
+      body: "ping",
+      json: false,
+    });
+  });
+
+  test("accepts --to instead of a positional id, and --json", () => {
+    expect(
+      command(["message", "send", "--to", "s_2", "--body", "hi", "--json"]),
+    ).toEqual({
+      type: "message-send",
+      toSessionId: "s_2",
+      body: "hi",
+      json: true,
+    });
+  });
+
+  test("missing target id is invalid_input", () => {
+    expect(errorCode(["message", "send", "--body", "x"])).toBe("invalid_input");
+  });
+
+  test("missing body is invalid_input", () => {
+    expect(errorCode(["message", "send", "s_1"])).toBe("invalid_input");
+  });
+
+  test("extra positionals are invalid_input", () => {
+    expect(errorCode(["message", "send", "s_1", "extra", "--body", "x"])).toBe(
+      "invalid_input",
+    );
+  });
+});
+
+describe("parseArgs report parent", () => {
+  test("maps --body and --json", () => {
+    expect(command(["report", "parent", "--body", "halfway", "--json"])).toEqual(
+      {
+        type: "report-parent",
+        body: "halfway",
+        json: true,
+      },
+    );
+  });
+
+  test("missing body is invalid_input", () => {
+    expect(errorCode(["report", "parent"])).toBe("invalid_input");
+  });
+
+  test("missing report subcommand is invalid_input", () => {
+    expect(errorCode(["report"])).toBe("invalid_input");
+  });
+
+  test("unknown report subcommand is invalid_input", () => {
+    expect(errorCode(["report", "sibling", "--body", "x"])).toBe(
+      "invalid_input",
+    );
+  });
+});

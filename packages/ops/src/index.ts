@@ -48,6 +48,11 @@ export { listSessions } from "./operations/list-sessions.ts";
 export { getSession } from "./operations/get-session.ts";
 export { listMessages } from "./operations/list-messages.ts";
 export {
+  sendMessage,
+  reportParent,
+  formatMessageBody,
+} from "./operations/send-message.ts";
+export {
   refreshLiveness,
   refreshLivenessAll,
 } from "./operations/liveness.ts";

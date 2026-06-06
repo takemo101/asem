@@ -116,6 +116,23 @@ export function renderMessageList(messages: readonly Message[]): string[] {
   return messages.map(messageRow);
 }
 
+/**
+ * Render the outcome of a sent Message or Report. Delivery is best-effort, so
+ * the second line reflects the truthful recorded state: delivered, failed, or
+ * recorded-but-undelivered. No ack/read state is implied.
+ */
+export function renderSentMessage(message: Message): string[] {
+  const lines = [`${message.kind} ${message.id} → ${message.toSessionId}`];
+  if (message.deliveryError !== null) {
+    lines.push(`delivery failed: ${message.deliveryError}`);
+  } else if (message.deliveredAt !== null) {
+    lines.push(`delivered at ${message.deliveredAt}`);
+  } else {
+    lines.push("recorded (undelivered)");
+  }
+  return lines;
+}
+
 // --- init / init-session ---------------------------------------------------
 
 export function renderInit(configPath: string): string[] {

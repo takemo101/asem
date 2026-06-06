@@ -62,6 +62,7 @@ export {
   builtinAgentTemplates,
   builtinMuxTemplates,
 } from "./template/builtin.ts";
+export { renderAgentCommand } from "./template/agent-command.ts";
 
 // Capture
 export {

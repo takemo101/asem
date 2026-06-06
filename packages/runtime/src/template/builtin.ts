@@ -188,14 +188,79 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
   },
 };
 
-/** Raw builtin agent templates, keyed by name. */
+/**
+ * Raw builtin agent templates, keyed by name.
+ *
+ * An agent template owns only two things: the agent **command** (binary plus any
+ * fixed flags) and the **prompt delivery mode**. It must not own multiplexer
+ * lifecycle or Session outcome interpretation. `prompt_delivery` is one of
+ * `arg | stdin | file | paste`; `after_start` is an optional sequence used
+ * mainly by the `paste` flow to give the agent time to boot before the operation
+ * pastes the prompt via the mux `send` sequence.
+ *
+ * Regardless of delivery mode, `create_session` always writes the prompt to
+ * `prompt.md` for audit/debug, and the rendered launch command never contains
+ * the raw Session token — the token is injected via env by the launch script
+ * (see {@link renderAgentCommand} and the `create_session` launch flow).
+ *
+ * ## Verified CLI flag assumptions
+ *
+ * The commands below were verified against each CLI's `--help` on macOS,
+ * 2026-06-06. Each CLI starts an **interactive** session in the pane, so the
+ * delivery mode is chosen to seed the initial prompt without breaking
+ * interactivity (a redirected stdin would close the agent's TTY input, so
+ * `stdin`/`file` are intentionally not used by these interactive builtins — they
+ * remain supported by the engine and are covered by the delivery-mode tests):
+ *
+ * - **claude** — `claude [prompt]`: a positional prompt starts an interactive
+ *   session seeded with it ("starts an interactive session by default"). → `arg`.
+ * - **codex** — `codex [PROMPT]`: optional positional prompt; "If no subcommand
+ *   is specified, options will be forwarded to the interactive CLI." → `arg`.
+ * - **pi** — `pi [@files...] [messages...]`: a positional message seeds the
+ *   interactive session (interactive unless `--print`). → `arg`.
+ * - **gemini** — `gemini [query..]`: the positional query is the "Initial
+ *   prompt. Runs in interactive mode by default" (`-p` is the headless flag we
+ *   deliberately avoid). → `arg`.
+ * - **agy** — `agy --prompt-interactive <text>` ("Run an initial prompt
+ *   interactively and continue the session"). The flag lives in `command`, and
+ *   `arg` delivery appends the prompt as its value. → `command: "agy -i"`, `arg`.
+ * - **opencode** — `opencode [project]` starts the TUI with no initial-prompt
+ *   positional (`opencode run [message]` is the non-interactive form we avoid),
+ *   so the prompt cannot be passed as an argument. The agent starts bare and the
+ *   prompt is pasted afterwards. → `paste`, with an `after_start` boot delay.
+ */
 export const builtinAgentTemplates: Readonly<Record<string, unknown>> = {
+  // `arg`: positional prompt seeds the interactive session.
   claude: {
     command: "claude",
     prompt_delivery: "arg",
   },
+  // `arg`: positional PROMPT forwarded to the interactive CLI.
   codex: {
     command: "codex",
     prompt_delivery: "arg",
+  },
+  // `arg`: positional message seeds the interactive session.
+  pi: {
+    command: "pi",
+    prompt_delivery: "arg",
+  },
+  // `arg`: positional query is the initial interactive prompt.
+  gemini: {
+    command: "gemini",
+    prompt_delivery: "arg",
+  },
+  // `arg` with the interactive-prompt flag baked into the command: the prompt
+  // becomes the value of `agy --prompt-interactive`.
+  agy: {
+    command: "agy -i",
+    prompt_delivery: "arg",
+  },
+  // `paste`: the TUI has no initial-prompt argument, so start bare and let the
+  // mux `send` sequence paste the prompt after a short boot delay.
+  opencode: {
+    command: "opencode",
+    prompt_delivery: "paste",
+    after_start: [{ type: "wait_ms", ms: 750 }],
   },
 };

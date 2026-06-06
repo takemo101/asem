@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import type { ConfigDiscovery } from "@asem/core";
 import { getSession } from "../src/index.ts";
 import {
+  FakeConfigLoader,
   FakeLivenessProbe,
   FakeScopeResolver,
   FakeStore,
+  makeConfig,
   makeOpsDeps,
 } from "../src/testing/fakes.ts";
 import { expectErr, expectOk, makeSession, scopeA, scopeB } from "./helpers.ts";
@@ -141,6 +144,32 @@ describe("getSession", () => {
         await getSession(depsWith(store), { id: s.id }, CTX),
       );
       expect(result.attachHint).toBeUndefined();
+    });
+
+    test("a malformed project-local mux template returns invalid_template, not a thrown defect", async () => {
+      const store = new FakeStore();
+      const s = makeSession({ mux: "herdr", muxRef: { pane_id: "w-7" } });
+      store.sessions.push(s);
+      const config = makeConfig({
+        mux: {
+          default: "herdr",
+          templates: { herdr: { attach: [{ type: "unknown_step" }] } },
+        },
+      });
+      const deps = depsWith(store, {
+        configLoader: new FakeConfigLoader({
+          kind: "found",
+          config,
+          configPath: "/repo/.asem.yaml",
+        } satisfies ConfigDiscovery),
+      });
+
+      const error = expectErr(
+        await getSession(deps, { id: s.id }, CTX),
+        "invalid_template",
+      );
+      expect(error.details?.kind).toBe("mux");
+      expect(error.details?.name).toBe("herdr");
     });
   });
 });

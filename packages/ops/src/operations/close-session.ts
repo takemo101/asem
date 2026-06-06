@@ -45,13 +45,13 @@ import {
 import {
   createRedactor,
   type MuxTemplate,
-  muxTemplateSchema,
   noopRedactor,
   SequenceEngine,
   withRedaction,
 } from "@asem/runtime";
 import { authenticateCurrentSession, resolveContext } from "../context.ts";
 import type { OpContext } from "../deps.ts";
+import { resolveMuxTemplate } from "../templates.ts";
 
 type CloseSessionDeps = {
   store: Store;
@@ -133,15 +133,21 @@ export async function closeSession(
     // Resolve the mux template through this cwd's config so a project-local
     // `close` sequence overrides the builtin for the Session's mux.
     const templateRegistry = deps.templateRegistryFactory.forConfig(config);
-    const rawMux = templateRegistry.getMuxTemplate(session.mux);
-    if (rawMux === undefined) {
+    // A malformed project-local template is a structured `invalid_template`
+    // error surfaced before the status update; a missing one stays
+    // `mux_template_not_found` (MIK-026).
+    const muxResult = resolveMuxTemplate(templateRegistry, session.mux);
+    if (!muxResult.ok) {
+      return err(muxResult.error);
+    }
+    if (muxResult.value === undefined) {
       return err(
         operationError("mux_template_not_found", "mux template not found", {
           mux: session.mux,
         }),
       );
     }
-    const muxTemplate: MuxTemplate = muxTemplateSchema.parse(rawMux);
+    const muxTemplate: MuxTemplate = muxResult.value;
 
     const engine = new SequenceEngine({
       runner: deps.templateRunner,

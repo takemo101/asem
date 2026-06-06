@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { hashToken } from "@asem/core";
+import { type ConfigDiscovery, hashToken } from "@asem/core";
 import { FakeTemplateRunner } from "@asem/runtime";
 import { formatMessageBody, reportParent, sendMessage } from "../src/index.ts";
 import {
+  FakeConfigLoader,
   FakeCurrentSessionResolver,
   FakeScopeResolver,
   FakeStore,
   MemoryLogger,
+  makeConfig,
   makeOpsDeps,
 } from "../src/testing/fakes.ts";
 import { expectErr, expectOk, makeSession, scopeA, scopeB } from "./helpers.ts";
@@ -263,6 +265,37 @@ describe("sendMessage — formatted body & delivery failure", () => {
     );
     expect(message.deliveredAt).toBeNull();
     expect(message.deliveryError).toContain("mux template not found");
+  });
+
+  test("a malformed target mux template returns invalid_template and records no Message", async () => {
+    const store = new FakeStore();
+    const target = makeTarget();
+    store.sessions.push(target);
+    const config = makeConfig({
+      mux: {
+        default: "herdr",
+        templates: { herdr: { send: [{ type: "unknown_step" }] } },
+      },
+    });
+    const d = {
+      ...deps({ store }),
+      configLoader: new FakeConfigLoader({
+        kind: "found",
+        config,
+        configPath: "/repo/.asem.yaml",
+      } satisfies ConfigDiscovery),
+    };
+
+    // A malformed project-local template is a config defect surfaced before the
+    // Message is recorded (no side effect), consistent with create/close/get —
+    // unlike a *missing* template, which is a best-effort delivery_error.
+    const error = expectErr(
+      await sendMessage(d, { toSessionId: target.id, body: "x" }, CTX),
+      "invalid_template",
+    );
+    expect(error.details?.kind).toBe("mux");
+    expect(error.details?.name).toBe("herdr");
+    expect(d.store.messages).toHaveLength(0);
   });
 });
 

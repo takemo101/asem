@@ -50,11 +50,9 @@ import {
 } from "@asem/core";
 import {
   type AgentTemplate,
-  agentTemplateSchema,
   type CommandSequence,
   createRedactor,
   type MuxTemplate,
-  muxTemplateSchema,
   renderAgentCommand,
   SequenceEngine,
 } from "@asem/runtime";
@@ -65,6 +63,7 @@ import {
 } from "../context.ts";
 import type { OpContext } from "../deps.ts";
 import { joinPath, sessionDirFor, TOKEN_FILE_MODE } from "../paths.ts";
+import { resolveAgentTemplate, resolveMuxTemplate } from "../templates.ts";
 
 type CreateSessionDeps = {
   store: Store;
@@ -184,24 +183,35 @@ export async function createSession(
   const mux = input.mux ?? config.mux.default;
   const agent = input.agent ?? config.agent.default;
 
-  const rawMux = templateRegistry.getMuxTemplate(mux);
-  if (rawMux === undefined) {
+  // A malformed project-local template is a recoverable config defect, surfaced
+  // as a structured `invalid_template` error before any side effects rather than
+  // a thrown schema exception (MIK-026). A missing name stays the existing
+  // `*_template_not_found`.
+  const muxResult = resolveMuxTemplate(templateRegistry, mux);
+  if (!muxResult.ok) {
+    return err(muxResult.error);
+  }
+  if (muxResult.value === undefined) {
     return err(
       operationError("mux_template_not_found", "mux template not found", {
         mux,
       }),
     );
   }
-  const rawAgent = templateRegistry.getAgentTemplate(agent);
-  if (rawAgent === undefined) {
+  const muxTemplate: MuxTemplate = muxResult.value;
+
+  const agentResult = resolveAgentTemplate(templateRegistry, agent);
+  if (!agentResult.ok) {
+    return err(agentResult.error);
+  }
+  if (agentResult.value === undefined) {
     return err(
       operationError("agent_template_not_found", "agent template not found", {
         agent,
       }),
     );
   }
-  const muxTemplate: MuxTemplate = muxTemplateSchema.parse(rawMux);
-  const agentTemplate: AgentTemplate = agentTemplateSchema.parse(rawAgent);
+  const agentTemplate: AgentTemplate = agentResult.value;
 
   // --- Identity, token, and runtime layout --------------------------------
   const id = deps.idGenerator.nextId();

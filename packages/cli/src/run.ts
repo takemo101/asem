@@ -17,9 +17,9 @@ import {
   reportParent,
   sendMessage,
 } from "@asem/ops";
+import type { CliIo } from "./io.ts";
 import type { CliCommand } from "./parse.ts";
 import { parseArgs } from "./parse.ts";
-import type { CliIo } from "./io.ts";
 import {
   renderAttach,
   renderError,

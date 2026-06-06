@@ -1,4 +1,9 @@
 #!/usr/bin/env bun
+export type { CliIo } from "./io.ts";
+export { BufferIo, processIo } from "./io.ts";
+export type { CliCommand, ParseResult } from "./parse.ts";
+export { parseArgs } from "./parse.ts";
+export type { RunCliOptions } from "./run.ts";
 /**
  * `@asem/cli` — the installed `asem` binary and its public projection API.
  *
@@ -8,12 +13,7 @@
  * SQLite + I/O adapters) is loaded only when this file runs as the binary, so
  * importing the package — and every default test — never pulls in SQLite/shell.
  */
-export { runCli, EXIT_OK, EXIT_ERROR, EXIT_USAGE } from "./run.ts";
-export type { RunCliOptions } from "./run.ts";
-export { parseArgs } from "./parse.ts";
-export type { CliCommand, ParseResult } from "./parse.ts";
-export { BufferIo, processIo } from "./io.ts";
-export type { CliIo } from "./io.ts";
+export { EXIT_ERROR, EXIT_OK, EXIT_USAGE, runCli } from "./run.ts";
 
 export const PACKAGE_NAME = "@asem/cli";
 

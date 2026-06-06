@@ -1,4 +1,5 @@
 import type {
+  CommandResult,
   Logger,
   OperationError,
   OperationErrorCode,
@@ -7,6 +8,13 @@ import type {
   TemplateRunner,
 } from "@asem/core";
 import { err, ok, operationError } from "@asem/core";
+import { SequenceTimeoutError } from "../errors.ts";
+import { noopRedactor } from "../redact/redact.ts";
+import {
+  interpolate,
+  interpolateValues,
+  MissingVariableError,
+} from "../template/interpolate.ts";
 import type {
   CommandSequence,
   RunStep,
@@ -14,14 +22,7 @@ import type {
   WaitMsStep,
   WriteFileStep,
 } from "../template/schema.ts";
-import {
-  interpolate,
-  interpolateValues,
-  MissingVariableError,
-} from "../template/interpolate.ts";
 import { applyCapture } from "./capture.ts";
-import { SequenceTimeoutError } from "../errors.ts";
-import { noopRedactor } from "../redact/redact.ts";
 
 /**
  * Command sequence engine.
@@ -131,9 +132,7 @@ export class SequenceEngine {
         return this.executeWaitMs(step);
       default: {
         const exhaustive: never = step;
-        throw new Error(
-          `unknown sequence step: ${JSON.stringify(exhaustive)}`,
-        );
+        throw new Error(`unknown sequence step: ${JSON.stringify(exhaustive)}`);
       }
     }
   }
@@ -148,8 +147,7 @@ export class SequenceEngine {
     let env: Record<string, string> | undefined;
     try {
       command = interpolate(step.command, vars);
-      cwd =
-        step.cwd !== undefined ? interpolate(step.cwd, vars) : context.cwd;
+      cwd = step.cwd !== undefined ? interpolate(step.cwd, vars) : context.cwd;
       env = this.resolveEnv(context.env, step.env, vars);
     } catch (error) {
       return this.fail("sequence_step_failed", this.describe(error));
@@ -166,7 +164,7 @@ export class SequenceEngine {
       background,
     };
 
-    let result;
+    let result: CommandResult;
     try {
       result = await this.runner.run(request);
     } catch (error) {

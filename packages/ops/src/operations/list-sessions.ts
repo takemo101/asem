@@ -7,21 +7,21 @@
  * liveness pass may refresh process state without inferring work outcome.
  */
 import {
-  err,
-  ok,
-  listSessionsInputSchema,
-  operationError,
   type Clock,
   type ConfigLoader,
+  err,
   type ListSessionsInput,
   type ListSessionsOutput,
   type LivenessProbe,
+  listSessionsInputSchema,
   type OperationResult,
+  ok,
+  operationError,
   type ScopeResolver,
   type Store,
 } from "@asem/core";
-import type { OpContext } from "../deps.ts";
 import { resolveContext } from "../context.ts";
+import type { OpContext } from "../deps.ts";
 import { refreshLivenessAll } from "./liveness.ts";
 
 type ListSessionsDeps = {

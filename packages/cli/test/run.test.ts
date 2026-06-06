@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { configPathFor } from "@asem/ops";
-import { runCli, EXIT_OK, EXIT_ERROR, EXIT_USAGE } from "../src/run.ts";
-import { BufferIo } from "../src/io.ts";
 import {
   FakeLivenessProbe,
   FakeScopeResolver,
@@ -9,13 +7,15 @@ import {
   MemoryLogger,
   makeOpsDeps,
 } from "../../ops/src/testing/fakes.ts";
+import { BufferIo } from "../src/io.ts";
+import { EXIT_ERROR, EXIT_OK, EXIT_USAGE, runCli } from "../src/run.ts";
 import {
   CWD,
-  SCOPE,
-  SCOPE_SIBLING,
   makeCliFixture,
   makeMessage,
   makeSession,
+  SCOPE,
+  SCOPE_SIBLING,
   seedCurrentSession,
 } from "./helpers.ts";
 
@@ -138,7 +138,10 @@ describe("runCli init-session", () => {
 describe("runCli session list/get", () => {
   test("renders one row per session in scope", async () => {
     const store = new FakeStore();
-    store.sessions.push(makeSession({ name: "alpha" }), makeSession({ name: "beta" }));
+    store.sessions.push(
+      makeSession({ name: "alpha" }),
+      makeSession({ name: "beta" }),
+    );
     const { deps } = makeCliFixture({ store });
 
     const { io, code } = await run(["session", "list"], deps);
@@ -187,7 +190,10 @@ describe("runCli session list/get", () => {
 
   test("get renders detail and omits the token hash", async () => {
     const store = new FakeStore();
-    const s = makeSession({ name: "detail-1", tokenHash: "sha256:secret-hash" });
+    const s = makeSession({
+      name: "detail-1",
+      tokenHash: "sha256:secret-hash",
+    });
     store.sessions.push(s);
     const { deps } = makeCliFixture({ store });
 
@@ -296,13 +302,7 @@ describe("runCli message send", () => {
   });
 
   test("an unknown target surfaces session_not_found (exit 1)", async () => {
-    const { io, code } = await run([
-      "message",
-      "send",
-      "ghost",
-      "--body",
-      "x",
-    ]);
+    const { io, code } = await run(["message", "send", "ghost", "--body", "x"]);
     expect(code).toBe(EXIT_ERROR);
     expect(io.errText()).toContain("session_not_found");
   });

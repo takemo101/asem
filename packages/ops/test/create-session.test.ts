@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hashToken, type ConfigDiscovery } from "@asem/core";
+import { type ConfigDiscovery, hashToken } from "@asem/core";
 import { FakeTemplateRunner } from "@asem/runtime";
 import { createSession, TOKEN_FILE_MODE } from "../src/index.ts";
 import {
@@ -8,8 +8,8 @@ import {
   FakeFileSystem,
   FakeScopeResolver,
   FakeStore,
-  makeOpsDeps,
   MemoryLogger,
+  makeOpsDeps,
 } from "../src/testing/fakes.ts";
 import { expectErr, expectOk, makeSession, scopeA, scopeB } from "./helpers.ts";
 
@@ -108,7 +108,9 @@ describe("createSession — happy path", () => {
     expect(script).toContain(`export AS_SESSION_ID='${FIRST_ID}'`);
     expect(script).toContain("export AS_PARENT_SESSION_ID=''");
     expect(script).toContain(`export AS_WORKSPACE_ID='${scopeA.workspaceId}'`);
-    expect(script).toContain(`export AS_WORKTREE_ROOT='${scopeA.worktreeRoot}'`);
+    expect(script).toContain(
+      `export AS_WORKTREE_ROOT='${scopeA.worktreeRoot}'`,
+    );
     expect(script).toContain(`export AS_PROJECT_ROOT='${scopeA.worktreeRoot}'`);
     expect(script).toContain(`export AS_SESSION_TOKEN='${FIRST_TOKEN}'`);
     // Agent (claude, prompt_delivery=arg) reads the prompt file as its argument.

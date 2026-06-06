@@ -11,20 +11,16 @@ import type { Store } from "@asem/core";
 
 export const PACKAGE_NAME = "@asem/store";
 
-export type { Store };
-
-export { SqliteStore, openSqliteStore } from "./sqlite-store.ts";
-export type { OpenSqliteStoreOptions } from "./sqlite-store.ts";
-
-export { StoreError, isStoreError } from "./errors.ts";
 export type { StoreErrorCode } from "./errors.ts";
-
-export { migrate, LATEST_SCHEMA_VERSION } from "./migrations.ts";
-
+export { isStoreError, StoreError } from "./errors.ts";
+export { LATEST_SCHEMA_VERSION, migrate } from "./migrations.ts";
+export type { MessageRow, SessionRow } from "./rows.ts";
 export {
-  parseSessionRow,
-  parseMessageRow,
-  sessionInsertValues,
   messageInsertValues,
+  parseMessageRow,
+  parseSessionRow,
+  sessionInsertValues,
 } from "./rows.ts";
-export type { SessionRow, MessageRow } from "./rows.ts";
+export type { OpenSqliteStoreOptions } from "./sqlite-store.ts";
+export { openSqliteStore, SqliteStore } from "./sqlite-store.ts";
+export type { Store };

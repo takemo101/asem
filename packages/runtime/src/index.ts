@@ -15,91 +15,84 @@ import type {
 
 export const PACKAGE_NAME = "@asem/runtime";
 
-export type { CommandRunner, TemplateRegistry, TemplateRunner };
-
-// Template schemas & types
+// Capture
 export {
-  agentTemplateSchema,
-  captureSourceSchema,
-  captureSpecSchema,
-  commandSequenceSchema,
-  muxTemplateSchema,
-  onErrorPolicySchema,
-  promptDeliverySchema,
-  runStepSchema,
-  sequenceStepSchema,
-  waitMsStepSchema,
-  writeFileStepSchema,
-  type AgentTemplate,
-  type CaptureSource,
-  type CaptureSpec,
-  type CommandSequence,
-  type MuxTemplate,
-  type OnErrorPolicy,
-  type PromptDelivery,
-  type RunStep,
-  type SequenceStep,
-  type WaitMsStep,
-  type WriteFileStep,
-} from "./template/schema.ts";
-
+  applyCapture,
+  type CaptureOutcome,
+  evaluateJsonPath,
+} from "./engine/capture.ts";
+// Sequence engine
+export {
+  type SequenceContext,
+  SequenceEngine,
+  type SequenceEngineDeps,
+  type SequenceRunResult,
+} from "./engine/sequence.ts";
+// Runtime error signals
+export { SequenceTimeoutError } from "./errors.ts";
+// Redaction
+export {
+  createMemoryLogger,
+  createRedactor,
+  type LogEntry,
+  noopRedactor,
+  redactFields,
+  withRedaction,
+} from "./redact/redact.ts";
+export { renderAgentCommand } from "./template/agent-command.ts";
+export {
+  builtinAgentTemplates,
+  builtinMuxTemplates,
+} from "./template/builtin.ts";
 // Interpolation
 export {
+  type InterpolationVars,
   interpolate,
   interpolateOptional,
   interpolateValues,
   MissingVariableError,
-  type InterpolationVars,
 } from "./template/interpolate.ts";
-
 // Template registry
 export {
   createTemplateRegistry,
   type TemplateRegistryOptions,
   type TypedTemplateRegistry,
 } from "./template/registry.ts";
+// Template schemas & types
 export {
-  builtinAgentTemplates,
-  builtinMuxTemplates,
-} from "./template/builtin.ts";
-export { renderAgentCommand } from "./template/agent-command.ts";
-
-// Capture
+  type AgentTemplate,
+  agentTemplateSchema,
+  type CaptureSource,
+  type CaptureSpec,
+  type CommandSequence,
+  captureSourceSchema,
+  captureSpecSchema,
+  commandSequenceSchema,
+  type MuxTemplate,
+  muxTemplateSchema,
+  type OnErrorPolicy,
+  onErrorPolicySchema,
+  type PromptDelivery,
+  promptDeliverySchema,
+  type RunStep,
+  runStepSchema,
+  type SequenceStep,
+  sequenceStepSchema,
+  type WaitMsStep,
+  type WriteFileStep,
+  waitMsStepSchema,
+  writeFileStepSchema,
+} from "./template/schema.ts";
 export {
-  applyCapture,
-  evaluateJsonPath,
-  type CaptureOutcome,
-} from "./engine/capture.ts";
-
-// Sequence engine
-export {
-  SequenceEngine,
-  type SequenceContext,
-  type SequenceEngineDeps,
-  type SequenceRunResult,
-} from "./engine/sequence.ts";
-
-// Runtime error signals
-export { SequenceTimeoutError } from "./errors.ts";
-
-// Redaction
-export {
-  createMemoryLogger,
-  createRedactor,
-  noopRedactor,
-  redactFields,
-  withRedaction,
-  type LogEntry,
-} from "./redact/redact.ts";
-
-// Test harness: virtual time & fake runner
-export { VirtualClock } from "./testing/virtual-clock.ts";
-export {
-  FakeTemplateRunner,
   type CommandTrace,
   type FakeCommandScript,
   type FakeRunnerOptions,
+  FakeTemplateRunner,
   type FakeWriteScript,
   type TraceEvent,
   type WriteTrace,
 } from "./testing/fake-runner.ts";
+
+// Test harness: virtual time & fake runner
+export { VirtualClock } from "./testing/virtual-clock.ts";
+export type { CommandRunner, TemplateRegistry, TemplateRunner };

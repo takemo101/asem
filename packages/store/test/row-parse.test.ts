@@ -1,12 +1,12 @@
+import type { SQLQueryBindings } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import {
   isStoreError,
+  type MessageRow,
   parseMessageRow,
   parseSessionRow,
-  type MessageRow,
   type SessionRow,
 } from "../src/index.ts";
-import type { SQLQueryBindings } from "bun:sqlite";
 import { freshStore, makeMessage, makeSession, scopeA } from "./helpers.ts";
 
 /**
@@ -84,9 +84,7 @@ function rawSessionRow(
 describe("row parse failures — sessions", () => {
   test("invalid status value fails as row_parse_failed", async () => {
     const { store, db } = freshStore();
-    db.query(INSERT_RAW_SESSION).run(
-      ...rawSessionRow({ status: "completed" }),
-    );
+    db.query(INSERT_RAW_SESSION).run(...rawSessionRow({ status: "completed" }));
 
     let caught: unknown;
     try {

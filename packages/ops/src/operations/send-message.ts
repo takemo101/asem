@@ -23,42 +23,42 @@
  * redactor masks it everywhere it might surface (principle 8).
  */
 import {
-  err,
-  ok,
-  operationError,
-  reportParentInputSchema,
-  sendMessageInputSchema,
   type Clock,
   type ConfigLoader,
   type CurrentSessionResolver,
   type EffectiveScope,
+  err,
   type IdGenerator,
   type Logger,
   type Message,
   type MessageKind,
   type MuxRef,
   type OperationResult,
+  ok,
+  operationError,
   type Redactor,
   type ReportParentInput,
   type ReportParentOutput,
+  reportParentInputSchema,
   type ScopeResolver,
   type SendMessageInput,
   type SendMessageOutput,
   type Session,
   type Store,
+  sendMessageInputSchema,
   type TemplateRegistry,
   type TemplateRunner,
 } from "@asem/core";
 import {
   createRedactor,
+  type MuxTemplate,
   muxTemplateSchema,
   noopRedactor,
   SequenceEngine,
   withRedaction,
-  type MuxTemplate,
 } from "@asem/runtime";
-import type { OpContext } from "../deps.ts";
 import { authenticateCurrentSession, resolveContext } from "../context.ts";
+import type { OpContext } from "../deps.ts";
 
 type MessagingDeps = {
   store: Store;
@@ -189,7 +189,10 @@ export async function reportParent(
       ),
     );
   }
-  const parent = await deps.store.getSessionById(scope, current.parentSessionId);
+  const parent = await deps.store.getSessionById(
+    scope,
+    current.parentSessionId,
+  );
   if (parent === null) {
     return err(
       operationError(
@@ -228,7 +231,9 @@ async function deliver(
   const { fromSession, target, kind, body, redactor } = params;
 
   const source =
-    fromSession === null ? null : { name: fromSession.name, id: fromSession.id };
+    fromSession === null
+      ? null
+      : { name: fromSession.name, id: fromSession.id };
   const formattedBody = formatMessageBody(kind, source, body);
 
   const message: Message = {
@@ -249,7 +254,9 @@ async function deliver(
   await deps.store.insertMessage(message);
 
   const logger =
-    deps.logger !== undefined ? withRedaction(deps.logger, redactor) : undefined;
+    deps.logger !== undefined
+      ? withRedaction(deps.logger, redactor)
+      : undefined;
 
   // Delivery uses the target Session's stored mux ref + its mux template `send`
   // sequence, executed through @asem/runtime via the injected TemplateRunner.

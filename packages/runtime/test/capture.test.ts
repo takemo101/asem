@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { applyCapture, evaluateJsonPath } from "../src/index.ts";
 import type { CaptureSpec } from "../src/index.ts";
+import { applyCapture, evaluateJsonPath } from "../src/index.ts";
 
-const regexSpec = (over: Partial<CaptureSpec> = {}): CaptureSpec => ({
-  name: "v",
-  source: "stdout",
-  regex: "id=(\\w+)",
-  group: 1,
-  ...over,
-}) as CaptureSpec;
+const regexSpec = (over: Partial<CaptureSpec> = {}): CaptureSpec =>
+  ({
+    name: "v",
+    source: "stdout",
+    regex: "id=(\\w+)",
+    group: 1,
+    ...over,
+  }) as CaptureSpec;
 
 describe("applyCapture — regex", () => {
   test("captures the requested group from stdout", () => {
@@ -18,7 +19,12 @@ describe("applyCapture — regex", () => {
 
   test("group 0 captures the whole match", () => {
     const out = applyCapture(
-      { name: "v", source: "stdout", regex: "id=\\w+", group: 0 } as CaptureSpec,
+      {
+        name: "v",
+        source: "stdout",
+        regex: "id=\\w+",
+        group: 0,
+      } as CaptureSpec,
       "id=abc",
       "",
     );
@@ -85,7 +91,11 @@ describe("applyCapture — jsonpath", () => {
 
   test("fails on a missing path", () => {
     const out = applyCapture(
-      { name: "v", source: "stdout", jsonpath: "$.pane.missing" } as CaptureSpec,
+      {
+        name: "v",
+        source: "stdout",
+        jsonpath: "$.pane.missing",
+      } as CaptureSpec,
       json,
       "",
     );

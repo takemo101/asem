@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type CommandSequence,
   createTemplateRegistry,
   FakeTemplateRunner,
-  SequenceEngine,
-  type CommandSequence,
   type MuxTemplate,
+  SequenceEngine,
 } from "../src/index.ts";
 
 /**
@@ -313,11 +313,7 @@ describe("builtin mux: a created pane is addressed by the same template", () => 
       });
       const refs = await runCreate(template, createRunner);
 
-      for (const sequence of [
-        template.send,
-        template.attach,
-        template.close,
-      ]) {
+      for (const sequence of [template.send, template.attach, template.close]) {
         const runner = new FakeTemplateRunner();
         // Pass ONLY the captured refs (+ message): proves the create refs are
         // sufficient to address the same pane later.

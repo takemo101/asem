@@ -1,14 +1,11 @@
 import type { TemplateRegistry } from "@asem/core";
+import { builtinAgentTemplates, builtinMuxTemplates } from "./builtin.ts";
 import {
-  agentTemplateSchema,
-  muxTemplateSchema,
   type AgentTemplate,
+  agentTemplateSchema,
   type MuxTemplate,
+  muxTemplateSchema,
 } from "./schema.ts";
-import {
-  builtinAgentTemplates,
-  builtinMuxTemplates,
-} from "./builtin.ts";
 
 /**
  * Template registry: resolves mux and agent templates by name.
@@ -68,7 +65,7 @@ class DefaultTemplateRegistry implements TypedTemplateRegistry {
     if (cached !== undefined) {
       return cached;
     }
-    if (!Object.prototype.hasOwnProperty.call(this.muxRaw, name)) {
+    if (!Object.hasOwn(this.muxRaw, name)) {
       return undefined;
     }
     const parsed = muxTemplateSchema.parse(this.muxRaw[name]);
@@ -81,7 +78,7 @@ class DefaultTemplateRegistry implements TypedTemplateRegistry {
     if (cached !== undefined) {
       return cached;
     }
-    if (!Object.prototype.hasOwnProperty.call(this.agentRaw, name)) {
+    if (!Object.hasOwn(this.agentRaw, name)) {
       return undefined;
     }
     const parsed = agentTemplateSchema.parse(this.agentRaw[name]);

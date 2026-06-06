@@ -12,11 +12,7 @@ export type CaptureOutcome =
   | { ok: true; value: string }
   | { ok: false; reason: string };
 
-function sourceText(
-  spec: CaptureSpec,
-  stdout: string,
-  stderr: string,
-): string {
+function sourceText(spec: CaptureSpec, stdout: string, stderr: string): string {
   return spec.source === "stderr" ? stderr : stdout;
 }
 
@@ -98,7 +94,7 @@ export function evaluateJsonPath(path: string, root: unknown): JsonPathResult {
     if (typeof current !== "object" || current === null) {
       return false;
     }
-    if (!Object.prototype.hasOwnProperty.call(current, key)) {
+    if (!Object.hasOwn(current, key)) {
       return false;
     }
     current = (current as Record<string, unknown>)[key];

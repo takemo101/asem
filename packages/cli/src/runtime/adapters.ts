@@ -7,21 +7,21 @@
  * the projection layer or its tests — so default CLI tests stay free of real
  * SQLite, shell, and filesystem (testability rules).
  */
+
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   access,
   chmod as fsChmod,
-  mkdir,
   readFile as fsReadFile,
   realpath as fsRealpath,
+  mkdir,
   rename,
   writeFile,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { spawn, spawnSync } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import {
-  configSchema,
   type Clock,
   type CommandRequest,
   type CommandResult,
@@ -30,6 +30,7 @@ import {
   type ConfigLoader,
   type CurrentSessionRef,
   type CurrentSessionResolver,
+  configSchema,
   type EffectiveScope,
   type FileSystem,
   type IdGenerator,
@@ -60,7 +61,11 @@ export class NodeFileSystem implements FileSystem {
     options?: { mode?: number },
   ): Promise<void> {
     const tmp = `${path}.${randomBytes(6).toString("hex")}.tmp`;
-    await writeFile(tmp, contents, options?.mode === undefined ? {} : { mode: options.mode });
+    await writeFile(
+      tmp,
+      contents,
+      options?.mode === undefined ? {} : { mode: options.mode },
+    );
     if (options?.mode !== undefined) {
       // Ensure the mode is applied even if umask masked it on create.
       await fsChmod(tmp, options.mode);
@@ -143,7 +148,8 @@ export class ConsoleLogger implements Logger {
 
 // --- ConfigLoader ---------------------------------------------------------
 
-const yaml = (Bun as unknown as { YAML: { parse(text: string): unknown } }).YAML;
+const yaml = (Bun as unknown as { YAML: { parse(text: string): unknown } })
+  .YAML;
 
 /** Discover and parse `.asem.yaml`, walking up from a start directory. */
 export class FileConfigLoader implements ConfigLoader {
@@ -311,7 +317,12 @@ export class NodeTemplateRunner implements TemplateRunner {
       if (request.background === true) {
         const handle = child.pid === undefined ? "bg" : String(child.pid);
         child.unref();
-        resolve({ stdout: "", stderr: "", exitCode: 0, backgroundHandle: handle });
+        resolve({
+          stdout: "",
+          stderr: "",
+          exitCode: 0,
+          backgroundHandle: handle,
+        });
         return;
       }
 

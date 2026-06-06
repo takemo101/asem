@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { CommandSequence } from "../src/index.ts";
 import {
   createMemoryLogger,
   createRedactor,
@@ -6,7 +7,6 @@ import {
   SequenceEngine,
   withRedaction,
 } from "../src/index.ts";
-import type { CommandSequence } from "../src/index.ts";
 
 function engine(runner: FakeTemplateRunner, extra = {}) {
   return new SequenceEngine({ runner, ...extra });

@@ -23,43 +23,43 @@
  * script under the ignored `.asem/sessions/` path (ADR 0001; principle 8).
  */
 import {
-  err,
-  hashToken,
-  ok,
-  createSessionInputSchema,
-  operationError,
-  shellEscape,
   type Clock,
   type ConfigLoader,
   type CreateSessionInput,
   type CreateSessionOutput,
   type CurrentSessionResolver,
+  createSessionInputSchema,
   type EffectiveScope,
+  err,
   type FileSystem,
+  hashToken,
   type IdGenerator,
   type Logger,
   type OperationError,
   type OperationResult,
+  ok,
+  operationError,
   type ScopeResolver,
   type Session,
   type Store,
+  shellEscape,
   type TemplateRegistry,
   type TemplateRunner,
   type TokenGenerator,
 } from "@asem/core";
 import {
+  type AgentTemplate,
   agentTemplateSchema,
+  type CommandSequence,
   createRedactor,
+  type MuxTemplate,
   muxTemplateSchema,
   renderAgentCommand,
   SequenceEngine,
-  type AgentTemplate,
-  type CommandSequence,
-  type MuxTemplate,
 } from "@asem/runtime";
-import type { OpContext } from "../deps.ts";
 import { resolveContext, sameScope } from "../context.ts";
-import { TOKEN_FILE_MODE, joinPath, sessionDirFor } from "../paths.ts";
+import type { OpContext } from "../deps.ts";
+import { joinPath, sessionDirFor, TOKEN_FILE_MODE } from "../paths.ts";
 
 type CreateSessionDeps = {
   store: Store;
@@ -213,7 +213,10 @@ export async function createSession(
 
   // Step 4 & 5: create the Session dir and always write prompt.md.
   await deps.fs.mkdirp(sessionDir);
-  await deps.fs.writeFileAtomic(promptPath, ensureTrailingNewline(input.prompt));
+  await deps.fs.writeFileAtomic(
+    promptPath,
+    ensureTrailingNewline(input.prompt),
+  );
 
   // Step 6: run the mux `create` sequence and capture mux refs.
   const createResult = await engine.run(muxTemplate.create, {
@@ -320,10 +323,7 @@ export async function createSession(
  * | no flag + no current Session            | `current_session_not_found`             |
  */
 async function resolveParent(
-  deps: Pick<
-    CreateSessionDeps,
-    "store" | "currentSessionResolver"
-  >,
+  deps: Pick<CreateSessionDeps, "store" | "currentSessionResolver">,
   scope: EffectiveScope,
   input: CreateSessionInput,
 ): Promise<OperationResult<string | null>> {
@@ -332,7 +332,10 @@ async function resolveParent(
   }
 
   if (input.parentSessionId !== undefined) {
-    const parent = await deps.store.getSessionById(scope, input.parentSessionId);
+    const parent = await deps.store.getSessionById(
+      scope,
+      input.parentSessionId,
+    );
     if (parent === null) {
       return err(
         operationError(

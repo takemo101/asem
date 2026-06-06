@@ -14,45 +14,43 @@ import type { OperationError, OperationResult } from "@asem/core";
 
 export const PACKAGE_NAME = "@asem/ops";
 
-export type { OperationError, OperationResult };
-
-// Dependency bundle & invocation context
-export type { OpsDeps, OpContext } from "./deps.ts";
-
 // Shared resolution / auth helpers
 export {
-  resolveContext,
   authenticateCurrentSession,
-  sameScope,
   type ProjectContext,
+  resolveContext,
+  sameScope,
 } from "./context.ts";
 
+// Dependency bundle & invocation context
+export type { OpContext, OpsDeps } from "./deps.ts";
+export { createSession } from "./operations/create-session.ts";
+export { getSession } from "./operations/get-session.ts";
+
+// Operation handlers
+export { initProject } from "./operations/init-project.ts";
+export { initSession } from "./operations/init-session.ts";
+export { listMessages } from "./operations/list-messages.ts";
+export { listSessions } from "./operations/list-sessions.ts";
+export {
+  refreshLiveness,
+  refreshLivenessAll,
+} from "./operations/liveness.ts";
+export {
+  formatMessageBody,
+  reportParent,
+  sendMessage,
+} from "./operations/send-message.ts";
 // Runtime path / layout helpers
 export {
-  RUNTIME_GITIGNORE_RULES,
-  TOKEN_FILE_MODE,
   configPathFor,
   currentSessionFileFor,
   dirName,
   gitignorePathFor,
   joinPath,
+  RUNTIME_GITIGNORE_RULES,
   sessionDirFor,
+  TOKEN_FILE_MODE,
   tokenFileFor,
 } from "./paths.ts";
-
-// Operation handlers
-export { initProject } from "./operations/init-project.ts";
-export { initSession } from "./operations/init-session.ts";
-export { createSession } from "./operations/create-session.ts";
-export { listSessions } from "./operations/list-sessions.ts";
-export { getSession } from "./operations/get-session.ts";
-export { listMessages } from "./operations/list-messages.ts";
-export {
-  sendMessage,
-  reportParent,
-  formatMessageBody,
-} from "./operations/send-message.ts";
-export {
-  refreshLiveness,
-  refreshLivenessAll,
-} from "./operations/liveness.ts";
+export type { OperationError, OperationResult };

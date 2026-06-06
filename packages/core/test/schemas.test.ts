@@ -4,9 +4,9 @@ import {
   effectiveScopeSchema,
   messageSchema,
   operationErrorSchema,
+  type Session,
   sessionSchema,
   sessionStatusSchema,
-  type Session,
 } from "../src/index.ts";
 
 const baseSession: Session = {

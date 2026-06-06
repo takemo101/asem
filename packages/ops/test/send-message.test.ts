@@ -1,17 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { hashToken } from "@asem/core";
 import { FakeTemplateRunner } from "@asem/runtime";
-import {
-  formatMessageBody,
-  reportParent,
-  sendMessage,
-} from "../src/index.ts";
+import { formatMessageBody, reportParent, sendMessage } from "../src/index.ts";
 import {
   FakeCurrentSessionResolver,
   FakeScopeResolver,
   FakeStore,
-  makeOpsDeps,
   MemoryLogger,
+  makeOpsDeps,
 } from "../src/testing/fakes.ts";
 import { expectErr, expectOk, makeSession, scopeA, scopeB } from "./helpers.ts";
 

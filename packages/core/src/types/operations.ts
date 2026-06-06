@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { nonEmptyString } from "./common.ts";
-import { sessionStatusSchema, type Session } from "./session.ts";
-import { messageKindSchema, type Message } from "./message.ts";
-import { muxRefSchema } from "./session.ts";
+import { type Message, messageKindSchema } from "./message.ts";
+import { muxRefSchema, type Session, sessionStatusSchema } from "./session.ts";
 
 /**
  * Operation input/output contracts shared by CLI and MCP surfaces.

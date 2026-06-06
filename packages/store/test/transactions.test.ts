@@ -18,7 +18,11 @@ describe("withTransaction — delete_session primitives", () => {
       makeMessage({ id: "m_to", toSessionId: "s_del" }),
     );
     await store.insertMessage(
-      makeMessage({ id: "m_from", fromSessionId: "s_del", toSessionId: "s_other" }),
+      makeMessage({
+        id: "m_from",
+        fromSessionId: "s_del",
+        toSessionId: "s_other",
+      }),
     );
     await store.insertMessage(
       makeMessage({ id: "m_unrelated", toSessionId: "s_other" }),
@@ -40,7 +44,9 @@ describe("withTransaction — delete_session primitives", () => {
     const { store } = freshStore();
     const session = makeSession({ id: "s_keep", name: "keep" });
     await store.insertSession(session);
-    await store.insertMessage(makeMessage({ id: "m_keep", toSessionId: "s_keep" }));
+    await store.insertMessage(
+      makeMessage({ id: "m_keep", toSessionId: "s_keep" }),
+    );
 
     const boom = new Error("operation decided to abort");
     await expect(
@@ -93,6 +99,8 @@ describe("withTransaction — delete_session primitives", () => {
     // Deleting related messages for s_del in scopeA must not touch scopeB.
     const removed = await store.deleteRelatedMessagesScoped(scopeA, "s_del");
     expect(removed).toBe(1);
-    expect((await store.listMessages(scopeB)).map((m) => m.id)).toEqual(["m_b"]);
+    expect((await store.listMessages(scopeB)).map((m) => m.id)).toEqual([
+      "m_b",
+    ]);
   });
 });

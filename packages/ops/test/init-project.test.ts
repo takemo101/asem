@@ -16,7 +16,10 @@ function expectOk<T>(
 describe("initProject", () => {
   test("creates .asem.yaml with the workspace id when missing", async () => {
     const fs = new FakeFileSystem();
-    const result = await initProject({ fs }, { cwd: CWD, workspaceId: "ws_42" });
+    const result = await initProject(
+      { fs },
+      { cwd: CWD, workspaceId: "ws_42" },
+    );
 
     const { configPath } = expectOk(result);
     expect(configPath).toBe("/repo/a/.asem.yaml");
@@ -47,7 +50,9 @@ describe("initProject", () => {
 
   test("leaves an existing config untouched but still appends missing rules", async () => {
     const fs = new FakeFileSystem();
-    fs.files.set("/repo/a/.asem.yaml", { contents: "workspace:\n  id: existing\n" });
+    fs.files.set("/repo/a/.asem.yaml", {
+      contents: "workspace:\n  id: existing\n",
+    });
 
     await initProject({ fs }, { cwd: CWD, workspaceId: "ws_new" });
 

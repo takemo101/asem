@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  freshStore,
-  makeMessage,
-  scopeA,
-  scopeB,
-} from "./helpers.ts";
+import { freshStore, makeMessage, scopeA, scopeB } from "./helpers.ts";
 
 describe("Message CRUD", () => {
   test("insert then list returns a typed Message", async () => {

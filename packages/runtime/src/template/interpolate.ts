@@ -31,12 +31,12 @@ export class MissingVariableError extends Error {
 function resolve(key: string, vars: InterpolationVars): string {
   // Exact match wins, so an explicit `_shell` variable can override the
   // derived escaping if a template author really wants that.
-  if (Object.prototype.hasOwnProperty.call(vars, key)) {
+  if (Object.hasOwn(vars, key)) {
     return vars[key] as string;
   }
   if (key.endsWith(SHELL_SUFFIX)) {
     const base = key.slice(0, -SHELL_SUFFIX.length);
-    if (Object.prototype.hasOwnProperty.call(vars, base)) {
+    if (Object.hasOwn(vars, base)) {
       return shellEscape(vars[base] as string);
     }
   }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createTemplateRegistry, type AgentTemplate } from "../src/index.ts";
+import { type AgentTemplate, createTemplateRegistry } from "../src/index.ts";
 
 /**
  * Optional real-CLI flag checks for the builtin agent templates (MIK-008).

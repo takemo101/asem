@@ -47,6 +47,7 @@ import {
   type Store,
   sendMessageInputSchema,
   type TemplateRegistry,
+  type TemplateRegistryFactory,
   type TemplateRunner,
 } from "@asem/core";
 import {
@@ -65,7 +66,7 @@ type MessagingDeps = {
   configLoader: ConfigLoader;
   scopeResolver: ScopeResolver;
   currentSessionResolver: CurrentSessionResolver;
-  templateRegistry: TemplateRegistry;
+  templateRegistryFactory: TemplateRegistryFactory;
   templateRunner: TemplateRunner;
   clock: Clock;
   idGenerator: IdGenerator;
@@ -113,7 +114,7 @@ export async function sendMessage(
   if (!contextResult.ok) {
     return contextResult;
   }
-  const { scope } = contextResult.value;
+  const { config, scope } = contextResult.value;
 
   // Auth: agent-originated calls present a current Session and must verify its
   // token; human local-trust calls have none and send with no attribution.
@@ -148,6 +149,9 @@ export async function sendMessage(
     kind: input.kind ?? "message",
     body: input.body,
     redactor: redactorFor(deps, senderToken),
+    // Build the registry from this cwd's config so a project-local mux `send`
+    // template overrides the builtin for delivery.
+    templateRegistry: deps.templateRegistryFactory.forConfig(config),
   });
 }
 
@@ -170,7 +174,7 @@ export async function reportParent(
   if (!contextResult.ok) {
     return contextResult;
   }
-  const { scope } = contextResult.value;
+  const { config, scope } = contextResult.value;
 
   // report_parent always acts as the current Session: resolve and verify it.
   const ref = await deps.currentSessionResolver.resolve(scope);
@@ -209,6 +213,7 @@ export async function reportParent(
     kind: "report",
     body: input.body,
     redactor: redactorFor(deps, ref?.token ?? null),
+    templateRegistry: deps.templateRegistryFactory.forConfig(config),
   });
 }
 
@@ -226,9 +231,11 @@ async function deliver(
     kind: MessageKind;
     body: string;
     redactor: Redactor;
+    templateRegistry: TemplateRegistry;
   },
 ): Promise<OperationResult<{ message: Message }>> {
-  const { fromSession, target, kind, body, redactor } = params;
+  const { fromSession, target, kind, body, redactor, templateRegistry } =
+    params;
 
   const source =
     fromSession === null
@@ -260,7 +267,7 @@ async function deliver(
 
   // Delivery uses the target Session's stored mux ref + its mux template `send`
   // sequence, executed through @asem/runtime via the injected TemplateRunner.
-  const rawMux = deps.templateRegistry.getMuxTemplate(target.mux);
+  const rawMux = templateRegistry.getMuxTemplate(target.mux);
   if (rawMux === undefined) {
     return recordDeliveryError(
       deps,

@@ -133,6 +133,21 @@ export interface TemplateRegistry {
   getAgentTemplate(name: string): unknown | undefined;
 }
 
+/**
+ * Builds a {@link TemplateRegistry} for a resolved project {@link Config}.
+ *
+ * Project-local `mux.templates` / `agent.templates` from `.asem.yaml` are
+ * layered over the builtin templates: project-local definitions override a
+ * builtin of the same name, and builtins remain available when the project-local
+ * maps are empty. The single template resolution path lives in `@asem/runtime`
+ * (implementation principle 13); surfaces never parse template definitions
+ * themselves. The factory is the seam because the templates an operation may use
+ * depend on the config discovered for that operation's `cwd`.
+ */
+export interface TemplateRegistryFactory {
+  forConfig(config: Config): TemplateRegistry;
+}
+
 /** Filesystem seam with atomic, mode-aware writes for Session-local files. */
 export interface FileSystem {
   readFile(path: string): Promise<string>;

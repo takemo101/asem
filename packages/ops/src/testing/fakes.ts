@@ -28,11 +28,14 @@ import type {
   SessionStatus,
   SessionUpdate,
   Store,
-  TemplateRegistry,
+  TemplateRegistryFactory,
   TemplateRunner,
   TokenGenerator,
 } from "@asem/core";
-import { createTemplateRegistry, FakeTemplateRunner } from "@asem/runtime";
+import {
+  createTemplateRegistryFactory,
+  FakeTemplateRunner,
+} from "@asem/runtime";
 import type { OpsDeps } from "../deps.ts";
 
 // --- FileSystem -----------------------------------------------------------
@@ -463,12 +466,14 @@ export const noopRedactor: Redactor = { redact: (value) => value };
 // --- Bundle ---------------------------------------------------------------
 
 /**
- * A {@link TemplateRegistry} backed by the runtime's builtin templates. The
- * registry/sequence-execution logic itself is exercised in `@asem/runtime`;
- * operation tests only need a real resolution path for `herdr`/`claude`.
+ * A {@link TemplateRegistryFactory} backed by the runtime's real factory: it
+ * layers a config's project-local templates over the builtins, so operation
+ * tests get the same resolution path as the real CLI/MCP/TUI deps (a
+ * project-local `.asem.yaml` template overrides a builtin; builtins like
+ * `herdr`/`claude` stay available when the project-local maps are empty).
  */
-export function makeTemplateRegistry(): TemplateRegistry {
-  return createTemplateRegistry();
+export function makeTemplateRegistryFactory(): TemplateRegistryFactory {
+  return createTemplateRegistryFactory();
 }
 
 /** A fresh fake {@link TemplateRunner} (records command/write/wait traces). */
@@ -484,7 +489,7 @@ export function makeOpsDeps(overrides: Partial<OpsDeps> = {}): OpsDeps {
     configLoader: new FakeConfigLoader(),
     scopeResolver: new FakeScopeResolver(),
     currentSessionResolver: new FakeCurrentSessionResolver(),
-    templateRegistry: makeTemplateRegistry(),
+    templateRegistryFactory: makeTemplateRegistryFactory(),
     templateRunner: makeTemplateRunner(),
     livenessProbe: new FakeLivenessProbe(),
     clock: new FakeClock(),

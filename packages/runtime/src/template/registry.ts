@@ -1,4 +1,8 @@
-import type { TemplateRegistry } from "@asem/core";
+import type {
+  Config,
+  TemplateRegistry,
+  TemplateRegistryFactory,
+} from "@asem/core";
 import { builtinAgentTemplates, builtinMuxTemplates } from "./builtin.ts";
 import {
   type AgentTemplate,
@@ -100,4 +104,22 @@ export function createTemplateRegistry(
   options: TemplateRegistryOptions = {},
 ): TypedTemplateRegistry {
   return new DefaultTemplateRegistry(options);
+}
+
+/**
+ * Default {@link TemplateRegistryFactory}: for a resolved {@link Config}, layer
+ * its project-local `mux.templates` / `agent.templates` over the builtins
+ * through {@link createTemplateRegistry}. This is the seam real CLI/MCP/TUI deps
+ * use so an operation sees the project-local templates declared for its `cwd`'s
+ * `.asem.yaml`, while builtins stay available when those maps are empty.
+ */
+export function createTemplateRegistryFactory(): TemplateRegistryFactory {
+  return {
+    forConfig(config: Config): TypedTemplateRegistry {
+      return createTemplateRegistry({
+        muxTemplates: config.mux.templates,
+        agentTemplates: config.agent.templates,
+      });
+    },
+  };
 }

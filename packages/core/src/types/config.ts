@@ -4,9 +4,11 @@ import { nonEmptyString } from "./common.ts";
 /**
  * Parsed shape of `.asem.yaml`.
  *
- * Template contents are intentionally left opaque (`record`) at this slice:
- * MIK-001 only establishes the config envelope. Template schemas are owned by
- * `@asem/runtime` and will be added when the runtime slice lands.
+ * Template contents are intentionally left opaque (`record`) here: the typed
+ * template schemas are owned by `@asem/runtime`. The runtime `TemplateRegistry`
+ * factory layers these project-local `mux.templates` / `agent.templates` over
+ * the builtins and parses each definition through that one resolution path, so
+ * core never duplicates the template schema.
  */
 export const muxConfigSchema = z
   .object({

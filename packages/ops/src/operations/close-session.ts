@@ -39,7 +39,7 @@ import {
   type ScopeResolver,
   type SessionStatus,
   type Store,
-  type TemplateRegistry,
+  type TemplateRegistryFactory,
   type TemplateRunner,
 } from "@asem/core";
 import {
@@ -58,7 +58,7 @@ type CloseSessionDeps = {
   configLoader: ConfigLoader;
   scopeResolver: ScopeResolver;
   currentSessionResolver: CurrentSessionResolver;
-  templateRegistry: TemplateRegistry;
+  templateRegistryFactory: TemplateRegistryFactory;
   templateRunner: TemplateRunner;
   clock: Clock;
   logger?: Logger;
@@ -90,7 +90,7 @@ export async function closeSession(
   if (!contextResult.ok) {
     return contextResult;
   }
-  const { scope } = contextResult.value;
+  const { config, scope } = contextResult.value;
 
   // Auth: agent-originated calls present a current Session and must verify its
   // token; human local-trust calls have none and close under local trust.
@@ -129,7 +129,10 @@ export async function closeSession(
   // Mux `close` runs only when a live pane could exist. An `exited`/`missing`
   // Session has no live pane, so we record the close without running `close`.
   if (PANE_LIVE_STATUSES.has(session.status)) {
-    const rawMux = deps.templateRegistry.getMuxTemplate(session.mux);
+    // Resolve the mux template through this cwd's config so a project-local
+    // `close` sequence overrides the builtin for the Session's mux.
+    const templateRegistry = deps.templateRegistryFactory.forConfig(config);
+    const rawMux = templateRegistry.getMuxTemplate(session.mux);
     if (rawMux === undefined) {
       return err(
         operationError("mux_template_not_found", "mux template not found", {

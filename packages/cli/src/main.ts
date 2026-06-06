@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { runMcpStdio } from "@asem/mcp";
 import type { OpsDeps } from "@asem/ops";
-import { createTemplateRegistry } from "@asem/runtime";
+import { createTemplateRegistryFactory } from "@asem/runtime";
 import { openSqliteStore } from "@asem/store";
 import { processIo } from "./io.ts";
 import { runCli } from "./run.ts";
@@ -43,9 +43,10 @@ export async function createRuntimeDeps(): Promise<OpsDeps> {
     configLoader: new FileConfigLoader(fs),
     scopeResolver: new GitScopeResolver(fs),
     currentSessionResolver: new FileCurrentSessionResolver(fs),
-    // Builtin templates only for now; project-local templates from `.asem.yaml`
-    // are layered in by a later slice.
-    templateRegistry: createTemplateRegistry(),
+    // Layers each operation cwd's project-local `.asem.yaml` mux/agent templates
+    // over the builtins through the one `@asem/runtime` resolution path; builtins
+    // stay available when the project-local maps are empty.
+    templateRegistryFactory: createTemplateRegistryFactory(),
     templateRunner: new NodeTemplateRunner(fs),
     livenessProbe: storedStatusLivenessProbe,
     clock: systemClock,

@@ -117,6 +117,8 @@ bun run check
 
 For small package slices, run the package-specific command first, then broader checks before finalizing.
 
+A Lefthook `pre-commit` hook (see [`lefthook.yml`](lefthook.yml)) runs the same baseline (`bun run typecheck`, `bun run test`, `bun run check`) sequentially. `lefthook` is a root devDependency and `bun install` wires the hook via the `prepare` script, so contributors get it automatically; re-run `bunx lefthook install` if hooks ever fall out of sync.
+
 Until implementation is scaffolded, documentation-only checks are:
 
 ```sh

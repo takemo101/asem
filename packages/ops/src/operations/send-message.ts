@@ -54,14 +54,13 @@ import {
 } from "@asem/core";
 import {
   createRedactor,
-  type MuxTemplate,
-  muxTemplateSchema,
   noopRedactor,
   SequenceEngine,
   withRedaction,
 } from "@asem/runtime";
 import { authenticateCurrentSession, resolveContext } from "../context.ts";
 import type { OpContext } from "../deps.ts";
+import { resolveMuxTemplate } from "../templates.ts";
 
 type MessagingDeps = {
   store: Store;
@@ -246,6 +245,16 @@ async function deliver(
   const { fromSession, target, kind, body, redactor, templateRegistry } =
     params;
 
+  // Resolve the target's mux template before recording the Message. A malformed
+  // project-local template is a recoverable config defect, surfaced as a
+  // structured `invalid_template` error with no side effect (no Message row),
+  // consistent with create/close/get (MIK-026). A *missing* template stays a
+  // best-effort delivery failure recorded on the Message below (principle 6).
+  const muxResult = resolveMuxTemplate(templateRegistry, target.mux);
+  if (!muxResult.ok) {
+    return err(muxResult.error);
+  }
+
   const source =
     fromSession === null
       ? null
@@ -275,9 +284,10 @@ async function deliver(
       : undefined;
 
   // Delivery uses the target Session's stored mux ref + its mux template `send`
-  // sequence, executed through @asem/runtime via the injected TemplateRunner.
-  const rawMux = templateRegistry.getMuxTemplate(target.mux);
-  if (rawMux === undefined) {
+  // sequence, executed through @asem/runtime via the injected TemplateRunner. A
+  // missing template is a best-effort delivery failure recorded on the Message.
+  const muxTemplate = muxResult.value;
+  if (muxTemplate === undefined) {
     return recordDeliveryError(
       deps,
       scope,
@@ -286,7 +296,6 @@ async function deliver(
       logger,
     );
   }
-  const muxTemplate: MuxTemplate = muxTemplateSchema.parse(rawMux);
 
   const engine = new SequenceEngine({
     runner: deps.templateRunner,

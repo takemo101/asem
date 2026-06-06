@@ -34,9 +34,10 @@ import {
   type Store,
   type TemplateRegistryFactory,
 } from "@asem/core";
-import { muxTemplateSchema, renderAttachHint } from "@asem/runtime";
+import { renderAttachHint } from "@asem/runtime";
 import { authenticateAgentOrigin, resolveContext } from "../context.ts";
 import type { OpContext } from "../deps.ts";
+import { resolveMuxTemplate } from "../templates.ts";
 import { refreshLiveness } from "./liveness.ts";
 
 type GetSessionDeps = {
@@ -87,32 +88,42 @@ export async function getSession(
     ? await refreshLiveness(deps, scope, stored)
     : stored;
 
-  const attachHint = resolveAttachHint(deps, config, session);
+  const attachHintResult = resolveAttachHint(deps, config, session);
+  if (!attachHintResult.ok) {
+    return err(attachHintResult.error);
+  }
+  const attachHint = attachHintResult.value;
 
   return ok({ session, ...(attachHint !== undefined ? { attachHint } : {}) });
 }
 
 /**
  * Render the operator attach hint for `session` from its mux template's `attach`
- * sequence and captured mux refs. Returns `undefined` when the mux template is
- * unknown, defines no attach commands, or the captured refs are missing a
- * variable the attach commands reference — the surface then falls back to safe
- * manual guidance. The template registry is built from the resolved config so
- * project-local mux templates resolve through the same path as builtins.
+ * sequence and captured mux refs. Resolves to `ok(undefined)` when the mux
+ * template is unknown, defines no attach commands, or the captured refs are
+ * missing a variable the attach commands reference — the surface then falls back
+ * to safe manual guidance. A *malformed* project-local template resolves to a
+ * structured `invalid_template` error so the unknown-template best-effort path
+ * is not confused with a configuration defect (MIK-026). The template registry
+ * is built from the resolved config so project-local mux templates resolve
+ * through the same path as builtins.
  */
 function resolveAttachHint(
   deps: Pick<GetSessionDeps, "templateRegistryFactory">,
   config: Config,
   session: Session,
-): string | undefined {
-  const rawMux = deps.templateRegistryFactory
-    .forConfig(config)
-    .getMuxTemplate(session.mux);
-  if (rawMux === undefined || rawMux === null) {
-    return undefined;
+): OperationResult<string | undefined> {
+  const muxResult = resolveMuxTemplate(
+    deps.templateRegistryFactory.forConfig(config),
+    session.mux,
+  );
+  if (!muxResult.ok) {
+    return err(muxResult.error);
   }
-  const muxTemplate = muxTemplateSchema.parse(rawMux);
-  return renderAttachHint(muxTemplate.attach, attachVars(session));
+  if (muxResult.value === undefined) {
+    return ok(undefined);
+  }
+  return ok(renderAttachHint(muxResult.value.attach, attachVars(session)));
 }
 
 /**

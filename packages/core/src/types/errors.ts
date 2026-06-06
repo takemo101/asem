@@ -11,6 +11,7 @@ export const operationErrorCodeSchema = z.enum([
   "invalid_input",
   "config_not_found",
   "invalid_config",
+  "invalid_template",
   "scope_mismatch",
   "session_not_found",
   "session_name_conflict",

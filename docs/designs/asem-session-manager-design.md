@@ -531,6 +531,7 @@ Important MVP errors:
 
 - `config_not_found`
 - `invalid_config`
+- `invalid_template`
 - `scope_mismatch`
 - `session_not_found`
 - `session_name_conflict`
@@ -544,6 +545,8 @@ Important MVP errors:
 - `message_delivery_failed`
 
 Create failures must not leave DB rows. Message delivery failures do leave Message rows with `delivery_error`.
+
+A malformed project-local template (a `.asem.yaml` `mux`/`agent` definition that fails the schema) is a recoverable local configuration defect, not a defect in asem: the ops boundary converts the schema error into `invalid_template` (with the template `kind`, `name`, and schema issue messages, never raw values) instead of letting it escape as an internal error. A *missing* template name is still `mux_template_not_found` / `agent_template_not_found`, and the best-effort delivery/attach paths keep their existing missing-template fallback. Template parsing happens before side effects where applicable, so an invalid template blocks a create/close/send before any pane control or Message row.
 
 ## Package architecture
 

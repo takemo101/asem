@@ -1,12 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { hashToken } from "@asem/core";
+import { type ConfigDiscovery, hashToken } from "@asem/core";
 import { FakeTemplateRunner } from "@asem/runtime";
 import { closeSession } from "../src/index.ts";
 import {
+  FakeConfigLoader,
   FakeCurrentSessionResolver,
   FakeScopeResolver,
   FakeStore,
   MemoryLogger,
+  makeConfig,
   makeOpsDeps,
 } from "../src/testing/fakes.ts";
 import { expectErr, expectOk, makeSession, scopeA, scopeB } from "./helpers.ts";
@@ -181,6 +183,38 @@ describe("closeSession — mux close failure", () => {
       await closeSession(d, { id: session.id }, CTX),
       "mux_template_not_found",
     );
+  });
+
+  test("a malformed project-local mux template returns invalid_template, not a thrown defect", async () => {
+    const store = new FakeStore();
+    const session = makeRunning();
+    store.sessions.push(session);
+    const config = makeConfig({
+      mux: {
+        default: "herdr",
+        templates: { herdr: { close: [{ type: "unknown_step" }] } },
+      },
+    });
+    const d = {
+      ...deps({ store }),
+      configLoader: new FakeConfigLoader({
+        kind: "found",
+        config,
+        configPath: "/repo/.asem.yaml",
+      } satisfies ConfigDiscovery),
+    };
+
+    const error = expectErr(
+      await closeSession(d, { id: session.id }, CTX),
+      "invalid_template",
+    );
+    expect(error.details?.kind).toBe("mux");
+    expect(error.details?.name).toBe("herdr");
+    // Truthful: the config defect blocks the close, so status stays unchanged.
+    expect(d.runner.commands).toHaveLength(0);
+    const stored = await d.store.getSessionById(scopeA, session.id);
+    expect(stored?.status).toBe("running");
+    expect(stored?.closedAt).toBeNull();
   });
 });
 

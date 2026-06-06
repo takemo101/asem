@@ -448,7 +448,7 @@ describe("createSession — project-local templates from .asem.yaml", () => {
     );
   });
 
-  test("an invalid project-local template is rejected (schema-validated before use)", async () => {
+  test("an invalid project-local mux template returns invalid_template before side effects", async () => {
     const config = makeConfig({
       mux: {
         default: "herdr",
@@ -457,9 +457,34 @@ describe("createSession — project-local templates from .asem.yaml", () => {
     });
     const d = { ...deps(), configLoader: configLoaderWith(config) };
 
-    // The registry parses project-local definitions; a malformed one throws as a
-    // configuration defect before any filesystem side effects.
-    await expect(createSession(d, ROOT_INPUT, CTX)).rejects.toThrow();
+    // A malformed project-local template is a recoverable config defect: it
+    // surfaces as a structured error, not a thrown schema exception, and leaves
+    // no filesystem/store side effects (MIK-026).
+    const error = expectErr(
+      await createSession(d, ROOT_INPUT, CTX),
+      "invalid_template",
+    );
+    expect(error.details?.kind).toBe("mux");
+    expect(error.details?.name).toBe("herdr");
+    expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
+    expect(d.store.sessions).toHaveLength(0);
+  });
+
+  test("an invalid project-local agent template returns invalid_template before side effects", async () => {
+    const config = makeConfig({
+      agent: {
+        default: "claude",
+        templates: { claude: { command: "" } },
+      },
+    });
+    const d = { ...deps(), configLoader: configLoaderWith(config) };
+
+    const error = expectErr(
+      await createSession(d, ROOT_INPUT, CTX),
+      "invalid_template",
+    );
+    expect(error.details?.kind).toBe("agent");
+    expect(error.details?.name).toBe("claude");
     expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
     expect(d.store.sessions).toHaveLength(0);
   });

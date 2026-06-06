@@ -9,6 +9,7 @@
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { runMcpStdio } from "@asem/mcp";
 import type { OpsDeps } from "@asem/ops";
 import { createTemplateRegistry } from "@asem/runtime";
 import { openSqliteStore } from "@asem/store";
@@ -57,5 +58,9 @@ export async function createRuntimeDeps(): Promise<OpsDeps> {
 /** Entry point for the installed binary. Returns the process exit code. */
 export async function main(argv: string[]): Promise<number> {
   const deps = await createRuntimeDeps();
+  if (argv[0] === "mcp") {
+    await runMcpStdio({ cwd: process.cwd(), deps });
+    return 0;
+  }
   return runCli({ argv, cwd: process.cwd(), deps, io: processIo });
 }

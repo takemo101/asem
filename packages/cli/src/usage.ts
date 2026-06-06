@@ -28,6 +28,7 @@ const ROOT_USAGE = [
   "                                   send a Message to a Session in the current scope",
   "  report parent --body <text> [--json]",
   "                                   report to the current Session's parent Session",
+  "  mcp                              start the stdio MCP server (AI-facing tools)",
   "",
   "global:",
   "  -h, --help                      show this help",

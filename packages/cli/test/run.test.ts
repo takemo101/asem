@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { configPathFor } from "@asem/ops";
+import { FakeTemplateRunner } from "@asem/runtime";
 import {
+  FakeConfigLoader,
+  FakeCurrentSessionResolver,
   FakeLivenessProbe,
   FakeScopeResolver,
   FakeStore,
@@ -132,6 +135,100 @@ describe("runCli init-session", () => {
     });
     expect(typeof parsed.token).toBe("string");
     expect(typeof parsed.sessionId).toBe("string");
+  });
+});
+
+describe("runCli session create", () => {
+  /** Minimal `herdr tab create` JSON the builtin herdr mux template captures. */
+  const HERDR_CREATE_JSON = JSON.stringify({
+    result: { root_pane: { pane_id: "pane-1" }, tab: { tab_id: "tab-1" } },
+  });
+
+  /** Deps whose mux `create` step yields capturable refs so a launch succeeds. */
+  function createDeps(options: { store?: FakeStore } = {}) {
+    const store = options.store ?? new FakeStore();
+    const deps = makeOpsDeps({
+      store,
+      configLoader: new FakeConfigLoader(),
+      scopeResolver: new FakeScopeResolver(SCOPE),
+      currentSessionResolver: new FakeCurrentSessionResolver(null),
+      templateRunner: new FakeTemplateRunner({
+        commands: [{ stdout: HERDR_CREATE_JSON }],
+      }),
+    });
+    return { deps, store };
+  }
+
+  test("delegates to createSession and renders the created Session", async () => {
+    const { deps, store } = createDeps();
+    const { io, code } = await run(
+      ["session", "create", "reviewer-1", "--prompt", "do it", "--root"],
+      deps,
+    );
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("created reviewer-1");
+    expect(io.outText()).toContain("running");
+    // The operation — not the CLI — persisted the Session.
+    expect(store.sessions).toHaveLength(1);
+    expect(store.sessions[0]!.name).toBe("reviewer-1");
+    expect(store.sessions[0]!.parentSessionId).toBeNull();
+  });
+
+  test("--parent <id> launches under an explicit in-scope parent", async () => {
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "p_1", name: "parent" }));
+    const { deps } = createDeps({ store });
+
+    const { io, code } = await run(
+      ["session", "create", "child-1", "--prompt", "go", "--parent", "p_1"],
+      deps,
+    );
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("parent: p_1");
+    const child = store.sessions.find((s) => s.name === "child-1");
+    expect(child?.parentSessionId).toBe("p_1");
+  });
+
+  test("--json prints the created Session as JSON", async () => {
+    const { deps } = createDeps();
+    const { io, code } = await run(
+      ["session", "create", "helper-1", "--prompt", "x", "--root", "--json"],
+      deps,
+    );
+    expect(code).toBe(EXIT_OK);
+    const parsed = JSON.parse(io.outText());
+    expect(parsed).toMatchObject({
+      name: "helper-1",
+      status: "running",
+      parentSessionId: null,
+      workspaceId: SCOPE.workspaceId,
+      worktreeRoot: SCOPE.worktreeRoot,
+    });
+  });
+
+  test("no parent flag and no current Session surfaces a structured error", async () => {
+    const { deps, store } = createDeps();
+    const { io, code } = await run(
+      ["session", "create", "orphan", "--prompt", "x"],
+      deps,
+    );
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("current_session_not_found");
+    // A failed create must never leave a Session row (principle 5).
+    expect(store.sessions).toHaveLength(0);
+  });
+
+  test("a same-scope name conflict surfaces session_name_conflict (exit 1)", async () => {
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ name: "dup" }));
+    const { deps } = createDeps({ store });
+
+    const { io, code } = await run(
+      ["session", "create", "dup", "--prompt", "x", "--root"],
+      deps,
+    );
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("session_name_conflict");
   });
 });
 

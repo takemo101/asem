@@ -141,6 +141,99 @@ describe("parseArgs init-session", () => {
   });
 });
 
+describe("parseArgs session create", () => {
+  test("maps a positional name + --prompt and defaults json to false", () => {
+    expect(
+      command(["session", "create", "reviewer-1", "--prompt", "do it"]),
+    ).toEqual({
+      type: "session-create",
+      name: "reviewer-1",
+      prompt: "do it",
+      json: false,
+    });
+  });
+
+  test("maps optional --agent/--mux/--cwd and a positional name", () => {
+    expect(
+      command([
+        "session",
+        "create",
+        "helper-1",
+        "--prompt",
+        "go",
+        "--agent",
+        "codex",
+        "--mux",
+        "tmux",
+        "--cwd",
+        "/repo/a/sub",
+        "--json",
+      ]),
+    ).toEqual({
+      type: "session-create",
+      name: "helper-1",
+      prompt: "go",
+      agent: "codex",
+      mux: "tmux",
+      cwd: "/repo/a/sub",
+      json: true,
+    });
+  });
+
+  test("--root sets root=true", () => {
+    expect(
+      command(["session", "create", "root-1", "--prompt", "x", "--root"]),
+    ).toMatchObject({ type: "session-create", root: true });
+  });
+
+  test("--parent <id> maps to parentSessionId", () => {
+    expect(
+      command([
+        "session",
+        "create",
+        "child-1",
+        "--prompt",
+        "x",
+        "--parent",
+        "s_parent",
+      ]),
+    ).toMatchObject({ type: "session-create", parentSessionId: "s_parent" });
+  });
+
+  test("--root and --parent are mutually exclusive", () => {
+    expect(
+      errorCode([
+        "session",
+        "create",
+        "x",
+        "--prompt",
+        "p",
+        "--root",
+        "--parent",
+        "s_p",
+      ]),
+    ).toBe("invalid_input");
+  });
+
+  test("missing name is invalid_input", () => {
+    expect(errorCode(["session", "create", "--prompt", "p"])).toBe(
+      "invalid_input",
+    );
+  });
+
+  test("missing prompt is invalid_input", () => {
+    expect(errorCode(["session", "create", "reviewer-1"])).toBe(
+      "invalid_input",
+    );
+  });
+
+  test("extra positionals are invalid_input", () => {
+    expect(
+      errorCode(["session", "create", "n", "extra", "--prompt", "p"]),
+    ).toBe("invalid_input");
+  });
+});
+
 describe("parseArgs session", () => {
   test("session list maps status/parent into a filter and flags", () => {
     const cmd = command([

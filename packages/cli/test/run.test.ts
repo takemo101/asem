@@ -231,6 +231,74 @@ describe("runCli session attach", () => {
   });
 });
 
+describe("runCli session close", () => {
+  test("delegates to close_session and renders the closed result", async () => {
+    const store = new FakeStore();
+    const s = makeSession({
+      name: "to-close",
+      mux: "herdr",
+      muxRef: { pane_id: "pane-1" },
+    });
+    store.sessions.push(s);
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(["session", "close", s.id], deps);
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain(s.id);
+    expect(io.outText()).toContain("closed");
+    // The operation — not the CLI — updated the stored status.
+    expect(store.sessions[0]!.status).toBe("closed");
+    expect(store.sessions[0]!.closedAt).not.toBeNull();
+  });
+
+  test("close of an unknown id surfaces session_not_found (exit 1)", async () => {
+    const { io, code } = await run(["session", "close", "ghost"]);
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("session_not_found");
+  });
+});
+
+describe("runCli session delete", () => {
+  test("--force deletes the Session and its related Messages", async () => {
+    const store = new FakeStore();
+    const s = makeSession({ id: "s_del", name: "to-delete" });
+    store.sessions.push(s);
+    store.messages.push(
+      makeMessage({ id: "m1", toSessionId: "s_del" }),
+      makeMessage({ id: "m2", fromSessionId: "s_del", toSessionId: "s_o" }),
+    );
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(
+      ["session", "delete", "s_del", "--force"],
+      deps,
+    );
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("s_del");
+    expect(io.outText()).toContain("2 related message");
+    expect(store.sessions).toHaveLength(0);
+    expect(store.messages).toHaveLength(0);
+  });
+
+  test("without --force the operation refuses (confirmation maps at surface)", async () => {
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "s_del", name: "to-delete" }));
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(["session", "delete", "s_del"], deps);
+    // The CLI passes force=false through; the operation owns the refusal.
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("invalid_input");
+    expect(store.sessions).toHaveLength(1);
+  });
+
+  test("delete of an unknown id with --force surfaces session_not_found", async () => {
+    const { io, code } = await run(["session", "delete", "ghost", "--force"]);
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("session_not_found");
+  });
+});
+
 describe("runCli message list", () => {
   test("renders scoped history", async () => {
     const store = new FakeStore();

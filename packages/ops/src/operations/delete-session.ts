@@ -1,0 +1,116 @@
+/**
+ * `delete_session` operation — destructive removal of a Session and the Messages
+ * related to it.
+ *
+ * Delete is irreversible, so the semantics live here, in `@asem/ops`, not in the
+ * Store (which only exposes scoped primitives) and not in an FK cascade. Two
+ * rules define the operation:
+ *
+ *   1. **Explicit confirmation.** The operation refuses to delete unless the
+ *      caller passes `force`. Surfaces map their own confirmation/`--force`
+ *      affordance onto this flag; the requirement itself is enforced here so no
+ *      surface can delete by accident.
+ *   2. **Operation-owned related-message cleanup.** A Session's history is the
+ *      Messages where it is the sender or the recipient
+ *      (`from_session_id = id OR to_session_id = id`). The Store does not decide
+ *      that those rows go with the Session; this operation does, removing them
+ *      and the Session together inside one Store transaction so the delete is
+ *      all-or-nothing.
+ *
+ * The target is resolved by scoped Store lookup, so a Session in a sibling
+ * worktree is `session_not_found` and is never deleted across the isolation
+ * boundary (ADR 0002). No delivery/read/ack state is invented or inspected.
+ */
+import {
+  type ConfigLoader,
+  type CurrentSessionResolver,
+  type DeleteSessionInput,
+  type DeleteSessionOutput,
+  deleteSessionInputSchema,
+  err,
+  type Logger,
+  type OperationResult,
+  ok,
+  operationError,
+  type ScopeResolver,
+  type Store,
+} from "@asem/core";
+import { authenticateCurrentSession, resolveContext } from "../context.ts";
+import type { OpContext } from "../deps.ts";
+
+type DeleteSessionDeps = {
+  store: Store;
+  configLoader: ConfigLoader;
+  scopeResolver: ScopeResolver;
+  currentSessionResolver: CurrentSessionResolver;
+  logger?: Logger;
+};
+
+export async function deleteSession(
+  deps: DeleteSessionDeps,
+  rawInput: DeleteSessionInput,
+  ctx: OpContext,
+): Promise<OperationResult<DeleteSessionOutput>> {
+  const parsed = deleteSessionInputSchema.safeParse(rawInput);
+  if (!parsed.success) {
+    return err(
+      operationError("invalid_input", "invalid delete-session input", {
+        issues: parsed.error.issues.map((issue) => issue.message),
+      }),
+    );
+  }
+  const input = parsed.data;
+
+  const contextResult = await resolveContext(deps, ctx.cwd);
+  if (!contextResult.ok) {
+    return contextResult;
+  }
+  const { scope } = contextResult.value;
+
+  // Auth: agent-originated calls present a current Session and must verify its
+  // token; human local-trust calls have none and delete under local trust.
+  const ref = await deps.currentSessionResolver.resolve(scope);
+  if (ref !== null) {
+    const auth = await authenticateCurrentSession(deps, scope);
+    if (!auth.ok) {
+      return auth;
+    }
+  }
+
+  // Explicit confirmation is required before any destructive lookup or write.
+  if (input.force !== true) {
+    return err(
+      operationError(
+        "invalid_input",
+        "delete_session is destructive and requires explicit confirmation (force)",
+        { id: input.id },
+      ),
+    );
+  }
+
+  // Scoped lookup enforces same-scope delete: a sibling-worktree Session is not
+  // found here, never deleted across the isolation boundary.
+  const session = await deps.store.getSessionById(scope, input.id);
+  if (session === null) {
+    return err(
+      operationError("session_not_found", "Session not found in this scope", {
+        id: input.id,
+      }),
+    );
+  }
+
+  // Operation-owned cleanup: remove related Messages and the Session together in
+  // one transaction so the delete is all-or-nothing. The Store provides the
+  // scoped primitives; this operation decides they belong to one unit of work.
+  const deletedMessageCount = await deps.store.withTransaction(async (tx) => {
+    const removed = await tx.deleteRelatedMessagesScoped(scope, session.id);
+    await tx.deleteSessionScoped(scope, session.id);
+    return removed;
+  });
+
+  deps.logger?.info("deleted Session", {
+    sessionId: session.id,
+    deletedMessageCount,
+  });
+  return ok({ deletedSessionId: session.id, deletedMessageCount });
+}

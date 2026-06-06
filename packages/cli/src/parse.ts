@@ -34,6 +34,8 @@ export type CliCommand =
     }
   | { type: "session-get"; id: string; refresh: boolean; json: boolean }
   | { type: "session-attach"; id: string; json: boolean }
+  | { type: "session-close"; id: string; json: boolean }
+  | { type: "session-delete"; id: string; force: boolean; json: boolean }
   | { type: "message-list"; filter?: MessageListFilter; json: boolean }
   | {
       type: "message-send";
@@ -292,20 +294,80 @@ function parseSessionAttach(args: string[]): ParseResult {
   };
 }
 
+/** `asem session close <id> [--json]`. */
+function parseSessionClose(args: string[]): ParseResult {
+  const flags = parseFlags(args, { booleans: ["json"], values: [] });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { positionals, booleans } = flags.value;
+
+  const id = positionals[0];
+  if (id === undefined || id.length === 0) {
+    return invalid("session id is required (use `asem session close <id>`)");
+  }
+  if (positionals.length > 1) {
+    return invalid("unexpected extra arguments", {
+      extra: positionals.slice(1),
+    });
+  }
+  return {
+    kind: "command",
+    command: { type: "session-close", id, json: booleans.has("json") },
+  };
+}
+
+/**
+ * `asem session delete <id> [--force|--yes] [--json]`. The destructive
+ * confirmation is mapped from `--force`/`--yes` here at the surface; whether the
+ * delete may actually proceed is the operation's call (semantics live in ops).
+ */
+function parseSessionDelete(args: string[]): ParseResult {
+  const flags = parseFlags(args, {
+    booleans: ["force", "yes", "json"],
+    values: [],
+  });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { positionals, booleans } = flags.value;
+
+  const id = positionals[0];
+  if (id === undefined || id.length === 0) {
+    return invalid("session id is required (use `asem session delete <id>`)");
+  }
+  if (positionals.length > 1) {
+    return invalid("unexpected extra arguments", {
+      extra: positionals.slice(1),
+    });
+  }
+  return {
+    kind: "command",
+    command: {
+      type: "session-delete",
+      id,
+      force: booleans.has("force") || booleans.has("yes"),
+      json: booleans.has("json"),
+    },
+  };
+}
+
 function parseSession(args: string[]): ParseResult {
   const [sub, ...rest] = args;
   switch (sub) {
     case undefined:
-      return invalid("missing session subcommand (list | get | attach)");
+      return invalid(
+        "missing session subcommand (list | get | attach | close | delete)",
+      );
     case "list":
       return parseSessionList(rest);
     case "get":
       return parseSessionGet(rest);
     case "attach":
       return parseSessionAttach(rest);
+    case "close":
+      return parseSessionClose(rest);
+    case "delete":
+      return parseSessionDelete(rest);
     default:
       return invalid(`unknown session subcommand: ${sub}`, {
-        expected: ["list", "get", "attach"],
+        expected: ["list", "get", "attach", "close", "delete"],
       });
   }
 }

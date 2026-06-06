@@ -9,6 +9,8 @@
  */
 import type { OperationError, OperationResult, OpsDeps } from "@asem/ops";
 import {
+  closeSession,
+  deleteSession,
   getSession,
   initProject,
   initSession,
@@ -22,6 +24,8 @@ import type { CliCommand } from "./parse.ts";
 import { parseArgs } from "./parse.ts";
 import {
   renderAttach,
+  renderClosedSession,
+  renderDeletedSession,
   renderError,
   renderInit,
   renderInitSessionExports,
@@ -98,6 +102,10 @@ async function dispatch(
       return runSessionGet(command, env);
     case "session-attach":
       return runSessionAttach(command, env);
+    case "session-close":
+      return runSessionClose(command, env);
+    case "session-delete":
+      return runSessionDelete(command, env);
     case "message-list":
       return runMessageList(command, env);
     case "message-send":
@@ -209,6 +217,34 @@ async function runSessionAttach(
       return;
     }
     emit(io, renderAttach(value.session, value.attachHint));
+  });
+}
+
+async function runSessionClose(
+  command: Extract<CliCommand, { type: "session-close" }>,
+  { cwd, deps, io }: DispatchEnv,
+): Promise<number> {
+  const result = await closeSession(deps, { id: command.id }, { cwd });
+  return render(io, result, (value) => {
+    if (command.json) emitJson(io, value.session);
+    else emit(io, renderClosedSession(value.session));
+  });
+}
+
+async function runSessionDelete(
+  command: Extract<CliCommand, { type: "session-delete" }>,
+  { cwd, deps, io }: DispatchEnv,
+): Promise<number> {
+  // The CLI only maps the `--force`/`--yes` confirmation onto the operation
+  // input; whether a delete may proceed without it is the operation's call.
+  const result = await deleteSession(
+    deps,
+    { id: command.id, force: command.force },
+    { cwd },
+  );
+  return render(io, result, (value) => {
+    if (command.json) emitJson(io, value);
+    else emit(io, renderDeletedSession(value));
   });
 }
 

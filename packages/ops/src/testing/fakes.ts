@@ -251,7 +251,17 @@ export class FakeStore implements Store {
   }
 
   async withTransaction<T>(fn: (tx: Store) => Promise<T>): Promise<T> {
-    return fn(this);
+    // Mirror the SqliteStore's all-or-nothing semantics: snapshot the rows, run
+    // the body, and restore on throw so operation tests can assert rollback.
+    const sessionSnapshot = this.sessions.map((s) => ({ ...s }));
+    const messageSnapshot = this.messages.map((m) => ({ ...m }));
+    try {
+      return await fn(this);
+    } catch (error) {
+      this.sessions.splice(0, this.sessions.length, ...sessionSnapshot);
+      this.messages.splice(0, this.messages.length, ...messageSnapshot);
+      throw error;
+    }
   }
 }
 

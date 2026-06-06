@@ -77,13 +77,27 @@ describe("CockpitApp effects", () => {
     expect(store.sessions[0]!.status).toBe("closed");
   });
 
-  test("attach leaves to the host and refreshes on return", async () => {
+  test("attach leaves to the host with the get_session hint and refreshes", async () => {
     const store = new FakeStore();
+    // The default muxRef carries `pane_id`, so the herdr attach hint renders.
     store.sessions.push(makeSession({ id: "s1", name: "one" }));
     const { app, host } = makeApp({ store });
     await app.dispatch({ type: "attach" });
     expect(host.attaches).toHaveLength(1);
     expect(host.attaches[0]!.session.id).toBe("s1");
+    expect(host.attaches[0]!.attachHint).toBe("herdr agent attach 'pane-1'");
+  });
+
+  test("attach passes a null hint when the mux ref cannot render one", async () => {
+    const store = new FakeStore();
+    // herdr's attach references `pane_id`, which this ref lacks → no hint.
+    store.sessions.push(
+      makeSession({ id: "s1", name: "one", muxRef: { tab_id: "tab-1" } }),
+    );
+    const { app, host } = makeApp({ store });
+    await app.dispatch({ type: "attach" });
+    expect(host.attaches).toHaveLength(1);
+    expect(host.attaches[0]!.attachHint).toBeNull();
   });
 
   test("a failing operation surfaces the structured error in the status line", async () => {

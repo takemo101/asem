@@ -81,9 +81,9 @@ export function renderSessionDetail(
 /**
  * Render the human attach guidance for a Session. The CLI never computes attach
  * commands itself; it renders the `attachHint` the operation surfaced. When no
- * hint is available yet (mux templates land in a later slice) it shows the mux
- * coordinates so a human can attach manually. This stays CLI-human only and
- * introduces no MCP attach semantics.
+ * hint can be rendered (for example, the mux ref is incomplete or the mux has
+ * no attach sequence), it shows the mux coordinates so a human can attach
+ * manually. This stays CLI-human only and introduces no MCP attach semantics.
  */
 export function renderAttach(session: Session, attachHint?: string): string[] {
   if (attachHint !== undefined && attachHint.length > 0) {

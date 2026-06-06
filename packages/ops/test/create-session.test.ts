@@ -21,11 +21,17 @@ const SESSION_DIR = `${scopeA.worktreeRoot}/.asem/sessions/${FIRST_ID}`;
 const PROMPT_PATH = `${SESSION_DIR}/prompt.md`;
 const LAUNCH_PATH = `${SESSION_DIR}/launch.sh`;
 
-/** A runner whose mux `create` step prints a capturable pane id. */
+/** A runner whose mux `create` step prints the herdr JSON that carries refs. */
 function happyRunner(): FakeTemplateRunner {
-  // [0] mux create -> stdout captured as pane_id; later calls default to ok.
-  return new FakeTemplateRunner({ commands: [{ stdout: "pane-1" }] });
+  // [0] mux create -> herdr `tab create` JSON; pane_id/tab_id captured via
+  // JSONPath. Later calls default to ok.
+  return new FakeTemplateRunner({ commands: [{ stdout: HERDR_CREATE_JSON }] });
 }
+
+/** Minimal `herdr tab create` JSON shape the builtin herdr template parses. */
+const HERDR_CREATE_JSON = JSON.stringify({
+  result: { root_pane: { pane_id: "pane-1" }, tab: { tab_id: "tab-1" } },
+});
 
 /** Build a deps bundle keeping typed references to the inspectable fakes. */
 function deps(
@@ -61,8 +67,8 @@ describe("createSession — happy path", () => {
 
     // Sequence order: create (capture pane) then run_in_pane.
     expect(d.runner.commands).toHaveLength(2);
-    expect(d.runner.commands[0]!.command).toContain("herdr pane split");
-    expect(d.runner.commands[1]!.command).toContain("herdr pane send-text");
+    expect(d.runner.commands[0]!.command).toContain("herdr tab create");
+    expect(d.runner.commands[1]!.command).toContain("herdr pane run");
 
     // The row is persisted exactly once, after the start.
     expect(d.store.sessions).toHaveLength(1);
@@ -86,7 +92,7 @@ describe("createSession — happy path", () => {
   test("captures mux refs from the create sequence onto the Session", async () => {
     const d = deps();
     const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
-    expect(session.muxRef).toEqual({ pane_id: "pane-1" });
+    expect(session.muxRef).toEqual({ pane_id: "pane-1", tab_id: "tab-1" });
   });
 
   test("writes a mode-0600 launch script injecting env and the agent command", async () => {
@@ -205,7 +211,7 @@ describe("createSession — token protection", () => {
 describe("createSession — failure leaves no stale row + best-effort cleanup", () => {
   test("a failed mux create returns a structured error with the log path and no row", async () => {
     const runner = new FakeTemplateRunner({
-      commands: [{ exitCode: 1, stderr: "split boom" }],
+      commands: [{ exitCode: 1, stderr: "create boom" }],
     });
     const d = deps({ runner });
 
@@ -226,7 +232,7 @@ describe("createSession — failure leaves no stale row + best-effort cleanup", 
   test("a failed run_in_pane attempts mux close and leaves no row", async () => {
     const runner = new FakeTemplateRunner({
       commands: [
-        { stdout: "pane-1" }, // create ok
+        { stdout: HERDR_CREATE_JSON }, // create ok (captures pane_id/tab_id)
         { exitCode: 1, stderr: "send boom" }, // run_in_pane fails
         {}, // close ok
       ],

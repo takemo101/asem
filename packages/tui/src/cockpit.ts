@@ -188,10 +188,15 @@ export async function executeCockpitEffect(
 ): Promise<OperationResult<CockpitEffectOutcome>> {
   switch (effect.kind) {
     case "send": {
+      // The TUI is the human operator surface (local trust). Mark the send
+      // operator-originated so it is recorded with no source attribution and
+      // never adopts the target worktree's current-Session pointer — in
+      // workspace scope `ctx.cwd` is the sibling worktree's root, whose own
+      // current Session must not be impersonated (MIK-022; ADR 0003).
       const result = await sendMessage(
         deps,
         { toSessionId: effect.sessionId, body: effect.body },
-        ctx,
+        { ...ctx, origin: "operator" },
       );
       return result.ok
         ? { ok: true, value: { kind: "sent", message: result.value.message } }

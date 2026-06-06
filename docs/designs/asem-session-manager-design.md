@@ -138,7 +138,10 @@ only) and one `@asem/ops` reader (`load_workspace_snapshot`); the cockpit groups
 the result by `worktree_root`. A cross-worktree operation in `workspace` scope is
 run with `cwd` set to the target Session's `worktree_root`, so the shared
 operation re-resolves to that Session's Effective Scope rather than bypassing
-scope checks.
+scope checks. Because that scope is the target worktree's, a TUI send marks
+itself operator-originated so it is not attributed to that worktree's current
+Session (see "Auth and local trust model" and
+[ADR 0003](../adr/0003-tui-operator-message-attribution.md)).
 
 ## Config design
 
@@ -504,6 +507,21 @@ Agent-originated operations require Session token verification.
 - Raw token is injected through env or mode-`0600` files.
 
 Human/operator CLI and TUI operations operate under local trust. TUI is an operator surface and may send/close/delete without Session token, guarded by confirmation for destructive operations.
+
+`send_message` decides a Message's source by resolving the current-Session
+pointer for the operation's Effective Scope: an agent-originated call verifies
+that Session's token and is attributed to it; a human local-trust call resolves
+no Session and is recorded with no source attribution (`from_session_id = null`,
+`[asem message]` header). The TUI is inherently the human operator, so it marks
+its send operator-originated (`OpContext.origin = "operator"`) to force the human
+path: it never adopts the resolved worktree's current-Session pointer. This
+matters in `--scope workspace`, where a cross-worktree send runs with `cwd` set
+to the target Session's `worktree_root` — without the operator marker, the send
+would silently impersonate that worktree's own current Session. The marker lives
+in the surface-built context, not the `send_message` input schema, so MCP/CLI
+input cannot set it. `report_parent` always acts as the verified current Session
+and never carries an operator origin. See
+[ADR 0003](../adr/0003-tui-operator-message-attribution.md).
 
 ## Error semantics
 

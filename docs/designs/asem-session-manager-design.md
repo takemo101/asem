@@ -768,6 +768,33 @@ Real mux integration tests:
 - skip when the binary is unavailable;
 - default CI must not require real multiplexers.
 
+### MVP smoke checks
+
+A single fake-runtime smoke suite proves the implemented slices work together
+before the MVP is called ready. It lives in the integrator package
+(`packages/cli/test/mvp-smoke.test.ts`) because `@asem/cli` depends on every
+surface, and it is deliberately cross-package: one shared in-memory Store and
+FileSystem are driven through the shared `@asem/ops` spine and then projected
+through MCP, the TUI cockpit, and the CLI.
+
+The flow walks the operation table end to end — `init` → `init-session` →
+`create-session` → `list`/`get` → `send-message` → `report-parent` →
+`message-list` → `close` → `delete` — then exercises MCP tool projection (the nine
+agreed tools, no attach), the TUI view-model/UI basics (tabs, keybar, Session
+rows, a scripted send), and a CLI projection. It also asserts the security/state
+invariants directly: token-bearing files (`.asem/tokens/<id>.token`, the launch
+script) are mode `0600` under the ignored runtime paths, the current-session
+pointer excludes the raw token, and no raw token ever reaches the log stream
+(secret redaction). It uses only fakes — no real multiplexer or agent CLI.
+
+A companion docs scan (`packages/cli/test/docs-links.test.ts`) keeps the durable
+docs honest: every relative Markdown link must resolve and no placeholder markers
+may ship.
+
+The opt-in real-mux/agent checks are separate and off by default: the
+`@asem/runtime` integration suites run only under `ASEM_MUX_INTEGRATION=1` /
+`ASEM_AGENT_INTEGRATION=1` and additionally skip per binary when it is absent.
+
 ## MVP implementation order
 
 1. **Monorepo scaffold**

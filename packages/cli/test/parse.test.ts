@@ -190,6 +190,44 @@ describe("parseArgs session", () => {
     });
   });
 
+  test("session close maps id", () => {
+    expect(command(["session", "close", "s_1"])).toEqual({
+      type: "session-close",
+      id: "s_1",
+      json: false,
+    });
+  });
+
+  test("session close requires an id", () => {
+    expect(errorCode(["session", "close"])).toBe("invalid_input");
+  });
+
+  test("session delete maps id and force (--force or --yes)", () => {
+    expect(command(["session", "delete", "s_1", "--force"])).toEqual({
+      type: "session-delete",
+      id: "s_1",
+      force: true,
+      json: false,
+    });
+    expect(command(["session", "delete", "s_1", "--yes"])).toMatchObject({
+      type: "session-delete",
+      force: true,
+    });
+  });
+
+  test("session delete defaults force to false (semantics enforced by ops)", () => {
+    expect(command(["session", "delete", "s_1"])).toEqual({
+      type: "session-delete",
+      id: "s_1",
+      force: false,
+      json: false,
+    });
+  });
+
+  test("session delete requires an id", () => {
+    expect(errorCode(["session", "delete"])).toBe("invalid_input");
+  });
+
   test("unknown session subcommand is invalid_input", () => {
     expect(errorCode(["session", "destroy", "s_1"])).toBe("invalid_input");
   });

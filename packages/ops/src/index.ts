@@ -24,7 +24,9 @@ export {
 
 // Dependency bundle & invocation context
 export type { OpContext, OpsDeps } from "./deps.ts";
+export { closeSession } from "./operations/close-session.ts";
 export { createSession } from "./operations/create-session.ts";
+export { deleteSession } from "./operations/delete-session.ts";
 export { getSession } from "./operations/get-session.ts";
 
 // Operation handlers

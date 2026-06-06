@@ -6,6 +6,7 @@
  * No domain decisions live here — the CLI only formats what `@asem/ops` returns.
  */
 import {
+  type DeleteSessionOutput,
   type InitSessionOutput,
   type Message,
   type OperationError,
@@ -92,6 +93,33 @@ export function renderAttach(session: Session, attachHint?: string): string[] {
     `no attach hint available for ${session.name} (${session.id})`,
     `mux:     ${session.mux}`,
     `mux_ref: ${JSON.stringify(session.muxRef)}`,
+  ];
+}
+
+// --- close / delete --------------------------------------------------------
+
+/**
+ * Render the outcome of `session close`. Close is process/connection state only:
+ * the lines report the new `closed` status and the `closed_at` stamp, never a
+ * work outcome.
+ */
+export function renderClosedSession(session: Session): string[] {
+  return [
+    `closed ${session.name} (${session.id})`,
+    `status:    ${session.status}`,
+    `closed_at: ${session.closedAt ?? "-"}`,
+  ];
+}
+
+/**
+ * Render the outcome of `session delete`. The destructive removal is owned by
+ * the operation; the CLI only reports what it removed.
+ */
+export function renderDeletedSession(output: DeleteSessionOutput): string[] {
+  const plural = output.deletedMessageCount === 1 ? "" : "s";
+  return [
+    `deleted Session ${output.deletedSessionId}`,
+    `removed ${output.deletedMessageCount} related message${plural}`,
   ];
 }
 

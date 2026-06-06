@@ -1,11 +1,11 @@
 import type { Config } from "./types/config.ts";
-import type { EffectiveScope } from "./types/scope.ts";
-import type { Session, SessionStatus } from "./types/session.ts";
 import type { Message } from "./types/message.ts";
 import type {
-  SessionListFilter,
   MessageListFilter,
+  SessionListFilter,
 } from "./types/operations.ts";
+import type { EffectiveScope } from "./types/scope.ts";
+import type { Session, SessionStatus } from "./types/session.ts";
 
 /**
  * Port interfaces required by future operation handlers (`@asem/ops`).
@@ -29,7 +29,10 @@ export type SessionUpdate = Partial<
 export interface Store {
   insertSession(session: Session): Promise<void>;
   getSessionById(scope: EffectiveScope, id: string): Promise<Session | null>;
-  getSessionByName(scope: EffectiveScope, name: string): Promise<Session | null>;
+  getSessionByName(
+    scope: EffectiveScope,
+    name: string,
+  ): Promise<Session | null>;
   listSessions(
     scope: EffectiveScope,
     filter?: SessionListFilter,

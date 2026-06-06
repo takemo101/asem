@@ -7,18 +7,18 @@
  * principle 7: scope every store query).
  */
 import {
-  err,
-  ok,
-  operationError,
-  verifyToken,
   type Config,
   type ConfigLoader,
   type CurrentSessionResolver,
   type EffectiveScope,
+  err,
   type OperationResult,
+  ok,
+  operationError,
   type ScopeResolver,
   type Session,
   type Store,
+  verifyToken,
 } from "@asem/core";
 
 /** Config + scope resolved for a worktree, shared by scoped operations. */

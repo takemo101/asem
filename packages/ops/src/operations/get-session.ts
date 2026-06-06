@@ -7,21 +7,21 @@
  * outcome.
  */
 import {
-  err,
-  ok,
-  getSessionInputSchema,
-  operationError,
   type Clock,
   type ConfigLoader,
+  err,
   type GetSessionInput,
   type GetSessionOutput,
+  getSessionInputSchema,
   type LivenessProbe,
   type OperationResult,
+  ok,
+  operationError,
   type ScopeResolver,
   type Store,
 } from "@asem/core";
-import type { OpContext } from "../deps.ts";
 import { resolveContext } from "../context.ts";
+import type { OpContext } from "../deps.ts";
 import { refreshLiveness } from "./liveness.ts";
 
 type GetSessionDeps = {

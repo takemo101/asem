@@ -43,9 +43,7 @@ export function operationError(
   message: string,
   details?: Record<string, unknown>,
 ): OperationError {
-  return details === undefined
-    ? { code, message }
-    : { code, message, details };
+  return details === undefined ? { code, message } : { code, message, details };
 }
 
 /**

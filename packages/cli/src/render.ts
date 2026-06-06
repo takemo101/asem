@@ -6,11 +6,11 @@
  * No domain decisions live here — the CLI only formats what `@asem/ops` returns.
  */
 import {
-  shellEscape,
   type InitSessionOutput,
   type Message,
   type OperationError,
   type Session,
+  shellEscape,
 } from "@asem/core";
 
 /** Render a structured error as `error: <code>: <message>` plus detail lines. */

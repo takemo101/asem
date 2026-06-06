@@ -8,9 +8,9 @@
  * schemas the operations parse, so the CLI never duplicates that semantics.
  */
 import {
-  operationError,
   type MessageListFilter,
   type OperationError,
+  operationError,
   type SessionListFilter,
 } from "@asem/core";
 
@@ -49,8 +49,14 @@ export type ParseResult =
   | { kind: "help"; topic?: string }
   | { kind: "error"; error: OperationError };
 
-function invalid(message: string, details?: Record<string, unknown>): ParseResult {
-  return { kind: "error", error: operationError("invalid_input", message, details) };
+function invalid(
+  message: string,
+  details?: Record<string, unknown>,
+): ParseResult {
+  return {
+    kind: "error",
+    error: operationError("invalid_input", message, details),
+  };
 }
 
 interface FlagSpec {
@@ -119,7 +125,10 @@ function fail<T = never>(
   message: string,
   details?: Record<string, unknown>,
 ): Parsed<T> {
-  return { ok: false, error: operationError("invalid_input", message, details) };
+  return {
+    ok: false,
+    error: operationError("invalid_input", message, details),
+  };
 }
 
 // --- per-command parsers ---------------------------------------------------
@@ -133,7 +142,9 @@ function parseInit(args: string[]): ParseResult {
     flags.value.values.get("id") ??
     flags.value.positionals[0];
   if (workspaceId === undefined || workspaceId.length === 0) {
-    return invalid("workspace id is required (use `asem init --workspace <id>`)");
+    return invalid(
+      "workspace id is required (use `asem init --workspace <id>`)",
+    );
   }
   if (flags.value.positionals.length > 1) {
     return invalid("unexpected extra arguments", {
@@ -148,7 +159,9 @@ function parseMuxRef(raw: string): Parsed<Record<string, unknown>> {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return fail("--mux-ref must be valid JSON (e.g. `--mux-ref '{\"pane\":\"p1\"}'`)");
+    return fail(
+      '--mux-ref must be valid JSON (e.g. `--mux-ref \'{"pane":"p1"}\'`)',
+    );
   }
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return fail("--mux-ref must be a JSON object");
@@ -214,7 +227,9 @@ function parseSessionList(args: string[]): ParseResult {
     filter = {
       // `status` is passed through verbatim; the operation's schema validates
       // the enum so the CLI does not duplicate the domain's status vocabulary.
-      ...(status !== undefined ? { status: status as SessionListFilter["status"] } : {}),
+      ...(status !== undefined
+        ? { status: status as SessionListFilter["status"] }
+        : {}),
       ...(parent !== undefined ? { parentSessionId: parent } : {}),
     };
   }
@@ -382,7 +397,9 @@ function parseReportParent(args: string[]): ParseResult {
 
   const body = values.get("body");
   if (body === undefined) {
-    return invalid("report body is required (use `asem report parent --body <text>`)");
+    return invalid(
+      "report body is required (use `asem report parent --body <text>`)",
+    );
   }
   return {
     kind: "command",

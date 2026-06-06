@@ -40,10 +40,7 @@ export const noopRedactor: Redactor = {
 };
 
 /** Redact every string value in a log/detail field map. */
-export function redactFields(
-  redactor: Redactor,
-  fields: LogFields,
-): LogFields {
+export function redactFields(redactor: Redactor, fields: LogFields): LogFields {
   const out: LogFields = {};
   for (const [key, value] of Object.entries(fields)) {
     out[key] = typeof value === "string" ? redactor.redact(value) : value;

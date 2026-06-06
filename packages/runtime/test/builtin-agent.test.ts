@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type AgentTemplate,
   agentTemplateSchema,
+  type CommandSequence,
   createTemplateRegistry,
   FakeTemplateRunner,
   renderAgentCommand,
   SequenceEngine,
-  type AgentTemplate,
-  type CommandSequence,
 } from "../src/index.ts";
 
 /**
@@ -152,9 +152,21 @@ describe("prompt delivery modes: arg / stdin / file / paste", () => {
     command: string;
     expected: string;
   }> = [
-    { delivery: "arg", command: "claude", expected: `claude "$(cat ${PROMPT_SHELL})"` },
-    { delivery: "stdin", command: "someagent", expected: `someagent < ${PROMPT_SHELL}` },
-    { delivery: "file", command: "someagent", expected: `someagent ${PROMPT_SHELL}` },
+    {
+      delivery: "arg",
+      command: "claude",
+      expected: `claude "$(cat ${PROMPT_SHELL})"`,
+    },
+    {
+      delivery: "stdin",
+      command: "someagent",
+      expected: `someagent < ${PROMPT_SHELL}`,
+    },
+    {
+      delivery: "file",
+      command: "someagent",
+      expected: `someagent ${PROMPT_SHELL}`,
+    },
     { delivery: "paste", command: "opencode", expected: "opencode" },
   ];
 

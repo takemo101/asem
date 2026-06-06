@@ -6,36 +6,33 @@
  * principle 4). Each fake is small and inspectable so tests can assert on
  * recorded effects (written files + modes, store contents, log entries).
  */
-import {
-  type Clock,
-  type Config,
-  type ConfigDiscovery,
-  type ConfigLoader,
-  type CurrentSessionRef,
-  type CurrentSessionResolver,
-  type EffectiveScope,
-  type FileSystem,
-  type IdGenerator,
-  type LivenessProbe,
-  type LogFields,
-  type Logger,
-  type Message,
-  type MessageListFilter,
-  type Redactor,
-  type ScopeResolver,
-  type Session,
-  type SessionListFilter,
-  type SessionStatus,
-  type SessionUpdate,
-  type Store,
-  type TemplateRegistry,
-  type TemplateRunner,
-  type TokenGenerator,
+import type {
+  Clock,
+  Config,
+  ConfigDiscovery,
+  ConfigLoader,
+  CurrentSessionRef,
+  CurrentSessionResolver,
+  EffectiveScope,
+  FileSystem,
+  IdGenerator,
+  LivenessProbe,
+  LogFields,
+  Logger,
+  Message,
+  MessageListFilter,
+  Redactor,
+  ScopeResolver,
+  Session,
+  SessionListFilter,
+  SessionStatus,
+  SessionUpdate,
+  Store,
+  TemplateRegistry,
+  TemplateRunner,
+  TokenGenerator,
 } from "@asem/core";
-import {
-  createTemplateRegistry,
-  FakeTemplateRunner,
-} from "@asem/runtime";
+import { createTemplateRegistry, FakeTemplateRunner } from "@asem/runtime";
 import type { OpsDeps } from "../deps.ts";
 
 // --- FileSystem -----------------------------------------------------------
@@ -174,9 +171,7 @@ export class FakeStore implements Store {
     id: string,
     patch: SessionUpdate,
   ): Promise<void> {
-    const session = this.sessions.find(
-      (s) => inScope(s, scope) && s.id === id,
-    );
+    const session = this.sessions.find((s) => inScope(s, scope) && s.id === id);
     if (session === undefined) {
       return;
     }
@@ -400,9 +395,7 @@ export class MemoryLogger implements Logger {
   private record(level: keyof Logger) {
     return (message: string, fields?: LogFields): void => {
       this.entries.push(
-        fields === undefined
-          ? { level, message }
-          : { level, message, fields },
+        fields === undefined ? { level, message } : { level, message, fields },
       );
     };
   }

@@ -6,7 +6,12 @@
  * or tokens are touched (testability rules). The CLI is exercised through
  * `runCli` exactly as the binary would call it.
  */
-import { hashToken, type EffectiveScope, type Message, type Session } from "@asem/core";
+import {
+  type EffectiveScope,
+  hashToken,
+  type Message,
+  type Session,
+} from "@asem/core";
 import type { OpsDeps } from "@asem/ops";
 import {
   FakeConfigLoader,
@@ -87,10 +92,9 @@ export interface CliFixture {
  */
 export const CURRENT_TOKEN = "tok-current";
 
-export function makeCliFixture(options: {
-  store?: FakeStore;
-  current?: { sessionId: string } | null;
-} = {}): CliFixture {
+export function makeCliFixture(
+  options: { store?: FakeStore; current?: { sessionId: string } | null } = {},
+): CliFixture {
   const store = options.store ?? new FakeStore();
   const current = options.current ?? null;
   const deps = makeOpsDeps({
@@ -98,7 +102,9 @@ export function makeCliFixture(options: {
     configLoader: new FakeConfigLoader(),
     scopeResolver: new FakeScopeResolver(SCOPE),
     currentSessionResolver: new FakeCurrentSessionResolver(
-      current === null ? null : { sessionId: current.sessionId, token: CURRENT_TOKEN },
+      current === null
+        ? null
+        : { sessionId: current.sessionId, token: CURRENT_TOKEN },
     ),
   });
   return { deps, store };

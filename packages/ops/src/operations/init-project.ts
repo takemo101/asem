@@ -8,19 +8,19 @@
  */
 import {
   err,
-  ok,
-  initProjectInputSchema,
-  operationError,
   type FileSystem,
   type InitProjectInput,
   type InitProjectOutput,
+  initProjectInputSchema,
   type Logger,
   type OperationResult,
+  ok,
+  operationError,
 } from "@asem/core";
 import {
-  RUNTIME_GITIGNORE_RULES,
   configPathFor,
   gitignorePathFor,
+  RUNTIME_GITIGNORE_RULES,
 } from "../paths.ts";
 
 /** Quote a workspace id as a YAML scalar only when it needs it. */
@@ -94,7 +94,9 @@ export async function initProject(
 
   const gitignorePath = gitignorePathFor(cwd);
   const gitignoreExists = await deps.fs.exists(gitignorePath);
-  const existing = gitignoreExists ? await deps.fs.readFile(gitignorePath) : null;
+  const existing = gitignoreExists
+    ? await deps.fs.readFile(gitignorePath)
+    : null;
   const updated = ensureGitignoreRules(existing);
   if (updated !== null) {
     await deps.fs.writeFileAtomic(gitignorePath, updated);

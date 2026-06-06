@@ -12,21 +12,21 @@
  * invalid_session_token).
  */
 import {
-  err,
-  ok,
-  listMessagesInputSchema,
-  operationError,
   type ConfigLoader,
   type CurrentSessionResolver,
+  err,
   type ListMessagesInput,
   type ListMessagesOutput,
+  listMessagesInputSchema,
   type MessageListFilter,
   type OperationResult,
+  ok,
+  operationError,
   type ScopeResolver,
   type Store,
 } from "@asem/core";
-import type { OpContext } from "../deps.ts";
 import { authenticateCurrentSession, resolveContext } from "../context.ts";
+import type { OpContext } from "../deps.ts";
 
 type ListMessagesDeps = {
   store: Store;

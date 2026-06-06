@@ -73,9 +73,7 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
         command: "herdr pane send-keys {{pane_id_shell}} Enter",
       },
     ],
-    attach: [
-      { type: "run", command: "herdr agent attach {{pane_id_shell}}" },
-    ],
+    attach: [{ type: "run", command: "herdr agent attach {{pane_id_shell}}" }],
     close: [{ type: "run", command: "herdr pane close {{pane_id_shell}}" }],
   },
 

@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { isStoreError } from "../src/index.ts";
-import {
-  freshStore,
-  makeSession,
-  scopeA,
-  scopeB,
-} from "./helpers.ts";
+import { freshStore, makeSession, scopeA, scopeB } from "./helpers.ts";
 
 describe("Session CRUD", () => {
   test("insert then read back a typed Session", async () => {
@@ -88,7 +83,11 @@ describe("Session duplicate names", () => {
   test("same name is allowed in a different worktree scope", async () => {
     const { store } = freshStore();
     await store.insertSession(
-      makeSession({ id: "s_a", name: "dup", worktreeRoot: scopeA.worktreeRoot }),
+      makeSession({
+        id: "s_a",
+        name: "dup",
+        worktreeRoot: scopeA.worktreeRoot,
+      }),
     );
     await expect(
       store.insertSession(
@@ -149,7 +148,9 @@ describe("listSessions filters", () => {
   test("filters by status", async () => {
     const { store } = freshStore();
     await store.insertSession(makeSession({ id: "s_run", status: "running" }));
-    await store.insertSession(makeSession({ id: "s_closed", status: "closed" }));
+    await store.insertSession(
+      makeSession({ id: "s_closed", status: "closed" }),
+    );
 
     const running = await store.listSessions(scopeA, { status: "running" });
     expect(running.map((s) => s.id)).toEqual(["s_run"]);
@@ -157,7 +158,9 @@ describe("listSessions filters", () => {
 
   test("filters by parentSessionId, including null (root)", async () => {
     const { store } = freshStore();
-    await store.insertSession(makeSession({ id: "root", parentSessionId: null }));
+    await store.insertSession(
+      makeSession({ id: "root", parentSessionId: null }),
+    );
     await store.insertSession(
       makeSession({ id: "child", parentSessionId: "root" }),
     );

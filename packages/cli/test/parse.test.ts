@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseArgs, type CliCommand } from "../src/parse.ts";
+import { type CliCommand, parseArgs } from "../src/parse.ts";
 
 /** Parse and assert success, returning the typed command. */
 function command(argv: string[]): CliCommand {
@@ -119,7 +119,9 @@ describe("parseArgs init-session", () => {
   });
 
   test("missing name is invalid_input", () => {
-    expect(errorCode(["init-session", "--mux-ref", "{}"])).toBe("invalid_input");
+    expect(errorCode(["init-session", "--mux-ref", "{}"])).toBe(
+      "invalid_input",
+    );
   });
 
   test("missing mux-ref is invalid_input", () => {
@@ -127,15 +129,15 @@ describe("parseArgs init-session", () => {
   });
 
   test("non-JSON mux-ref is invalid_input", () => {
-    expect(errorCode(["init-session", "--name", "x", "--mux-ref", "nope"])).toBe(
-      "invalid_input",
-    );
+    expect(
+      errorCode(["init-session", "--name", "x", "--mux-ref", "nope"]),
+    ).toBe("invalid_input");
   });
 
   test("array mux-ref is invalid_input (must be an object)", () => {
-    expect(errorCode(["init-session", "--name", "x", "--mux-ref", "[1,2]"])).toBe(
-      "invalid_input",
-    );
+    expect(
+      errorCode(["init-session", "--name", "x", "--mux-ref", "[1,2]"]),
+    ).toBe("invalid_input");
   });
 });
 
@@ -258,13 +260,13 @@ describe("parseArgs message send", () => {
 
 describe("parseArgs report parent", () => {
   test("maps --body and --json", () => {
-    expect(command(["report", "parent", "--body", "halfway", "--json"])).toEqual(
-      {
-        type: "report-parent",
-        body: "halfway",
-        json: true,
-      },
-    );
+    expect(
+      command(["report", "parent", "--body", "halfway", "--json"]),
+    ).toEqual({
+      type: "report-parent",
+      body: "halfway",
+      json: true,
+    });
   });
 
   test("missing body is invalid_input", () => {

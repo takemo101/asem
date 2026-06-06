@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hashToken, type CurrentSessionRef } from "@asem/core";
+import { type CurrentSessionRef, hashToken } from "@asem/core";
 import { listMessages } from "../src/index.ts";
 import {
   FakeCurrentSessionResolver,
@@ -85,7 +85,11 @@ describe("listMessages", () => {
 
     const ref: CurrentSessionRef = { sessionId: me.id, token: RAW_TOKEN };
     const { messages } = expectOk(
-      await listMessages(depsWith(store, ref), { filter: { inbox: true } }, CTX),
+      await listMessages(
+        depsWith(store, ref),
+        { filter: { inbox: true } },
+        CTX,
+      ),
     );
     expect(messages.map((m) => m.id)).toEqual([mine.id]);
   });
@@ -113,7 +117,10 @@ describe("listMessages", () => {
       toSessionId: me.id,
       deliveredAt: "2026-06-05T12:30:00.000Z",
     });
-    const othersPending = makeMessage({ toSessionId: "s_other", deliveredAt: null });
+    const othersPending = makeMessage({
+      toSessionId: "s_other",
+      deliveredAt: null,
+    });
     store.messages.push(minePending, mineDone, othersPending);
 
     const ref: CurrentSessionRef = { sessionId: me.id, token: RAW_TOKEN };
@@ -132,7 +139,11 @@ describe("listMessages", () => {
   test("inbox surfaces current_session_not_found when no current Session", async () => {
     const { store } = seededStore();
     expectErr(
-      await listMessages(depsWith(store, null), { filter: { inbox: true } }, CTX),
+      await listMessages(
+        depsWith(store, null),
+        { filter: { inbox: true } },
+        CTX,
+      ),
       "current_session_not_found",
     );
   });
@@ -141,7 +152,11 @@ describe("listMessages", () => {
     const { store, me } = seededStore();
     const ref: CurrentSessionRef = { sessionId: me.id, token: "wrong" };
     expectErr(
-      await listMessages(depsWith(store, ref), { filter: { inbox: true } }, CTX),
+      await listMessages(
+        depsWith(store, ref),
+        { filter: { inbox: true } },
+        CTX,
+      ),
       "invalid_session_token",
     );
   });
@@ -150,7 +165,11 @@ describe("listMessages", () => {
     const { store } = seededStore();
     const ref: CurrentSessionRef = { sessionId: "ghost", token: RAW_TOKEN };
     expectErr(
-      await listMessages(depsWith(store, ref), { filter: { inbox: true } }, CTX),
+      await listMessages(
+        depsWith(store, ref),
+        { filter: { inbox: true } },
+        CTX,
+      ),
       "session_not_found",
     );
   });
@@ -163,7 +182,11 @@ describe("listMessages", () => {
       scope: scopeB,
     };
     expectErr(
-      await listMessages(depsWith(store, ref), { filter: { inbox: true } }, CTX),
+      await listMessages(
+        depsWith(store, ref),
+        { filter: { inbox: true } },
+        CTX,
+      ),
       "scope_mismatch",
     );
   });

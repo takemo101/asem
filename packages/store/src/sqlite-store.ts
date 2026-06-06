@@ -11,8 +11,9 @@
  * worktree_root`) per implementation principle 7. Scope filters are applied in
  * one place here; callsites cannot opt out ad hoc.
  */
-import { Database } from "bun:sqlite";
+
 import type { SQLQueryBindings } from "bun:sqlite";
+import { Database } from "bun:sqlite";
 import type {
   EffectiveScope,
   Message,
@@ -22,15 +23,15 @@ import type {
   SessionUpdate,
   Store,
 } from "@asem/core";
-import { migrate } from "./migrations.ts";
 import { StoreError } from "./errors.ts";
+import { migrate } from "./migrations.ts";
 import {
+  type MessageRow,
   messageInsertValues,
   parseMessageRow,
   parseSessionRow,
-  sessionInsertValues,
-  type MessageRow,
   type SessionRow,
+  sessionInsertValues,
 } from "./rows.ts";
 
 const INSERT_SESSION = `

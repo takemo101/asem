@@ -1,8 +1,4 @@
-import type {
-  CommandRequest,
-  CommandResult,
-  TemplateRunner,
-} from "@asem/core";
+import type { CommandRequest, CommandResult, TemplateRunner } from "@asem/core";
 import { SequenceTimeoutError } from "../errors.ts";
 import { VirtualClock } from "./virtual-clock.ts";
 

@@ -9,31 +9,31 @@
  * principle 8).
  */
 import {
-  err,
-  hashToken,
-  ok,
-  initSessionInputSchema,
-  operationError,
   type Clock,
   type ConfigLoader,
+  err,
   type FileSystem,
+  hashToken,
   type IdGenerator,
   type InitSessionInput,
   type InitSessionOutput,
+  initSessionInputSchema,
   type Logger,
   type OperationResult,
+  ok,
+  operationError,
   type ScopeResolver,
   type Session,
   type Store,
   type TokenGenerator,
 } from "@asem/core";
-import type { OpContext } from "../deps.ts";
 import { resolveContext } from "../context.ts";
+import type { OpContext } from "../deps.ts";
 import {
-  TOKEN_FILE_MODE,
   currentSessionFileFor,
   dirName,
   sessionDirFor,
+  TOKEN_FILE_MODE,
   tokenFileFor,
 } from "../paths.ts";
 

@@ -1,10 +1,6 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import {
-  LATEST_SCHEMA_VERSION,
-  migrate,
-  SqliteStore,
-} from "../src/index.ts";
+import { LATEST_SCHEMA_VERSION, migrate, SqliteStore } from "../src/index.ts";
 import { freshStore } from "./helpers.ts";
 
 interface NameRow {

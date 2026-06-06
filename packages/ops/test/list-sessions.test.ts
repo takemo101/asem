@@ -107,6 +107,9 @@ describe("listSessions", () => {
     const d = depsWith(store, {
       configLoader: new FakeConfigLoader({ kind: "not_found" }),
     });
-    expectErr(await listSessions(d, { filter: undefined }, CTX), "config_not_found");
+    expectErr(
+      await listSessions(d, { filter: undefined }, CTX),
+      "config_not_found",
+    );
   });
 });

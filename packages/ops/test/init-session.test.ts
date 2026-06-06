@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { hashToken, verifyToken, type ConfigDiscovery } from "@asem/core";
+import { type ConfigDiscovery, hashToken, verifyToken } from "@asem/core";
 import { initSession, TOKEN_FILE_MODE } from "../src/index.ts";
 import {
   FakeConfigLoader,
   FakeFileSystem,
   FakeScopeResolver,
   FakeStore,
-  makeOpsDeps,
   MemoryLogger,
+  makeOpsDeps,
 } from "../src/testing/fakes.ts";
 import { expectErr, expectOk, makeSession, scopeA } from "./helpers.ts";
 
@@ -143,11 +143,7 @@ describe("initSession", () => {
     store.sessions.push(makeSession({ name: "dup" }));
     const d = deps({ store });
 
-    const result = await initSession(
-      d,
-      { name: "dup", muxRef: MUX_REF },
-      CTX,
-    );
+    const result = await initSession(d, { name: "dup", muxRef: MUX_REF }, CTX);
     expectErr(result, "session_name_conflict");
   });
 

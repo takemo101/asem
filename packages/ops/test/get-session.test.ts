@@ -62,7 +62,11 @@ describe("getSession", () => {
     const probe = new FakeLivenessProbe();
 
     expectOk(
-      await getSession(depsWith(store, { livenessProbe: probe }), { id: s.id }, CTX),
+      await getSession(
+        depsWith(store, { livenessProbe: probe }),
+        { id: s.id },
+        CTX,
+      ),
     );
     expect(probe.probed).toHaveLength(0);
   });

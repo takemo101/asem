@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
-  hashToken,
   type ConfigDiscovery,
   type CurrentSessionRef,
+  hashToken,
 } from "@asem/core";
 import {
   authenticateCurrentSession,
@@ -66,7 +66,10 @@ describe("sameScope", () => {
     expect(sameScope(scopeA, { ...scopeA })).toBe(true);
     expect(sameScope(scopeA, scopeB)).toBe(false);
     expect(
-      sameScope(scopeA, { workspaceId: "ws_other", worktreeRoot: scopeA.worktreeRoot }),
+      sameScope(scopeA, {
+        workspaceId: "ws_other",
+        worktreeRoot: scopeA.worktreeRoot,
+      }),
     ).toBe(false);
   });
 });

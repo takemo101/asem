@@ -7,24 +7,20 @@
  * terminal UI, no MCP transport, no hidden filesystem mutation.
  */
 
+export * from "./helpers/shell.ts";
+// Pure helpers
+export * from "./helpers/token.ts";
+// Port interfaces
+export * from "./ports.ts";
 // Shared primitives
 export * from "./types/common.ts";
-
-// Domain types & schemas
-export * from "./types/scope.ts";
-export * from "./types/session.ts";
-export * from "./types/message.ts";
 export * from "./types/config.ts";
 
 // Structured errors & result envelope
 export * from "./types/errors.ts";
-
+export * from "./types/message.ts";
 // Operation input/output contracts
 export * from "./types/operations.ts";
-
-// Port interfaces
-export * from "./ports.ts";
-
-// Pure helpers
-export * from "./helpers/token.ts";
-export * from "./helpers/shell.ts";
+// Domain types & schemas
+export * from "./types/scope.ts";
+export * from "./types/session.ts";

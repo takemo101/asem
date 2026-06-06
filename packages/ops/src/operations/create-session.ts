@@ -51,6 +51,7 @@ import {
   agentTemplateSchema,
   createRedactor,
   muxTemplateSchema,
+  renderAgentCommand,
   SequenceEngine,
   type AgentTemplate,
   type CommandSequence,
@@ -89,30 +90,6 @@ function withLogPath(error: OperationError, logPath: string): OperationError {
     ...(error.details ?? {}),
     logPath,
   });
-}
-
-/** Build the agent invocation line for the launch script per delivery mode. */
-function agentCommandLine(
-  template: AgentTemplate,
-  promptPath: string,
-): string {
-  const promptShell = shellEscape(promptPath);
-  switch (template.prompt_delivery) {
-    case "arg":
-      return `${template.command} "$(cat ${promptShell})"`;
-    case "stdin":
-      return `${template.command} < ${promptShell}`;
-    case "file":
-      return `${template.command} ${promptShell}`;
-    case "paste":
-      // The prompt is pasted later via the mux `send` / agent `after_start`
-      // flow; the launch script only starts the agent.
-      return template.command;
-    default: {
-      const exhaustive: never = template.prompt_delivery;
-      throw new Error(`unknown prompt_delivery: ${String(exhaustive)}`);
-    }
-  }
 }
 
 /**
@@ -266,7 +243,7 @@ export async function createSession(
       AS_SESSION_TOKEN: token,
     },
     cwd,
-    agentCommand: agentCommandLine(agentTemplate, promptPath),
+    agentCommand: renderAgentCommand(agentTemplate, promptPath),
   });
   await deps.fs.writeFileAtomic(launchScriptPath, launchScript, {
     mode: TOKEN_FILE_MODE,

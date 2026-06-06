@@ -20,6 +20,7 @@ import {
   type Store,
   verifyToken,
 } from "@asem/core";
+import type { OpContext } from "./deps.ts";
 
 /** Config + scope resolved for a worktree, shared by scoped operations. */
 export interface ProjectContext {
@@ -122,4 +123,23 @@ export async function authenticateCurrentSession(
     );
   }
   return ok(session);
+}
+
+/**
+ * Enforce MCP/agent-origin auth when requested by the trusted surface context.
+ *
+ * Human CLI/TUI calls leave `origin` unset (or set `operator` for TUI sends) and
+ * therefore keep local-trust behavior. MCP sets `origin: "agent"`, so every
+ * scoped read/mutation that calls this helper requires a verified current
+ * Session token before continuing.
+ */
+export async function authenticateAgentOrigin(
+  deps: { store: Store; currentSessionResolver: CurrentSessionResolver },
+  scope: EffectiveScope,
+  ctx: OpContext,
+): Promise<OperationResult<Session | null>> {
+  if (ctx.origin !== "agent") {
+    return ok(null);
+  }
+  return authenticateCurrentSession(deps, scope);
 }

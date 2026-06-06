@@ -1,12 +1,15 @@
+#!/usr/bin/env bun
 /**
  * `@asem/mcp` — stdio MCP server that projects shared operations as MCP tools.
  *
- * Scaffold only (MIK-001). Tool projection lands in a later slice. MCP tool
- * handlers map request/response only and delegate to `@asem/ops`; MCP does not
+ * MCP is an AI-facing surface projection. It maps JSON-RPC tool requests to
+ * shared `@asem/ops` handlers and returns structured tool results. It does not
  * expose attach and does not duplicate domain logic.
  */
-import type { OperationResult } from "@asem/core";
-
 export const PACKAGE_NAME = "@asem/mcp";
 
-export type { OperationResult };
+export type { JsonRpcRequest, JsonRpcResponse } from "./jsonrpc.ts";
+export type { McpServerOptions } from "./server.ts";
+export { handleMcpLine, handleMcpRequest, runMcpStdio } from "./server.ts";
+export type { McpToolDefinition, McpToolResult } from "./tools.ts";
+export { callMcpTool, hasMcpTool, listMcpTools } from "./tools.ts";

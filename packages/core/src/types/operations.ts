@@ -46,6 +46,8 @@ export const initProjectInputSchema = z
 export type InitProjectInput = z.infer<typeof initProjectInputSchema>;
 export interface InitProjectOutput {
   configPath: string;
+  configCreated: boolean;
+  gitignoreUpdated: boolean;
 }
 
 // --- register current session --------------------------------------------

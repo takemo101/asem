@@ -49,6 +49,66 @@ describe("initProject", () => {
     expect(config!.contents).toContain("workspace:");
   });
 
+  test("creates .asem.yaml with selected agent and mux templates", async () => {
+    const fs = new FakeFileSystem();
+    const result = await initProject(
+      { fs, scopeResolver: scopeAt() },
+      {
+        cwd: CWD,
+        workspaceId: "ws_42",
+        agent: {
+          default: "pi",
+          templates: {
+            pi: { command: "pi", prompt_delivery: "arg", after_start: [] },
+          },
+        },
+        mux: {
+          default: "tmux",
+          templates: {
+            tmux: {
+              create: [
+                {
+                  type: "run",
+                  command: "tmux new-window -n {{name_shell}}",
+                  capture: [{ name: "pane_id", regex: "(.*)", group: 1 }],
+                },
+              ],
+              run_in_pane: [
+                {
+                  type: "run",
+                  command:
+                    "tmux send-keys -t {{pane_id_shell}} {{launch_cmd_shell}} Enter",
+                },
+              ],
+              send: [
+                {
+                  type: "run",
+                  command:
+                    "tmux send-keys -t {{pane_id_shell}} {{message_shell}} Enter",
+                },
+              ],
+              attach: [{ type: "run", command: "tmux attach-session" }],
+              close: [
+                { type: "run", command: "tmux kill-pane -t {{pane_id_shell}}" },
+              ],
+            },
+          },
+        },
+      },
+    );
+
+    const { configPath } = expectOk(result);
+    const config = fs.files.get(configPath)!.contents;
+    expect(config).toContain("default: tmux");
+    expect(config).toContain("default: pi");
+    expect(config).toContain("templates:\n    tmux:");
+    expect(config).toContain("templates:\n    pi:");
+    expect(config).toContain(
+      'command: "tmux send-keys -t {{pane_id_shell}} {{message_shell}} Enter"',
+    );
+    expect(config).toContain("prompt_delivery: arg");
+  });
+
   test("adds all runtime ignore rules to a fresh .gitignore", async () => {
     const fs = new FakeFileSystem();
     await initProject(

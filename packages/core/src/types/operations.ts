@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { nonEmptyString } from "./common.ts";
+import { agentConfigSchema, muxConfigSchema } from "./config.ts";
 import { type Message, messageKindSchema } from "./message.ts";
 import { muxRefSchema, type Session, sessionStatusSchema } from "./session.ts";
 
@@ -36,8 +37,10 @@ export type MessageListFilter = z.infer<typeof messageListFilterSchema>;
 
 export const initProjectInputSchema = z
   .object({
-    workspaceId: nonEmptyString,
+    workspaceId: nonEmptyString.optional(),
     cwd: nonEmptyString,
+    mux: muxConfigSchema.optional(),
+    agent: agentConfigSchema.optional(),
   })
   .strict();
 export type InitProjectInput = z.infer<typeof initProjectInputSchema>;

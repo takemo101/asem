@@ -48,6 +48,10 @@ _Avoid_: Adapter, plugin, workflow.
 A short ordered set of shell-oriented steps used to create panes, start agents, send text, attach, or close. Command Sequences are startup/control procedures, not workflows.
 _Avoid_: Workflow, pipeline, strategy.
 
+**Init Wizard**:
+A human CLI setup flow for initializing an asem Workspace and choosing its default Agent, Multiplexer, and Templates. It creates initial configuration; it is not a general configuration editor.
+_Avoid_: Config marketplace, template authoring workflow, environment doctor.
+
 **Cockpit**:
 The human TUI view for supervising Sessions in a scope.
 _Avoid_: Dashboard when it implies analytics; orchestrator when it implies control logic.

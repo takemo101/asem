@@ -14,12 +14,14 @@
  * land outside the generated ignore coverage.
  */
 import {
+  type AgentConfig,
   err,
   type FileSystem,
   type InitProjectInput,
   type InitProjectOutput,
   initProjectInputSchema,
   type Logger,
+  type MuxConfig,
   type OperationResult,
   ok,
   operationError,
@@ -38,21 +40,106 @@ function yamlScalar(value: string): string {
     : `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
+/** Render one YAML scalar for the small config/template shapes init owns. */
+function yamlValue(value: unknown): string {
+  if (typeof value === "string") return yamlScalar(value);
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (value === null) return "null";
+  return yamlScalar(String(value));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function renderYamlObject(
+  object: Record<string, unknown>,
+  indent: number,
+): string[] {
+  const pad = " ".repeat(indent);
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(object)) {
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        lines.push(`${pad}${key}: []`);
+      } else {
+        lines.push(`${pad}${key}:`);
+        lines.push(...renderYamlArray(value, indent + 2));
+      }
+      continue;
+    }
+    if (isRecord(value)) {
+      const entries = Object.entries(value);
+      if (entries.length === 0) {
+        lines.push(`${pad}${key}: {}`);
+      } else {
+        lines.push(`${pad}${key}:`);
+        lines.push(...renderYamlObject(value, indent + 2));
+      }
+      continue;
+    }
+    lines.push(`${pad}${key}: ${yamlValue(value)}`);
+  }
+  return lines;
+}
+
+function renderYamlArray(values: unknown[], indent: number): string[] {
+  const pad = " ".repeat(indent);
+  const lines: string[] = [];
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      lines.push(`${pad}-`);
+      lines.push(...renderYamlArray(value, indent + 2));
+      continue;
+    }
+    if (isRecord(value)) {
+      const entries = Object.entries(value);
+      if (entries.length === 0) {
+        lines.push(`${pad}- {}`);
+        continue;
+      }
+      const [firstKey, firstValue] = entries[0]!;
+      if (Array.isArray(firstValue)) {
+        lines.push(`${pad}- ${firstKey}:`);
+        lines.push(...renderYamlArray(firstValue, indent + 2));
+      } else if (isRecord(firstValue)) {
+        lines.push(`${pad}- ${firstKey}:`);
+        lines.push(...renderYamlObject(firstValue, indent + 2));
+      } else {
+        lines.push(`${pad}- ${firstKey}: ${yamlValue(firstValue)}`);
+      }
+      for (const [key, child] of entries.slice(1)) {
+        if (Array.isArray(child)) {
+          lines.push(`${pad}  ${key}:`);
+          lines.push(...renderYamlArray(child, indent + 4));
+        } else if (isRecord(child)) {
+          lines.push(`${pad}  ${key}:`);
+          lines.push(...renderYamlObject(child, indent + 4));
+        } else {
+          lines.push(`${pad}  ${key}: ${yamlValue(child)}`);
+        }
+      }
+      continue;
+    }
+    lines.push(`${pad}- ${yamlValue(value)}`);
+  }
+  return lines;
+}
+
 /** Render the initial `.asem.yaml` for a workspace (design "Config design"). */
-function renderConfigYaml(workspaceId: string): string {
-  return [
-    "workspace:",
-    `  id: ${yamlScalar(workspaceId)}`,
-    "",
-    "mux:",
-    "  default: herdr",
-    "  templates: {}",
-    "",
-    "agent:",
-    "  default: claude",
-    "  templates: {}",
-    "",
-  ].join("\n");
+function renderConfigYaml(
+  workspaceId: string,
+  mux?: MuxConfig,
+  agent?: AgentConfig,
+): string {
+  const config = {
+    workspace: { id: workspaceId },
+    mux: mux ?? { default: "herdr", templates: {} },
+    agent: agent ?? { default: "claude", templates: {} },
+  };
+  return `${renderYamlObject(config, 0).join("\n")}\n`;
 }
 
 /**
@@ -91,7 +178,7 @@ export async function initProject(
       }),
     );
   }
-  const { cwd, workspaceId } = parsed.data;
+  const { cwd, workspaceId, mux, agent } = parsed.data;
 
   // Initialize the Worktree Root, not the raw cwd, so the generated ignore
   // rules cover the worktree-local paths runtime token/log state uses.
@@ -100,7 +187,18 @@ export async function initProject(
   const configPath = configPathFor(worktreeRoot);
   const configExists = await deps.fs.exists(configPath);
   if (!configExists) {
-    await deps.fs.writeFileAtomic(configPath, renderConfigYaml(workspaceId));
+    if (workspaceId === undefined) {
+      return err(
+        operationError(
+          "invalid_input",
+          "workspace id is required (use `asem init --workspace <id>`)",
+        ),
+      );
+    }
+    await deps.fs.writeFileAtomic(
+      configPath,
+      renderConfigYaml(workspaceId, mux, agent),
+    );
     deps.logger?.info("created .asem.yaml", { configPath });
   }
 

@@ -23,6 +23,7 @@
     "@asem/store": "workspace:*",
     "@asem/runtime": "workspace:*",
     "@asem/mcp": "workspace:*",
-    "@asem/tui": "workspace:*"
+    "@asem/tui": "workspace:*",
+    "@inquirer/prompts": "^8.5.2"
   }
 }

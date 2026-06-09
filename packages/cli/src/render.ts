@@ -7,6 +7,7 @@
  */
 import {
   type DeleteSessionOutput,
+  type InitProjectOutput,
   type InitSessionOutput,
   type Message,
   type OperationError,
@@ -180,8 +181,24 @@ export function renderSentMessage(message: Message): string[] {
 
 // --- init / init-session ---------------------------------------------------
 
-export function renderInit(configPath: string): string[] {
-  return [`initialized asem project (${configPath})`];
+export function renderInit(output: InitProjectOutput): string[] {
+  if (!output.configCreated) {
+    return [
+      `left existing config unchanged (${output.configPath})`,
+      output.gitignoreUpdated
+        ? "ensured runtime ignore rules"
+        : "runtime ignore rules already present",
+    ];
+  }
+
+  return [
+    `initialized asem project (${output.configPath})`,
+    "",
+    "Next steps:",
+    "  asem init-session --name <name> --mux-ref '<json>' --root",
+    "  asem session create <name> --prompt '<text>'",
+    "  asem tui",
+  ];
 }
 
 /**

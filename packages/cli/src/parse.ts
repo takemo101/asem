@@ -164,7 +164,7 @@ function parseInit(args: string[]): ParseResult {
     flags.value.values.get("id") ??
     flags.value.positionals[0];
   const interactive = flags.value.booleans.has("interactive");
-  if (!interactive && (workspaceId === undefined || workspaceId.length === 0)) {
+  if (workspaceId !== undefined && workspaceId.length === 0) {
     return invalid(
       "workspace id is required (use `asem init --workspace <id>`)",
     );

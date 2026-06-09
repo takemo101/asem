@@ -100,7 +100,11 @@ function renderYamlArray(values: unknown[], indent: number): string[] {
         lines.push(`${pad}- {}`);
         continue;
       }
-      const [firstKey, firstValue] = entries[0]!;
+      const first = entries[0];
+      if (first === undefined) {
+        continue;
+      }
+      const [firstKey, firstValue] = first;
       if (Array.isArray(firstValue)) {
         lines.push(`${pad}- ${firstKey}:`);
         lines.push(...renderYamlArray(firstValue, indent + 2));
@@ -186,6 +190,7 @@ export async function initProject(
 
   const configPath = configPathFor(worktreeRoot);
   const configExists = await deps.fs.exists(configPath);
+  let configCreated = false;
   if (!configExists) {
     if (workspaceId === undefined) {
       return err(
@@ -199,6 +204,7 @@ export async function initProject(
       configPath,
       renderConfigYaml(workspaceId, mux, agent),
     );
+    configCreated = true;
     deps.logger?.info("created .asem.yaml", { configPath });
   }
 
@@ -208,10 +214,11 @@ export async function initProject(
     ? await deps.fs.readFile(gitignorePath)
     : null;
   const updated = ensureGitignoreRules(existing);
-  if (updated !== null) {
+  const gitignoreUpdated = updated !== null;
+  if (gitignoreUpdated) {
     await deps.fs.writeFileAtomic(gitignorePath, updated);
     deps.logger?.info("updated .gitignore runtime rules", { gitignorePath });
   }
 
-  return ok({ configPath });
+  return ok({ configPath, configCreated, gitignoreUpdated });
 }

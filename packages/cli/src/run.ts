@@ -22,7 +22,11 @@ import {
   reportParent,
   sendMessage,
 } from "@asem/ops";
-import { materializeInitConfig } from "./init-config.ts";
+import {
+  materializeInitConfig,
+  validateInitAgentName,
+  validateInitMuxName,
+} from "./init-config.ts";
 import type { InitWizardPrompts } from "./init-wizard.ts";
 import { runInitWizard } from "./init-wizard.ts";
 import type { CliIo } from "./io.ts";
@@ -166,7 +170,7 @@ async function runInit(
   const configExists = await deps.fs.exists(configPath);
 
   if (command.interactive) {
-    if (!isTty) {
+    if (!configExists && !isTty) {
       return fail(
         io,
         operationError(
@@ -176,6 +180,14 @@ async function runInit(
       );
     }
     if (!configExists) {
+      if (agent !== undefined) {
+        const validation = validateInitAgentName(agent);
+        if (!validation.ok) return fail(io, validation.error);
+      }
+      if (mux !== undefined) {
+        const validation = validateInitMuxName(mux);
+        if (!validation.ok) return fail(io, validation.error);
+      }
       const wizard = await runInitWizard({
         cwd: worktreeRoot,
         configPath,
@@ -223,7 +235,7 @@ async function runInit(
       : {}),
   };
   const result = await initProject(deps, initInput);
-  return render(io, result, (value) => emit(io, renderInit(value.configPath)));
+  return render(io, result, (value) => emit(io, renderInit(value)));
 }
 
 async function runInitSession(

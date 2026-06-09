@@ -85,8 +85,11 @@ describe("parseArgs init", () => {
     });
   });
 
-  test("missing workspace id is invalid_input for non-interactive init", () => {
-    expect(errorCode(["init"])).toBe("invalid_input");
+  test("non-interactive init can omit workspace so existing config can no-op", () => {
+    expect(command(["init"])).toEqual({
+      type: "init",
+      interactive: false,
+    });
   });
 
   test("non-interactive init requires agent and mux together", () => {

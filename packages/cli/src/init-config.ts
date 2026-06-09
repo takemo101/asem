@@ -28,6 +28,10 @@ export type InitConfigResult =
   | { ok: true; value: Config }
   | { ok: false; error: OperationError };
 
+export type InitTemplateValidationResult =
+  | { ok: true }
+  | { ok: false; error: OperationError };
+
 function knownNames(record: Readonly<Record<string, unknown>>): string[] {
   return Object.keys(record).sort();
 }
@@ -44,6 +48,20 @@ function unknownTemplateError(
     name,
     known,
   });
+}
+
+export function validateInitAgentName(
+  agent: string,
+): InitTemplateValidationResult {
+  return builtinAgentTemplates[agent] === undefined
+    ? { ok: false, error: unknownTemplateError("agent", agent) }
+    : { ok: true };
+}
+
+export function validateInitMuxName(mux: string): InitTemplateValidationResult {
+  return builtinMuxTemplates[mux] === undefined
+    ? { ok: false, error: unknownTemplateError("mux", mux) }
+    : { ok: true };
 }
 
 /** Materialize selected builtin Agent/Mux Templates into a Config object. */

@@ -70,6 +70,94 @@ describe("runCli init", () => {
     // The operation — not the CLI — performed the write.
     expect(await deps.fs.exists(configPath)).toBe(true);
   });
+
+  test("non-interactive init materializes selected builtin templates", async () => {
+    const { deps } = makeCliFixture();
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["init", "--workspace", "ws-new", "--agent", "pi", "--mux", "tmux"],
+      cwd: CWD,
+      deps,
+      io,
+    });
+
+    expect(code).toBe(EXIT_OK);
+    const config = await deps.fs.readFile(configPathFor(CWD));
+    expect(config).toContain("default: tmux");
+    expect(config).toContain("default: pi");
+    expect(config).toContain("tmux new-window");
+    expect(config).toContain("command: pi");
+  });
+
+  test("interactive init in non-TTY exits with guidance", async () => {
+    const { deps } = makeCliFixture();
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["init", "--interactive"],
+      cwd: CWD,
+      deps,
+      io,
+      isTty: false,
+    });
+
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("interactive init requires a TTY");
+    expect(await deps.fs.exists(configPathFor(CWD))).toBe(false);
+  });
+
+  test("interactive init cancellation exits 0 and writes no config", async () => {
+    const { deps } = makeCliFixture();
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["init", "--interactive", "--workspace", "ws-new"],
+      cwd: CWD,
+      deps,
+      io,
+      isTty: true,
+      prompts: {
+        input: async () => "ws-new",
+        select: async <T extends string>() => "pi" as T,
+        confirm: async () => false,
+      },
+    });
+
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("cancelled; no files changed");
+    expect(await deps.fs.exists(configPathFor(CWD))).toBe(false);
+  });
+
+  test("interactive init leaves an existing config untouched without prompting", async () => {
+    const { deps } = makeCliFixture();
+    await deps.fs.writeFileAtomic(
+      configPathFor(CWD),
+      "workspace:\n  id: existing\n",
+    );
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["init", "--interactive", "--agent", "does-not-matter"],
+      cwd: CWD,
+      deps,
+      io,
+      isTty: true,
+      prompts: {
+        input: async () => {
+          throw new Error("should not prompt");
+        },
+        select: async () => {
+          throw new Error("should not prompt");
+        },
+        confirm: async () => {
+          throw new Error("should not prompt");
+        },
+      },
+    });
+
+    expect(code).toBe(EXIT_OK);
+    expect(await deps.fs.readFile(configPathFor(CWD))).toBe(
+      "workspace:\n  id: existing\n",
+    );
+    expect(await deps.fs.exists(`${CWD}/.gitignore`)).toBe(true);
+  });
 });
 
 describe("runCli init-session", () => {

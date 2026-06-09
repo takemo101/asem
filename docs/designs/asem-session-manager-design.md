@@ -170,6 +170,8 @@ Rules:
 
 - `workspace.id` is required after `asem init`.
 - Builtin templates are available even when project-local `templates` is empty.
+- `asem init --interactive` may materialize the selected builtin Agent and Multiplexer Templates into project-local `templates`; see [`init-wizard-design.md`](./init-wizard-design.md).
+- Non-interactive `asem init --workspace <id> --agent <name> --mux <name>` may also materialize selected builtin Templates.
 - Project-local templates are trusted like local code.
 - Multiple worktrees may share the same `workspace.id`, but normal operations remain worktree-isolated.
 - No `config validate` command in MVP.

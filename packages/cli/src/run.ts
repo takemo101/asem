@@ -7,9 +7,11 @@
  * structured error. No use-case logic (scope, auth, persistence) is duplicated
  * here — every command delegates to the operation that owns it.
  */
+import { operationError } from "@asem/core";
 import type { OperationError, OperationResult, OpsDeps } from "@asem/ops";
 import {
   closeSession,
+  configPathFor,
   createSession,
   deleteSession,
   getSession,
@@ -20,9 +22,13 @@ import {
   reportParent,
   sendMessage,
 } from "@asem/ops";
+import { materializeInitConfig } from "./init-config.ts";
+import type { InitWizardPrompts } from "./init-wizard.ts";
+import { runInitWizard } from "./init-wizard.ts";
 import type { CliIo } from "./io.ts";
 import type { CliCommand } from "./parse.ts";
 import { parseArgs } from "./parse.ts";
+import { InquirerInitWizardPrompts } from "./prompts.ts";
 import {
   renderAttach,
   renderClosedSession,
@@ -44,6 +50,10 @@ export interface RunCliOptions {
   cwd: string;
   deps: OpsDeps;
   io: CliIo;
+  /** Test seam for interactive init; defaults to process stdin TTY state. */
+  isTty?: boolean;
+  /** Test seam for interactive init prompts; defaults to Inquirer prompts. */
+  prompts?: InitWizardPrompts;
 }
 
 /** Process-style exit codes the CLI returns (0 ok, 2 usage, 1 operation error). */
@@ -84,10 +94,22 @@ export async function runCli(opts: RunCliOptions): Promise<number> {
   if (parsed.kind === "error") {
     return fail(io, parsed.error);
   }
-  return dispatch(parsed.command, { cwd, deps, io });
+  return dispatch(parsed.command, {
+    cwd,
+    deps,
+    io,
+    isTty: opts.isTty ?? Boolean(process.stdin.isTTY),
+    prompts: opts.prompts,
+  });
 }
 
-type DispatchEnv = { cwd: string; deps: OpsDeps; io: CliIo };
+type DispatchEnv = {
+  cwd: string;
+  deps: OpsDeps;
+  io: CliIo;
+  isTty: boolean;
+  prompts?: InitWizardPrompts;
+};
 
 async function dispatch(
   command: CliCommand,
@@ -134,12 +156,73 @@ function render<T>(
 
 async function runInit(
   command: Extract<CliCommand, { type: "init" }>,
-  { cwd, deps, io }: DispatchEnv,
+  { cwd, deps, io, isTty, prompts }: DispatchEnv,
 ): Promise<number> {
-  const result = await initProject(deps, {
-    workspaceId: command.workspaceId,
+  let workspaceId = command.workspaceId;
+  let agent = command.agent;
+  let mux = command.mux;
+  const worktreeRoot = await deps.scopeResolver.resolveWorktreeRoot(cwd);
+  const configPath = configPathFor(worktreeRoot);
+  const configExists = await deps.fs.exists(configPath);
+
+  if (command.interactive) {
+    if (!isTty) {
+      return fail(
+        io,
+        operationError(
+          "invalid_input",
+          "interactive init requires a TTY; use `asem init --workspace <id> --agent <agent> --mux <mux>` for non-interactive setup",
+        ),
+      );
+    }
+    if (!configExists) {
+      const wizard = await runInitWizard({
+        cwd: worktreeRoot,
+        configPath,
+        prompts: prompts ?? new InquirerInitWizardPrompts(),
+        ...(workspaceId !== undefined ? { workspaceId } : {}),
+        ...(agent !== undefined ? { agent } : {}),
+        ...(mux !== undefined ? { mux } : {}),
+      });
+      if (wizard.kind === "cancelled") {
+        io.out("cancelled; no files changed");
+        return EXIT_OK;
+      }
+      workspaceId = wizard.workspaceId;
+      agent = wizard.agent;
+      mux = wizard.mux;
+    }
+  }
+
+  if (workspaceId === undefined && !configExists) {
+    return fail(
+      io,
+      operationError(
+        "invalid_input",
+        "workspace id is required (use `asem init --workspace <id>`)",
+      ),
+    );
+  }
+
+  const selectedConfig =
+    !configExists &&
+    workspaceId !== undefined &&
+    agent !== undefined &&
+    mux !== undefined
+      ? materializeInitConfig({ workspaceId, agent, mux })
+      : null;
+  if (selectedConfig !== null && !selectedConfig.ok) {
+    return fail(io, selectedConfig.error);
+  }
+
+  const initInput = {
     cwd,
-  });
+    ...(workspaceId !== undefined ? { workspaceId } : {}),
+    ...(selectedConfig !== null
+      ? { agent: selectedConfig.value.agent, mux: selectedConfig.value.mux }
+      : {}),
+  };
+  const result = await initProject(deps, initInput);
   return render(io, result, (value) => emit(io, renderInit(value.configPath)));
 }
 

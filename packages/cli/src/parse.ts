@@ -16,7 +16,13 @@ import {
 
 /** A successfully parsed command plus its typed operation inputs. */
 export type CliCommand =
-  | { type: "init"; workspaceId: string }
+  | {
+      type: "init";
+      workspaceId?: string;
+      agent?: string;
+      mux?: string;
+      interactive: boolean;
+    }
   | {
       type: "init-session";
       name: string;
@@ -147,24 +153,41 @@ function fail<T = never>(
 // --- per-command parsers ---------------------------------------------------
 
 function parseInit(args: string[]): ParseResult {
-  const flags = parseFlags(args, { booleans: [], values: ["workspace", "id"] });
+  const flags = parseFlags(args, {
+    booleans: ["interactive"],
+    values: ["workspace", "id", "agent", "mux"],
+  });
   if (!flags.ok) return { kind: "error", error: flags.error };
 
   const workspaceId =
     flags.value.values.get("workspace") ??
     flags.value.values.get("id") ??
     flags.value.positionals[0];
-  if (workspaceId === undefined || workspaceId.length === 0) {
+  const interactive = flags.value.booleans.has("interactive");
+  if (!interactive && (workspaceId === undefined || workspaceId.length === 0)) {
     return invalid(
       "workspace id is required (use `asem init --workspace <id>`)",
     );
   }
-  if (flags.value.positionals.length > 1) {
+  if (flags.value.positionals.length > (workspaceId === undefined ? 0 : 1)) {
     return invalid("unexpected extra arguments", {
       extra: flags.value.positionals.slice(1),
     });
   }
-  return { kind: "command", command: { type: "init", workspaceId } };
+
+  const agent = flags.value.values.get("agent");
+  const mux = flags.value.values.get("mux");
+  if (!interactive && (agent === undefined) !== (mux === undefined)) {
+    return invalid("--agent and --mux must be provided together");
+  }
+  const command: CliCommand = {
+    type: "init",
+    interactive,
+    ...(workspaceId !== undefined ? { workspaceId } : {}),
+    ...(agent !== undefined ? { agent } : {}),
+    ...(mux !== undefined ? { mux } : {}),
+  };
+  return { kind: "command", command };
 }
 
 function parseMuxRef(raw: string): Parsed<Record<string, unknown>> {

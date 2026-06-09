@@ -46,6 +46,7 @@ describe("parseArgs init", () => {
     expect(command(["init", "--workspace", "ws-1"])).toEqual({
       type: "init",
       workspaceId: "ws-1",
+      interactive: false,
     });
   });
 
@@ -53,11 +54,48 @@ describe("parseArgs init", () => {
     expect(command(["init", "ws-2"])).toEqual({
       type: "init",
       workspaceId: "ws-2",
+      interactive: false,
     });
   });
 
-  test("missing workspace id is invalid_input", () => {
+  test("maps interactive init without requiring a workspace id", () => {
+    expect(command(["init", "--interactive"])).toEqual({
+      type: "init",
+      interactive: true,
+    });
+  });
+
+  test("maps non-interactive init template selections", () => {
+    expect(
+      command([
+        "init",
+        "--workspace",
+        "ws-1",
+        "--agent",
+        "pi",
+        "--mux",
+        "tmux",
+      ]),
+    ).toEqual({
+      type: "init",
+      workspaceId: "ws-1",
+      agent: "pi",
+      mux: "tmux",
+      interactive: false,
+    });
+  });
+
+  test("missing workspace id is invalid_input for non-interactive init", () => {
     expect(errorCode(["init"])).toBe("invalid_input");
+  });
+
+  test("non-interactive init requires agent and mux together", () => {
+    expect(errorCode(["init", "--workspace", "ws", "--agent", "pi"])).toBe(
+      "invalid_input",
+    );
+    expect(errorCode(["init", "--workspace", "ws", "--mux", "tmux"])).toBe(
+      "invalid_input",
+    );
   });
 
   test("extra positionals are invalid_input", () => {

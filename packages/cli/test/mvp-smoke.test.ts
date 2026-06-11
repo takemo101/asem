@@ -94,6 +94,7 @@ const MUX_REF: MuxRef = {
   tab_id: "stale-tab",
   herdr_workspace_id: "herdr-workspace-1",
   herdr_label: "s_0001",
+  herdr_session: "asem",
 };
 
 /** Minimal `herdr tab create` JSON the builtin herdr template captures refs from. */
@@ -179,7 +180,11 @@ function withCreateRunner(base: OpsDeps): OpsDeps {
   return {
     ...base,
     templateRunner: new FakeTemplateRunner({
-      commands: [{ stdout: HERDR_CREATE_JSON }, { stdout: "s_0003" }],
+      commands: [
+        { stdout: HERDR_CREATE_JSON },
+        { stdout: "s_0003" },
+        { stdout: "asem" },
+      ],
     }),
   };
 }

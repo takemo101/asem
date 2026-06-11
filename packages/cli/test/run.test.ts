@@ -34,6 +34,7 @@ const HERDR_REF = {
   tab_id: "stale-tab",
   herdr_workspace_id: "herdr-workspace-1",
   herdr_label: "s_0001",
+  herdr_session: "asem",
 };
 
 describe("runCli help & usage", () => {
@@ -362,7 +363,11 @@ describe("runCli session create", () => {
       scopeResolver: new FakeScopeResolver(SCOPE),
       currentSessionResolver: new FakeCurrentSessionResolver(null),
       templateRunner: new FakeTemplateRunner({
-        commands: [{ stdout: HERDR_CREATE_JSON }, { stdout: "s_0001" }],
+        commands: [
+          { stdout: HERDR_CREATE_JSON },
+          { stdout: "s_0001" },
+          { stdout: "asem" },
+        ],
       }),
     });
     return { deps, store };
@@ -539,12 +544,11 @@ describe("runCli session attach", () => {
     const { io, code } = await run(["session", "attach", s.id], deps);
     expect(code).toBe(EXIT_OK);
     expect(io.outText()).toContain("HERDR_LABEL='s_0001'");
-    expect(io.outText()).toContain(
-      'HERDR_SESSION="$HERDR_SESSION_NAME" herdr agent focus "$pane_id"',
-    );
-    expect(io.outText()).toContain(
-      'herdr session attach "$HERDR_SESSION_NAME"',
-    );
+    expect(io.outText()).toContain("HERDR_SESSION='asem'");
+    expect(io.outText()).not.toContain("session list");
+    expect(io.outText()).not.toContain("HERDR_SESSION_NAME");
+    expect(io.outText()).toContain('HERDR_SESSION=\'asem\' herdr tab focus "$tab_id"');
+    expect(io.outText()).toContain("herdr session attach 'asem'");
     expect(io.outText()).not.toContain("herdr agent attach");
     expect(io.outText()).not.toContain("stale-pane");
   });
@@ -572,10 +576,11 @@ describe("runCli session attach", () => {
     expect(io.outText()).toBe("");
     expect(commands).toHaveLength(1);
     expect(commands[0]).toContain("HERDR_LABEL='s_0001'");
-    expect(commands[0]).toContain(
-      'HERDR_SESSION="$HERDR_SESSION_NAME" herdr agent focus "$pane_id"',
-    );
-    expect(commands[0]).toContain('herdr session attach "$HERDR_SESSION_NAME"');
+    expect(commands[0]).toContain("HERDR_SESSION='asem'");
+    expect(commands[0]).not.toContain("session list");
+    expect(commands[0]).not.toContain("HERDR_SESSION_NAME");
+    expect(commands[0]).toContain('HERDR_SESSION=\'asem\' herdr tab focus "$tab_id"');
+    expect(commands[0]).toContain("herdr session attach 'asem'");
   });
 
   test("attach of an unknown id surfaces session_not_found (exit 1)", async () => {

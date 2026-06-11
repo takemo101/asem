@@ -27,17 +27,17 @@ describe("renderAttachHint: builtin mux templates", () => {
       pane_id: "stale-pane",
       herdr_workspace_id: "w",
       herdr_label: "s_0001",
+      herdr_session: "asem",
     });
     expect(hint).toContain("HERDR_LABEL='s_0001'");
     expect(hint).toContain("HERDR_WORKSPACE_ID='w'");
-    expect(hint).toContain('["herdr", "session", "list", "--json"]');
-    expect(hint).toContain('["herdr", "--session", name');
+    expect(hint).toContain("HERDR_SESSION='asem'");
+    expect(hint).not.toContain("session list");
+    expect(hint).not.toContain("HERDR_SESSION_NAME");
     expect(hint).toContain(
-      'HERDR_SESSION="$HERDR_SESSION_NAME" herdr agent focus "$pane_id"',
+      'HERDR_SESSION=\'asem\' herdr tab focus "$tab_id"',
     );
-    expect(hint).toContain(
-      '&& herdr session attach "$HERDR_SESSION_NAME"',
-    );
+    expect(hint).toContain("&& herdr session attach 'asem'");
     expect(hint).not.toContain("herdr agent attach");
     expect(hint).not.toContain("stale-pane");
   });
@@ -64,9 +64,11 @@ describe("renderAttachHint: builtin mux templates", () => {
     const hint = renderAttachHint(muxTemplate("herdr").attach, {
       herdr_workspace_id: "w; rm -rf /",
       herdr_label: "label with space",
+      herdr_session: "session with space",
     });
     expect(hint).toContain("HERDR_LABEL='label with space'");
     expect(hint).toContain("HERDR_WORKSPACE_ID='w; rm -rf /'");
+    expect(hint).toContain("HERDR_SESSION='session with space'");
   });
 });
 

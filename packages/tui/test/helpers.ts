@@ -77,6 +77,7 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
       tab_id: "tab-1",
       herdr_workspace_id: WORKSPACE,
       herdr_label: id,
+      herdr_session: "asem",
     },
     sessionDir: `${WORKTREE_A}/.asem/sessions/s_${s}`,
     tokenHash: "sha256:deadbeef",

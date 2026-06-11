@@ -20,6 +20,7 @@ const HERDR_REF = {
   tab_id: "stale-tab",
   herdr_workspace_id: "herdr-workspace-1",
   herdr_label: "s_0001",
+  herdr_session: "asem",
 };
 
 /** Deps scoped to {@link scopeA}, keeping typed references to the fakes. */

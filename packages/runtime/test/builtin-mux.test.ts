@@ -93,14 +93,18 @@ describe("builtin mux: herdr", () => {
   test("create: command, cwd/env propagation, and captured refs", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner({
-      commands: [{ stdout: HERDR_CREATE_JSON }, { stdout: "s_0001" }],
+      commands: [
+        { stdout: HERDR_CREATE_JSON },
+        { stdout: "s_0001" },
+        { stdout: "asem" },
+      ],
     });
     const refs = await runCreate(template, runner, {
       cwd: "/repo",
       env: { AS_X: "1" },
     });
 
-    expect(runner.commands).toHaveLength(2);
+    expect(runner.commands).toHaveLength(3);
     expect(runner.commands[0]!.command).toBe(
       "herdr tab create --cwd '/repo' --no-focus --label 's_0001'",
     );
@@ -112,6 +116,7 @@ describe("builtin mux: herdr", () => {
       tab_id: "w:2",
       herdr_workspace_id: "w",
       herdr_label: "s_0001",
+      herdr_session: "asem",
     });
   });
 
@@ -131,15 +136,19 @@ describe("builtin mux: herdr", () => {
       pane_id: "stale-pane",
       herdr_workspace_id: "w",
       herdr_label: "s_0001",
+      herdr_session: "asem",
     });
     expect(commandsOf(runner)).toHaveLength(2);
     expect(commandsOf(runner).join("\n")).toContain("HERDR_LABEL='s_0001'");
     expect(commandsOf(runner).join("\n")).toContain("HERDR_WORKSPACE_ID='w'");
+    expect(commandsOf(runner).join("\n")).toContain("HERDR_SESSION='asem'");
+    expect(commandsOf(runner).join("\n")).not.toContain("session list");
+    expect(commandsOf(runner).join("\n")).not.toContain("HERDR_SESSION_NAME");
     expect(commandsOf(runner)[0]).toContain(
-      '&& HERDR_SESSION="$HERDR_SESSION_NAME" herdr pane send-text "$pane_id" \'hi; there\'',
+      '&& HERDR_SESSION=\'asem\' herdr pane send-text "$pane_id" \'hi; there\'',
     );
     expect(commandsOf(runner)[1]).toContain(
-      '&& HERDR_SESSION="$HERDR_SESSION_NAME" herdr pane send-keys "$pane_id" Enter',
+      '&& HERDR_SESSION=\'asem\' herdr pane send-keys "$pane_id" Enter',
     );
     expect(commandsOf(runner).join("\n")).not.toContain("stale-pane");
   });
@@ -151,15 +160,17 @@ describe("builtin mux: herdr", () => {
       pane_id: "stale-pane",
       herdr_workspace_id: "w",
       herdr_label: "s_0001",
+      herdr_session: "asem",
     });
     expect(commandsOf(runner)).toHaveLength(1);
     expect(commandsOf(runner)[0]).toContain("HERDR_LABEL='s_0001'");
+    expect(commandsOf(runner)[0]).toContain("HERDR_SESSION='asem'");
+    expect(commandsOf(runner)[0]).not.toContain("session list");
+    expect(commandsOf(runner)[0]).not.toContain("HERDR_SESSION_NAME");
     expect(commandsOf(runner)[0]).toContain(
-      '&& HERDR_SESSION="$HERDR_SESSION_NAME" herdr agent focus "$pane_id"',
+      '&& HERDR_SESSION=\'asem\' herdr tab focus "$tab_id"',
     );
-    expect(commandsOf(runner)[0]).toContain(
-      '&& herdr session attach "$HERDR_SESSION_NAME"',
-    );
+    expect(commandsOf(runner)[0]).toContain("&& herdr session attach 'asem'");
     expect(commandsOf(runner)[0]).not.toContain("herdr agent attach");
     expect(commandsOf(runner)[0]).not.toContain("stale-pane");
   });
@@ -171,11 +182,15 @@ describe("builtin mux: herdr", () => {
       pane_id: "stale-pane",
       herdr_workspace_id: "w",
       herdr_label: "s_0001",
+      herdr_session: "asem",
     });
     expect(commandsOf(runner)).toHaveLength(1);
     expect(commandsOf(runner)[0]).toContain("HERDR_LABEL='s_0001'");
+    expect(commandsOf(runner)[0]).toContain("HERDR_SESSION='asem'");
+    expect(commandsOf(runner)[0]).not.toContain("session list");
+    expect(commandsOf(runner)[0]).not.toContain("HERDR_SESSION_NAME");
     expect(commandsOf(runner)[0]).toContain(
-      '&& HERDR_SESSION="$HERDR_SESSION_NAME" herdr pane close "$pane_id"',
+      '&& HERDR_SESSION=\'asem\' herdr pane close "$pane_id"',
     );
     expect(commandsOf(runner)[0]).not.toContain("stale-pane");
   });
@@ -334,8 +349,9 @@ describe("builtin mux: a created pane is addressed by the same template", () => 
           }),
         },
         { stdout: "s_0001" },
+        { stdout: "asem" },
       ],
-      addressedBy: "s_0001",
+      addressedBy: "asem",
     },
     {
       name: "tmux",

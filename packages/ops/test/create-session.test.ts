@@ -28,9 +28,13 @@ const LAUNCH_PATH = `${SESSION_DIR}/launch.sh`;
 /** A runner whose mux `create` step prints the herdr JSON that carries refs. */
 function happyRunner(): FakeTemplateRunner {
   // [0] mux create -> herdr `tab create` JSON; [1] captures the stable
-  // Session-id label. Later calls default to ok.
+  // Session-id label; [2] captures the herdr session name. Later calls default to ok.
   return new FakeTemplateRunner({
-    commands: [{ stdout: HERDR_CREATE_JSON }, { stdout: FIRST_ID }],
+    commands: [
+      { stdout: HERDR_CREATE_JSON },
+      { stdout: FIRST_ID },
+      { stdout: "asem" },
+    ],
   });
 }
 
@@ -74,11 +78,13 @@ describe("createSession — happy path", () => {
     const d = deps();
     const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
 
-    // Sequence order: create (capture pane), capture stable label, then run_in_pane.
-    expect(d.runner.commands).toHaveLength(3);
+    // Sequence order: create (capture pane), capture stable label, capture herdr
+    // session name, then run_in_pane.
+    expect(d.runner.commands).toHaveLength(4);
     expect(d.runner.commands[0]!.command).toContain("herdr tab create");
     expect(d.runner.commands[1]!.command).toContain("printf");
-    expect(d.runner.commands[2]!.command).toContain("herdr pane run");
+    expect(d.runner.commands[2]!.command).toContain("HERDR_SESSION");
+    expect(d.runner.commands[3]!.command).toContain("herdr pane run");
 
     // The row is persisted exactly once, after the start.
     expect(d.store.sessions).toHaveLength(1);
@@ -107,6 +113,7 @@ describe("createSession — happy path", () => {
       tab_id: "tab-1",
       herdr_workspace_id: "herdr-workspace-1",
       herdr_label: FIRST_ID,
+      herdr_session: "asem",
     });
   });
 
@@ -299,6 +306,7 @@ describe("createSession — failure leaves no stale row + best-effort cleanup", 
       commands: [
         { stdout: HERDR_CREATE_JSON }, // create ok (captures pane_id/tab_id/workspace)
         { stdout: FIRST_ID }, // stable herdr label capture
+        { stdout: "asem" }, // herdr session capture
         { exitCode: 1, stderr: "send boom" }, // run_in_pane fails
         {}, // close ok
       ],

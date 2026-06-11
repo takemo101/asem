@@ -98,8 +98,9 @@ describe("CockpitApp effects", () => {
     expect(host.attaches).toHaveLength(1);
     expect(host.attaches[0]!.session.id).toBe("s1");
     expect(host.attaches[0]!.attachHint).toContain("HERDR_LABEL='s1'");
-    expect(host.attaches[0]!.attachHint).toContain("herdr agent focus");
-    expect(host.attaches[0]!.attachHint).toContain("herdr session attach");
+    expect(host.attaches[0]!.attachHint).toContain("HERDR_SESSION='asem'");
+    expect(host.attaches[0]!.attachHint).toContain("herdr tab focus");
+    expect(host.attaches[0]!.attachHint).toContain("herdr session attach 'asem'");
     expect(host.attaches[0]!.attachHint).not.toContain("herdr agent attach");
   });
 

@@ -7,7 +7,7 @@
  * structured error. No use-case logic (scope, auth, persistence) is duplicated
  * here — every command delegates to the operation that owns it.
  */
-import { operationError } from "@asem/core";
+import { type AttachCommand, operationError } from "@asem/core";
 import type { OperationError, OperationResult, OpsDeps } from "@asem/ops";
 import {
   closeSession,
@@ -49,7 +49,7 @@ import {
 import { usageFor } from "./usage.ts";
 
 /** Inputs for one CLI invocation. `deps` is the injected operation bundle. */
-export type AttachRunner = (command: string) => Promise<number>;
+export type AttachRunner = (command: AttachCommand) => Promise<number>;
 
 export interface RunCliOptions {
   argv: readonly string[];
@@ -347,11 +347,12 @@ async function runSessionAttach(
       emitJson(io, {
         session: value.session,
         attachHint: value.attachHint ?? null,
+        attachCommand: value.attachCommand ?? null,
       });
       return;
     }
-    if (value.attachHint !== undefined && attachRunner !== undefined) {
-      return attachRunner(value.attachHint);
+    if (value.attachCommand !== undefined && attachRunner !== undefined) {
+      return attachRunner(value.attachCommand);
     }
     emit(io, renderAttach(value.session, value.attachHint));
   });

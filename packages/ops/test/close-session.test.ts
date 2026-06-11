@@ -16,10 +16,9 @@ import { expectErr, expectOk, makeSession, scopeA, scopeB } from "./helpers.ts";
 const CTX = { cwd: scopeA.worktreeRoot };
 const CURRENT_TOKEN = "tok-current";
 const HERDR_REF = {
-  pane_id: "stale-pane",
-  tab_id: "stale-tab",
+  pane_id: "pane-1",
+  tab_id: "tab-1",
   herdr_workspace_id: "herdr-workspace-1",
-  herdr_label: "s_0001",
   herdr_session: "asem",
 };
 
@@ -46,7 +45,7 @@ function deps(
   return { ...bundle, store, runner, logger };
 }
 
-/** A herdr Session whose `close` sequence resolves its `pane_id` mux ref. */
+/** A herdr Session whose `close` sequence closes its owning workspace. */
 function makeRunning(overrides = {}) {
   return makeSession({
     name: "reviewer-1",
@@ -68,11 +67,11 @@ describe("closeSession — pane control + status update", () => {
       await closeSession(d, { id: session.id }, CTX),
     );
 
-    // The herdr `close` sequence resolves the current pane from the stable label.
+    // The herdr `close` sequence closes the owning workspace.
     expect(d.runner.commands).toHaveLength(1);
-    expect(d.runner.commands[0]!.command).toContain("herdr pane close");
-    expect(d.runner.commands[0]!.command).toContain("HERDR_LABEL='s_0001'");
-    expect(d.runner.commands[0]!.command).not.toContain("stale-pane");
+    expect(d.runner.commands[0]!.command).toContain(
+      "herdr --session 'asem' workspace close 'herdr-workspace-1'",
+    );
     expect(d.runner.commands[0]!.cwd).toBe(session.cwd);
 
     // Status moves to closed with a closed_at stamp; never a work outcome.

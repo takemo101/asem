@@ -333,14 +333,15 @@ Command strings should use `_shell` variants.
 
 ### Mux template shape
 
-Mux templates expose five sequences:
+Mux templates expose five command sequences plus an optional structured attach argv template:
 
 ```yaml
-create: []       # create mux session/window/tab/pane and capture pane refs
-run_in_pane: []  # execute launch script/command in target pane
-send: []         # inject text into pane
-attach: []       # attach command for humans/CLI/TUI
-close: []        # close pane/session process
+create: []          # create mux session/window/tab/pane and capture refs
+run_in_pane: []     # execute launch script/command in target pane
+send: []            # inject text into pane
+attach: []          # legacy shell attach hint for humans
+attach_command: []  # argv form preferred by CLI/TUI attach runners
+close: []           # close pane/session process
 ```
 
 Initial builtin mux templates:
@@ -349,7 +350,7 @@ Initial builtin mux templates:
 - `tmux`
 - `zellij`
 
-`herdr` note: herdr display pane/tab ids can compact when panes close, so they are not safe as durable Session coordinates by themselves. The builtin herdr template labels the tab with the generated Session id, stores that stable label plus the herdr workspace id in `mux_ref_json`, and resolves the current pane id from `herdr tab list` / `herdr pane list` immediately before `send`, `attach`, or `close`. This keeps later operations from accidentally targeting a different pane that reused an old compacted id.
+Builtin mux lifecycle follows the cuekit-proven model where possible: tmux and zellij create one native multiplexer session per asem Session, then attach and close by that native session name. Herdr creates one workspace per asem Session under an explicit `herdr_session`; `send` targets the captured root pane, `attach` focuses the captured workspace/tab, and `close` closes the workspace. CLI/TUI attach prefer `attach_command` argv over shelling an `attach` string.
 
 ### Agent template shape
 
@@ -418,7 +419,7 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 | Register current Session | `asem init-session` | `init_session` | token generated | effective scope | inserts Session row, prints exports |
 | Create Session | `asem session create` | `create_session` | human or verified current Session | effective scope | creates pane, writes files, inserts Session row |
 | List Sessions | `asem session list` | `list_sessions` | human or verified current Session | effective scope | reads Session rows, may update liveness |
-| Get Session | `asem session get` | `get_session` | human or verified current Session | effective scope | reads one Session, may include `attach_hint` |
+| Get Session | `asem session get` | `get_session` | human or verified current Session | effective scope | reads one Session, may include `attach_hint` and `attach_command` |
 | Attach Session | `asem session attach` | — | human local trust | effective scope | attaches to external mux |
 | Close Session | `asem session close` | `close_session` | human or verified current Session | effective scope | closes pane/process, sets `closed` |
 | Delete Session | `asem session delete` | `delete_session` | human or verified current Session | effective scope | deletes Session and related messages |
@@ -428,7 +429,7 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 | Start MCP | `asem mcp` | — | local process | current config | starts stdio MCP server |
 | Start TUI | `asem tui` | — | human local trust | worktree/workspace | opens Session cockpit |
 
-MCP intentionally does not expose attach. `get_session` may return `attach_hint` for human/operator use.
+MCP intentionally does not expose attach. `get_session` may return legacy `attach_hint` plus structured `attach_command` for human/operator surfaces; CLI/TUI execute the structured argv form when present.
 
 ### Current Session registration
 

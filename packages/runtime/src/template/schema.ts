@@ -102,12 +102,16 @@ export type CommandSequence = z.infer<typeof commandSequenceSchema>;
  * Mux template: the five command sequences a multiplexer integration exposes.
  * Each defaults to an empty sequence so partial templates parse cleanly.
  */
+export const attachCommandTemplateSchema = z.array(nonEmptyString).default([]);
+export type AttachCommandTemplate = z.infer<typeof attachCommandTemplateSchema>;
+
 export const muxTemplateSchema = z
   .object({
     create: commandSequenceSchema.default([]),
     run_in_pane: commandSequenceSchema.default([]),
     send: commandSequenceSchema.default([]),
     attach: commandSequenceSchema.default([]),
+    attach_command: attachCommandTemplateSchema,
     close: commandSequenceSchema.default([]),
   })
   .strict();

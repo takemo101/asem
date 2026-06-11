@@ -30,7 +30,28 @@ import {
   interpolate,
   MissingVariableError,
 } from "./interpolate.ts";
-import type { CommandSequence } from "./schema.ts";
+import type { AttachCommandTemplate, CommandSequence } from "./schema.ts";
+
+export interface RenderedAttachCommand {
+  argv: string[];
+}
+
+export function renderAttachCommand(
+  attachCommand: AttachCommandTemplate | undefined,
+  vars: InterpolationVars,
+): RenderedAttachCommand | undefined {
+  if (attachCommand === undefined || attachCommand.length === 0) {
+    return undefined;
+  }
+  try {
+    return { argv: attachCommand.map((arg) => interpolate(arg, vars)) };
+  } catch (error) {
+    if (error instanceof MissingVariableError) {
+      return undefined;
+    }
+    throw error;
+  }
+}
 
 /**
  * Render the human attach command for a mux template's `attach` sequence, or

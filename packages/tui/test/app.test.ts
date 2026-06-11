@@ -90,25 +90,26 @@ describe("CockpitApp effects", () => {
 
   test("attach leaves to the host with the get_session hint and refreshes", async () => {
     const store = new FakeStore();
-    // The default muxRef carries the stable herdr label/workspace, so the
-    // attach hint renders a resolver command instead of trusting `pane_id`.
+    // The default muxRef carries herdr session/workspace/tab refs, so attach
+    // can be represented as structured argv instead of a shell-only hint.
     store.sessions.push(makeSession({ id: "s1", name: "one" }));
     const { app, host } = makeApp({ store });
     await app.dispatch({ type: "attach" });
     expect(host.attaches).toHaveLength(1);
     expect(host.attaches[0]!.session.id).toBe("s1");
-    expect(host.attaches[0]!.attachHint).toContain("HERDR_LABEL='s1'");
-    expect(host.attaches[0]!.attachHint).toContain("HERDR_SESSION='asem'");
-    expect(host.attaches[0]!.attachHint).toContain("herdr tab focus");
-    expect(host.attaches[0]!.attachHint).toContain(
-      "herdr session attach 'asem'",
-    );
-    expect(host.attaches[0]!.attachHint).not.toContain("herdr agent attach");
+    expect(host.attaches[0]!.attachHint).toContain("herdr --session 'asem'");
+    expect(host.attaches[0]!.attachCommand).toEqual({
+      argv: [
+        "sh",
+        "-c",
+        "herdr --session 'asem' workspace focus 'ws_1' >/dev/null && herdr --session 'asem' tab focus 'tab-1' >/dev/null && if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach 'asem'; fi",
+      ],
+    });
   });
 
   test("attach passes a null hint when the mux ref cannot render one", async () => {
     const store = new FakeStore();
-    // herdr's attach references the stable label/workspace, which this ref lacks → no hint.
+    // herdr's attach references session/workspace/tab refs, which this ref lacks → no hint.
     store.sessions.push(
       makeSession({ id: "s1", name: "one", muxRef: { tab_id: "tab-1" } }),
     );
@@ -116,6 +117,7 @@ describe("CockpitApp effects", () => {
     await app.dispatch({ type: "attach" });
     expect(host.attaches).toHaveLength(1);
     expect(host.attaches[0]!.attachHint).toBeNull();
+    expect(host.attaches[0]!.attachCommand).toBeNull();
   });
 
   test("a failing operation surfaces the structured error in the status line", async () => {

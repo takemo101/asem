@@ -30,10 +30,9 @@ async function run(argv: string[], deps = makeCliFixture().deps) {
 }
 
 const HERDR_REF = {
-  pane_id: "stale-pane",
-  tab_id: "stale-tab",
+  pane_id: "pane-1",
+  tab_id: "tab-1",
   herdr_workspace_id: "herdr-workspace-1",
-  herdr_label: "s_0001",
   herdr_session: "asem",
 };
 
@@ -98,7 +97,8 @@ describe("runCli init", () => {
     const config = await deps.fs.readFile(configPathFor(CWD));
     expect(config).toContain("default: tmux");
     expect(config).toContain("default: pi");
-    expect(config).toContain("tmux new-window");
+    expect(config).toContain("tmux new-session");
+    expect(config).toContain("attach_command");
     expect(config).toContain("command: pi");
   });
 
@@ -346,11 +346,12 @@ describe("runCli init-session", () => {
 });
 
 describe("runCli session create", () => {
-  /** Minimal `herdr tab create` JSON the builtin herdr mux template captures. */
+  /** Minimal `herdr workspace create` JSON the builtin herdr mux template captures. */
   const HERDR_CREATE_JSON = JSON.stringify({
     result: {
+      workspace: { workspace_id: "herdr-workspace-1" },
       root_pane: { pane_id: "pane-1" },
-      tab: { tab_id: "tab-1", workspace_id: "herdr-workspace-1" },
+      tab: { tab_id: "tab-1" },
     },
   });
 
@@ -363,11 +364,7 @@ describe("runCli session create", () => {
       scopeResolver: new FakeScopeResolver(SCOPE),
       currentSessionResolver: new FakeCurrentSessionResolver(null),
       templateRunner: new FakeTemplateRunner({
-        commands: [
-          { stdout: HERDR_CREATE_JSON },
-          { stdout: "s_0001" },
-          { stdout: "asem" },
-        ],
+        commands: [{ stdout: "asem" }, { stdout: HERDR_CREATE_JSON }],
       }),
     });
     return { deps, store };
@@ -543,16 +540,10 @@ describe("runCli session attach", () => {
 
     const { io, code } = await run(["session", "attach", s.id], deps);
     expect(code).toBe(EXIT_OK);
-    expect(io.outText()).toContain("HERDR_LABEL='s_0001'");
-    expect(io.outText()).toContain("HERDR_SESSION='asem'");
-    expect(io.outText()).not.toContain("session list");
-    expect(io.outText()).not.toContain("HERDR_SESSION_NAME");
-    expect(io.outText()).toContain(
-      "HERDR_SESSION='asem' herdr tab focus \"$tab_id\"",
-    );
-    expect(io.outText()).toContain("herdr session attach 'asem'");
-    expect(io.outText()).not.toContain("herdr agent attach");
-    expect(io.outText()).not.toContain("stale-pane");
+    expect(io.outText()).toContain("herdr --session 'asem'");
+    expect(io.outText()).toContain("workspace focus 'herdr-workspace-1'");
+    expect(io.outText()).toContain("tab focus 'tab-1'");
+    expect(io.outText()).toContain("exec herdr session attach 'asem'");
   });
 
   test("executes the rendered attach hint when an attach runner is injected", async () => {
@@ -561,7 +552,7 @@ describe("runCli session attach", () => {
     store.sessions.push(s);
     const { deps } = makeCliFixture({ store });
     const io = new BufferIo();
-    const commands: string[] = [];
+    const commands: string[][] = [];
 
     const code = await runCli({
       argv: ["session", "attach", s.id],
@@ -569,7 +560,7 @@ describe("runCli session attach", () => {
       deps,
       io,
       attachRunner: async (command) => {
-        commands.push(command);
+        commands.push(command.argv);
         return EXIT_OK;
       },
     });
@@ -577,14 +568,11 @@ describe("runCli session attach", () => {
     expect(code).toBe(EXIT_OK);
     expect(io.outText()).toBe("");
     expect(commands).toHaveLength(1);
-    expect(commands[0]).toContain("HERDR_LABEL='s_0001'");
-    expect(commands[0]).toContain("HERDR_SESSION='asem'");
-    expect(commands[0]).not.toContain("session list");
-    expect(commands[0]).not.toContain("HERDR_SESSION_NAME");
-    expect(commands[0]).toContain(
-      "HERDR_SESSION='asem' herdr tab focus \"$tab_id\"",
-    );
-    expect(commands[0]).toContain("herdr session attach 'asem'");
+    expect(commands[0]).toEqual([
+      "sh",
+      "-c",
+      "herdr --session 'asem' workspace focus 'herdr-workspace-1' >/dev/null && herdr --session 'asem' tab focus 'tab-1' >/dev/null && if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach 'asem'; fi",
+    ]);
   });
 
   test("attach of an unknown id surfaces session_not_found (exit 1)", async () => {

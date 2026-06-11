@@ -18,7 +18,7 @@
  * Tests exercise this with fake `@asem/ops` deps (the `@asem/ops` in-memory
  * fakes), never a real store, multiplexer, or agent.
  */
-import type { Message, OperationResult, Session } from "@asem/core";
+import type { AttachCommand, Message, OperationResult, Session } from "@asem/core";
 import {
   closeSession,
   deleteSession,
@@ -93,7 +93,7 @@ export async function loadCockpitSnapshot(
 }
 
 /** Ports the attach-hint loader needs (the `get_session` read subset). */
-export type AttachHintDeps = Pick<
+export type AttachDeps = Pick<
   OpsDeps,
   | "store"
   | "configLoader"
@@ -112,13 +112,18 @@ export type AttachHintDeps = Pick<
  * host falls back to safe manual guidance. A failed read (e.g. the Session was
  * removed) is treated as "no hint" — attach is best-effort operator guidance.
  */
-export async function loadAttachHint(
-  deps: AttachHintDeps,
+export async function loadAttach(
+  deps: AttachDeps,
   ctx: OpContext,
   sessionId: string,
-): Promise<string | null> {
+): Promise<{ attachHint: string | null; attachCommand: AttachCommand | null }> {
   const result = await getSession(deps, { id: sessionId }, ctx);
-  return result.ok ? (result.value.attachHint ?? null) : null;
+  return result.ok
+    ? {
+        attachHint: result.value.attachHint ?? null,
+        attachCommand: result.value.attachCommand ?? null,
+      }
+    : { attachHint: null, attachCommand: null };
 }
 
 /** Deps the cockpit env resolver needs (config + scope discovery). */

@@ -22,8 +22,10 @@ export { CockpitApp, runCockpit, type StepResult } from "./app.ts";
 export {
   type CockpitEffectOutcome,
   type EffectDeps,
+  type AttachDeps,
   type EnvDeps,
   executeCockpitEffect,
+  loadAttach,
   loadCockpitSnapshot,
   resolveCockpitEnv,
   type SnapshotDeps,

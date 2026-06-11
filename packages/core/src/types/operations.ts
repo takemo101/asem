@@ -104,9 +104,14 @@ export const getSessionInputSchema = z
   })
   .strict();
 export type GetSessionInput = z.infer<typeof getSessionInputSchema>;
+export interface AttachCommand {
+  argv: string[];
+}
+
 export interface GetSessionOutput {
   session: Session;
   attachHint?: string;
+  attachCommand?: AttachCommand;
 }
 
 // --- close / delete -------------------------------------------------------

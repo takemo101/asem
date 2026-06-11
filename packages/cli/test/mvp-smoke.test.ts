@@ -86,22 +86,20 @@ import { EXIT_OK, runCli } from "../src/run.ts";
 const CWD = "/repo/a";
 const SCOPE: EffectiveScope = { workspaceId: "ws_1", worktreeRoot: CWD };
 const CTX = { cwd: CWD };
-// A herdr-shaped mux ref: the builtin herdr `send`/`close` sequences resolve
-// the current pane from stable label/workspace refs because display pane ids can
-// compact after closes.
+// A herdr-shaped mux ref captured from the owning herdr workspace.
 const MUX_REF: MuxRef = {
-  pane_id: "stale-pane",
-  tab_id: "stale-tab",
+  pane_id: "pane-1",
+  tab_id: "tab-1",
   herdr_workspace_id: "herdr-workspace-1",
-  herdr_label: "s_0001",
   herdr_session: "asem",
 };
 
-/** Minimal `herdr tab create` JSON the builtin herdr template captures refs from. */
+/** Minimal `herdr workspace create` JSON the builtin herdr template captures refs from. */
 const HERDR_CREATE_JSON = JSON.stringify({
   result: {
+    workspace: { workspace_id: "herdr-workspace-1" },
     root_pane: { pane_id: "pane-1" },
-    tab: { tab_id: "tab-1", workspace_id: "herdr-workspace-1" },
+    tab: { tab_id: "tab-1" },
   },
 });
 
@@ -180,11 +178,7 @@ function withCreateRunner(base: OpsDeps): OpsDeps {
   return {
     ...base,
     templateRunner: new FakeTemplateRunner({
-      commands: [
-        { stdout: HERDR_CREATE_JSON },
-        { stdout: "s_0003" },
-        { stdout: "asem" },
-      ],
+      commands: [{ stdout: "asem" }, { stdout: HERDR_CREATE_JSON }],
     }),
   };
 }

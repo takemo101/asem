@@ -29,11 +29,6 @@
  * (`launch_cmd` for `run_in_pane`, `message` for `send`).
  */
 
-const HERDR_RESOLVE_PANE_BY_LABEL =
-  'HERDR_SESSION={{herdr_session_shell}} HERDR_LABEL={{herdr_label_shell}} HERDR_WORKSPACE_ID={{herdr_workspace_id_shell}} python3 -c \'exec("""import json, os, shlex, subprocess\nlabel = os.environ["HERDR_LABEL"]\nworkspace = os.environ["HERDR_WORKSPACE_ID"]\ntabs = json.loads(subprocess.check_output(["herdr", "tab", "list", "--workspace", workspace], text=True))["result"]["tabs"]\ntab = next((t for t in tabs if t.get("label") == label), None)\nassert tab is not None, "herdr tab label not found"\npanes = json.loads(subprocess.check_output(["herdr", "pane", "list", "--workspace", workspace], text=True))["result"]["panes"]\npane = next((p for p in panes if p.get("tab_id") == tab.get("tab_id")), None)\nassert pane is not None, "herdr pane for tab not found"\nprint("tab_id=" + shlex.quote(tab["tab_id"]))\nprint("pane_id=" + shlex.quote(pane["pane_id"]))\n""")\'';
-
-const HERDR_RESOLVE_PANE_VAR = `eval "$(${HERDR_RESOLVE_PANE_BY_LABEL})"`;
-
 /** Raw builtin mux templates, keyed by name. */
 export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
   /**
@@ -45,66 +40,54 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
    * an MCP op.
    */
   herdr: {
-    // `tab create` returns the new tab plus its root pane as JSON. A new tab
-    // (not a split) keeps each Session isolated; `--no-focus` avoids stealing
-    // the operator's focus when a Session is created in the background. The tab
-    // label uses the Session id because it is unique and stable; the human
-    // Session name remains in the durable Session row and TUI/CLI surfaces.
     create: [
-      {
-        type: "run",
-        command:
-          "herdr tab create --cwd {{cwd_shell}} --no-focus --label {{session_id_shell}}",
-        capture: [
-          { name: "pane_id", jsonpath: "$.result.root_pane.pane_id" },
-          { name: "tab_id", jsonpath: "$.result.tab.tab_id" },
-          { name: "herdr_workspace_id", jsonpath: "$.result.tab.workspace_id" },
-        ],
-      },
-      {
-        type: "run",
-        command: "printf '%s' {{session_id_shell}}",
-        capture: [{ name: "herdr_label", regex: "^(.+)$", group: 1 }],
-      },
       {
         type: "run",
         command: "printf '%s' \"${HERDR_SESSION:-default}\"",
         capture: [{ name: "herdr_session", regex: "^(.+)$", group: 1 }],
       },
+      {
+        type: "run",
+        command:
+          "herdr --session {{herdr_session_shell}} workspace create --cwd {{cwd_shell}} --label {{session_id_shell}}",
+        capture: [
+          { name: "pane_id", jsonpath: "$.result.root_pane.pane_id" },
+          { name: "tab_id", jsonpath: "$.result.tab.tab_id" },
+          { name: "herdr_workspace_id", jsonpath: "$.result.workspace.workspace_id" },
+        ],
+      },
     ],
-    // `pane run` writes the command text and presses Enter, so the launch
-    // script starts in one step.
     run_in_pane: [
       {
         type: "run",
-        command: "herdr pane run {{pane_id_shell}} {{launch_cmd_shell}}",
+        command:
+          "herdr --session {{herdr_session_shell}} pane run {{pane_id_shell}} {{launch_cmd_shell}}",
       },
     ],
-    // `send-text` writes literal text only; Enter is a separate key press, so
-    // a delivered Message lands as input and is submitted.
     send: [
       {
         type: "run",
-        command: `${HERDR_RESOLVE_PANE_VAR} && HERDR_SESSION={{herdr_session_shell}} herdr pane send-text "$pane_id" {{message_shell}}`,
-      },
-      {
-        type: "run",
-        command: `${HERDR_RESOLVE_PANE_VAR} && HERDR_SESSION={{herdr_session_shell}} herdr pane send-keys "$pane_id" Enter`,
+        command:
+          "herdr --session {{herdr_session_shell}} pane run {{pane_id_shell}} {{message_shell}}",
       },
     ],
     attach: [
       {
         type: "run",
         command:
-          `${HERDR_RESOLVE_PANE_VAR} && ` +
-          `HERDR_SESSION={{herdr_session_shell}} herdr tab focus "$tab_id" >/dev/null && ` +
-          `if [ "\${HERDR_ENV:-}" = '1' ]; then :; else herdr session attach {{herdr_session_shell}}; fi`,
+          "herdr --session {{herdr_session_shell}} workspace focus {{herdr_workspace_id_shell}} >/dev/null && herdr --session {{herdr_session_shell}} tab focus {{tab_id_shell}} >/dev/null && if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach {{herdr_session_shell}}; fi",
       },
+    ],
+    attach_command: [
+      "sh",
+      "-c",
+      "herdr --session {{herdr_session_shell}} workspace focus {{herdr_workspace_id_shell}} >/dev/null && herdr --session {{herdr_session_shell}} tab focus {{tab_id_shell}} >/dev/null && if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach {{herdr_session_shell}}; fi",
     ],
     close: [
       {
         type: "run",
-        command: `${HERDR_RESOLVE_PANE_VAR} && HERDR_SESSION={{herdr_session_shell}} herdr pane close "$pane_id"`,
+        command:
+          "herdr --session {{herdr_session_shell}} workspace close {{herdr_workspace_id_shell}}",
       },
     ],
   },
@@ -120,40 +103,46 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
       {
         type: "run",
         command:
-          "tmux new-window -P -F '#{session_name}|#{window_id}|#{pane_id}' -c {{cwd_shell}} -n {{name_shell}}",
+          "tmux new-session -d -s {{session_id_shell}} -c {{cwd_shell}} -P -F '#{session_name}|#{pane_id}'",
         capture: [
-          { name: "session_name", regex: "^([^|]*)\\|", group: 1 },
-          { name: "window_id", regex: "^[^|]*\\|([^|]*)\\|", group: 1 },
-          // Trailing `\s*$` drops the newline `tmux -P` prints after the line.
+          { name: "tmux_session_name", regex: "^([^|]*)\\|", group: 1 },
           { name: "pane_id", regex: "\\|([^|\\s]+)\\s*$", group: 1 },
         ],
       },
     ],
-    // `send-keys … Enter` sends the literal text then the Enter key.
     run_in_pane: [
       {
         type: "run",
         command:
-          "tmux send-keys -t {{pane_id_shell}} {{launch_cmd_shell}} Enter",
+          "tmux send-keys -t {{tmux_session_name_shell}} -l {{launch_cmd_shell}}",
+      },
+      { type: "wait_ms", ms: 200 },
+      {
+        type: "run",
+        command: "tmux send-keys -t {{tmux_session_name_shell}} Enter",
       },
     ],
     send: [
       {
         type: "run",
-        command: "tmux send-keys -t {{pane_id_shell}} {{message_shell}} Enter",
+        command: "tmux send-keys -t {{tmux_session_name_shell}} -l {{message_shell}}",
       },
-    ],
-    // Operator attach: select the captured window + pane, then attach to the
-    // session so the human lands on exactly that pane.
-    attach: [
-      { type: "run", command: "tmux select-window -t {{window_id_shell}}" },
-      { type: "run", command: "tmux select-pane -t {{pane_id_shell}}" },
+      { type: "wait_ms", ms: 200 },
       {
         type: "run",
-        command: "tmux attach-session -t {{session_name_shell}}",
+        command: "tmux send-keys -t {{tmux_session_name_shell}} Enter",
       },
     ],
-    close: [{ type: "run", command: "tmux kill-pane -t {{pane_id_shell}}" }],
+    attach: [
+      {
+        type: "run",
+        command: "tmux attach-session -t {{tmux_session_name_shell}}",
+      },
+    ],
+    attach_command: ["tmux", "attach-session", "-t", "{{tmux_session_name}}"],
+    close: [
+      { type: "run", command: "tmux kill-session -t {{tmux_session_name_shell}}" },
+    ],
   },
 
   /**
@@ -168,52 +157,56 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
       {
         type: "run",
         command:
-          "zellij action new-tab --name {{session_id_shell}} --cwd {{cwd_shell}}",
+          "zellij attach --create-background {{session_id_shell}} options --default-cwd {{cwd_shell}}",
       },
-      // Record the stable tab name as the addressable mux ref. zellij gives no
-      // stable id back, so we echo the name we set and capture it.
       {
         type: "run",
         command: "printf '%s' {{session_id_shell}}",
-        capture: [{ name: "tab_name", regex: "^(.+)$", group: 1 }],
+        capture: [{ name: "zellij_session_name", regex: "^(.+)$", group: 1 }],
       },
     ],
     run_in_pane: [
       {
         type: "run",
-        command: "zellij action go-to-tab-name {{tab_name_shell}}",
+        command:
+          "zellij --session {{zellij_session_name_shell}} action write-chars {{launch_cmd_shell}}",
       },
+      { type: "wait_ms", ms: 200 },
       {
         type: "run",
-        command: "zellij action write-chars {{launch_cmd_shell}}",
+        command: "zellij --session {{zellij_session_name_shell}} action write 13",
       },
-      { type: "run", command: "zellij action write 13" },
     ],
     send: [
       {
         type: "run",
-        command: "zellij action go-to-tab-name {{tab_name_shell}}",
+        command:
+          "zellij --session {{zellij_session_name_shell}} action write-chars {{message_shell}}",
       },
+      { type: "wait_ms", ms: 200 },
       {
         type: "run",
-        command: "zellij action write-chars {{message_shell}}",
+        command: "zellij --session {{zellij_session_name_shell}} action write 13",
       },
-      { type: "run", command: "zellij action write 13" },
     ],
-    // Operator attach: focus the Session's tab.
     attach: [
       {
         type: "run",
-        command: "zellij action go-to-tab-name {{tab_name_shell}}",
+        command: "zellij attach {{zellij_session_name_shell}}",
       },
     ],
-    // Focus the tab, then close the focused tab.
+    attach_command: ["zellij", "attach", "{{zellij_session_name}}"],
     close: [
       {
         type: "run",
-        command: "zellij action go-to-tab-name {{tab_name_shell}}",
+        command: "zellij kill-session {{zellij_session_name_shell}}",
+        on_error: "ignore",
       },
-      { type: "run", command: "zellij action close-tab" },
+      {
+        type: "run",
+        command: "zellij delete-session {{zellij_session_name_shell}}",
+        on_error: "ignore",
+      },
     ],
   },
 };

@@ -27,22 +27,19 @@ const LAUNCH_PATH = `${SESSION_DIR}/launch.sh`;
 
 /** A runner whose mux `create` step prints the herdr JSON that carries refs. */
 function happyRunner(): FakeTemplateRunner {
-  // [0] mux create -> herdr `tab create` JSON; [1] captures the stable
-  // Session-id label; [2] captures the herdr session name. Later calls default to ok.
+  // [0] captures the herdr session name; [1] mux create -> herdr `workspace create` JSON.
+  // Later calls default to ok.
   return new FakeTemplateRunner({
-    commands: [
-      { stdout: HERDR_CREATE_JSON },
-      { stdout: FIRST_ID },
-      { stdout: "asem" },
-    ],
+    commands: [{ stdout: "asem" }, { stdout: HERDR_CREATE_JSON }],
   });
 }
 
-/** Minimal `herdr tab create` JSON shape the builtin herdr template parses. */
+/** Minimal `herdr workspace create` JSON shape the builtin herdr template parses. */
 const HERDR_CREATE_JSON = JSON.stringify({
   result: {
+    workspace: { workspace_id: "herdr-workspace-1" },
     root_pane: { pane_id: "pane-1" },
-    tab: { tab_id: "tab-1", workspace_id: "herdr-workspace-1" },
+    tab: { tab_id: "tab-1" },
   },
 });
 
@@ -78,13 +75,11 @@ describe("createSession — happy path", () => {
     const d = deps();
     const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
 
-    // Sequence order: create (capture pane), capture stable label, capture herdr
-    // session name, then run_in_pane.
-    expect(d.runner.commands).toHaveLength(4);
-    expect(d.runner.commands[0]!.command).toContain("herdr tab create");
-    expect(d.runner.commands[1]!.command).toContain("printf");
-    expect(d.runner.commands[2]!.command).toContain("HERDR_SESSION");
-    expect(d.runner.commands[3]!.command).toContain("herdr pane run");
+    // Sequence order: capture herdr session, create workspace, then run_in_pane.
+    expect(d.runner.commands).toHaveLength(3);
+    expect(d.runner.commands[0]!.command).toContain("HERDR_SESSION");
+    expect(d.runner.commands[1]!.command).toContain("herdr --session 'asem' workspace create");
+    expect(d.runner.commands[2]!.command).toContain("herdr --session 'asem' pane run");
 
     // The row is persisted exactly once, after the start.
     expect(d.store.sessions).toHaveLength(1);
@@ -112,7 +107,6 @@ describe("createSession — happy path", () => {
       pane_id: "pane-1",
       tab_id: "tab-1",
       herdr_workspace_id: "herdr-workspace-1",
-      herdr_label: FIRST_ID,
       herdr_session: "asem",
     });
   });
@@ -304,9 +298,8 @@ describe("createSession — failure leaves no stale row + best-effort cleanup", 
   test("a failed run_in_pane attempts mux close and leaves no row", async () => {
     const runner = new FakeTemplateRunner({
       commands: [
-        { stdout: HERDR_CREATE_JSON }, // create ok (captures pane_id/tab_id/workspace)
-        { stdout: FIRST_ID }, // stable herdr label capture
         { stdout: "asem" }, // herdr session capture
+        { stdout: HERDR_CREATE_JSON }, // create ok (captures pane_id/tab_id/workspace)
         { exitCode: 1, stderr: "send boom" }, // run_in_pane fails
         {}, // close ok
       ],
@@ -317,9 +310,9 @@ describe("createSession — failure leaves no stale row + best-effort cleanup", 
     const error = expectErr(result, "sequence_step_failed");
     expect(error.details?.logPath).toBe(SESSION_DIR);
 
-    // Best-effort cleanup ran the mux `close` sequence with the captured pane.
+    // Best-effort cleanup ran the mux `close` sequence with the captured workspace.
     const closed = d.runner.commands.some((c) =>
-      c.command.includes("herdr pane close"),
+      c.command.includes("herdr --session 'asem' workspace close 'herdr-workspace-1'"),
     );
     expect(closed).toBe(true);
 
@@ -462,7 +455,7 @@ describe("createSession — project-local templates from .asem.yaml", () => {
 
     expectOk(await createSession(d, ROOT_INPUT, CTX));
 
-    expect(d.runner.commands[0]!.command).toContain("herdr tab create");
+    expect(d.runner.commands[1]!.command).toContain("herdr --session 'asem' workspace create");
     expect(d.fs.files.get(LAUNCH_PATH)!.contents).toContain(
       `claude "$(cat '${PROMPT_PATH}')"`,
     );

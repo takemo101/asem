@@ -11,19 +11,9 @@ import {
  * Builtin mux template tests (MIK-007).
  *
  * These exercise the herdr / tmux / zellij builtin mux templates entirely
- * through the {@link FakeTemplateRunner} — no real multiplexer binary is
- * required (implementation principle 4). They assert:
- *
- * - the `create` sequence's command order, cwd/env propagation, and the mux
- *   refs it captures;
- * - `send` and `close` command construction with shell-escaped variables;
- * - `attach` producing a human/operator attach command (never an MCP op);
- * - that a pane created by a mux template is addressed by **the same** mux
- *   template for `send` / `attach` / `close`, using only the captured refs
- *   (i.e. exactly what a later op would load from the Store).
+ * through the FakeTemplateRunner — no real multiplexer binary is required.
  */
 
-/** The base interpolation vars `create_session` provides to a `create` run. */
 const BASE_VARS: Record<string, string> = {
   session_id: "s_0001",
   cwd: "/repo",
@@ -31,7 +21,6 @@ const BASE_VARS: Record<string, string> = {
   launch_cmd: "bash '/repo/.asem/sessions/s_0001/launch.sh'",
 };
 
-/** A Message body containing a space + shell metachar to prove `_shell` use. */
 const MESSAGE = "hi; there";
 
 function muxTemplate(name: string): MuxTemplate {
@@ -59,7 +48,6 @@ async function runCreate(
   return result.value.captures;
 }
 
-/** Run a non-create sequence with ONLY the captured refs + message available. */
 async function runWithRefsOnly(
   sequence: CommandSequence,
   runner: FakeTemplateRunner,
@@ -67,9 +55,6 @@ async function runWithRefsOnly(
 ): Promise<void> {
   const result = await engine(runner).run(sequence, {
     cwd: "/repo",
-    // Captured refs + the op-provided vars (`launch_cmd` for run_in_pane,
-    // `message` for send). Base create vars like `name`/`cwd` are deliberately
-    // absent, mirroring a later op that only has the Store muxRef.
     variables: { ...refs, message: MESSAGE, launch_cmd: BASE_VARS.launch_cmd! },
   });
   expect(result.ok).toBe(true);
@@ -81,128 +66,93 @@ const commandsOf = (runner: FakeTemplateRunner): string[] =>
 // --- herdr ----------------------------------------------------------------
 
 describe("builtin mux: herdr", () => {
-  // herdr's CLI emits JSON; `create` captures initial compactable ids plus
-  // stable label/workspace refs used to resolve the current pane later.
   const HERDR_CREATE_JSON = JSON.stringify({
     result: {
+      workspace: { workspace_id: "w" },
       root_pane: { pane_id: "w-3" },
-      tab: { tab_id: "w:2", workspace_id: "w" },
+      tab: { tab_id: "w:2" },
     },
   });
 
   test("create: command, cwd/env propagation, and captured refs", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner({
-      commands: [
-        { stdout: HERDR_CREATE_JSON },
-        { stdout: "s_0001" },
-        { stdout: "asem" },
-      ],
+      commands: [{ stdout: "asem" }, { stdout: HERDR_CREATE_JSON }],
     });
     const refs = await runCreate(template, runner, {
       cwd: "/repo",
       env: { AS_X: "1" },
     });
 
-    expect(runner.commands).toHaveLength(3);
-    expect(runner.commands[0]!.command).toBe(
-      "herdr tab create --cwd '/repo' --no-focus --label 's_0001'",
+    expect(runner.commands).toHaveLength(2);
+    expect(runner.commands[0]!.command).toBe("printf '%s' \"${HERDR_SESSION:-default}\"");
+    expect(runner.commands[1]!.command).toBe(
+      "herdr --session 'asem' workspace create --cwd '/repo' --label 's_0001'",
     );
-    expect(runner.commands[0]!.cwd).toBe("/repo");
-    expect(runner.commands[0]!.env).toEqual({ AS_X: "1" });
-    // Enough ref data for later send/attach/close without trusting compactable ids.
+    expect(runner.commands[1]!.cwd).toBe("/repo");
+    expect(runner.commands[1]!.env).toEqual({ AS_X: "1" });
     expect(refs).toEqual({
+      herdr_session: "asem",
       pane_id: "w-3",
       tab_id: "w:2",
       herdr_workspace_id: "w",
-      herdr_label: "s_0001",
-      herdr_session: "asem",
     });
   });
 
   test("run_in_pane runs the launch command in the captured pane", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.run_in_pane, runner, { pane_id: "w-3" });
-    expect(commandsOf(runner)).toEqual([
-      "herdr pane run 'w-3' 'bash '\\''/repo/.asem/sessions/s_0001/launch.sh'\\'''",
-    ]);
+    await runWithRefsOnly(template.run_in_pane, runner, {
+      pane_id: "w-3",
+      herdr_session: "asem",
+    });
+    expect(commandsOf(runner)).toHaveLength(1);
+    expect(commandsOf(runner)[0]).toContain("herdr --session 'asem' pane run 'w-3'");
+    expect(commandsOf(runner)[0]).toContain("/repo/.asem/sessions/s_0001/launch.sh");
   });
 
-  test("send resolves the current pane by stable herdr label", async () => {
+  test("send submits the message through the captured pane", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner();
     await runWithRefsOnly(template.send, runner, {
-      pane_id: "stale-pane",
-      herdr_workspace_id: "w",
-      herdr_label: "s_0001",
+      pane_id: "w-3",
       herdr_session: "asem",
     });
-    expect(commandsOf(runner)).toHaveLength(2);
-    expect(commandsOf(runner).join("\n")).toContain("HERDR_LABEL='s_0001'");
-    expect(commandsOf(runner).join("\n")).toContain("HERDR_WORKSPACE_ID='w'");
-    expect(commandsOf(runner).join("\n")).toContain("HERDR_SESSION='asem'");
-    expect(commandsOf(runner).join("\n")).not.toContain("session list");
-    expect(commandsOf(runner).join("\n")).not.toContain("HERDR_SESSION_NAME");
-    expect(commandsOf(runner)[0]).toContain(
-      "&& HERDR_SESSION='asem' herdr pane send-text \"$pane_id\" 'hi; there'",
-    );
-    expect(commandsOf(runner)[1]).toContain(
-      "&& HERDR_SESSION='asem' herdr pane send-keys \"$pane_id\" Enter",
-    );
-    expect(commandsOf(runner).join("\n")).not.toContain("stale-pane");
+    expect(commandsOf(runner)).toEqual([
+      "herdr --session 'asem' pane run 'w-3' 'hi; there'",
+    ]);
   });
 
-  test("attach resolves the current pane by stable herdr label", async () => {
+  test("attach focuses the captured workspace and tab", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner();
     await runWithRefsOnly(template.attach, runner, {
-      pane_id: "stale-pane",
       herdr_workspace_id: "w",
-      herdr_label: "s_0001",
+      tab_id: "w:2",
       herdr_session: "asem",
     });
-    expect(commandsOf(runner)).toHaveLength(1);
-    expect(commandsOf(runner)[0]).toContain("HERDR_LABEL='s_0001'");
-    expect(commandsOf(runner)[0]).toContain("HERDR_SESSION='asem'");
-    expect(commandsOf(runner)[0]).not.toContain("session list");
-    expect(commandsOf(runner)[0]).not.toContain("HERDR_SESSION_NAME");
-    expect(commandsOf(runner)[0]).toContain(
-      "&& HERDR_SESSION='asem' herdr tab focus \"$tab_id\" >/dev/null",
-    );
-    expect(commandsOf(runner)[0]).toContain(
-      "&& if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else herdr session attach 'asem'; fi",
-    );
-    expect(commandsOf(runner)[0]).not.toContain("herdr agent attach");
-    expect(commandsOf(runner)[0]).not.toContain("stale-pane");
+    expect(commandsOf(runner)).toEqual([
+      "herdr --session 'asem' workspace focus 'w' >/dev/null && herdr --session 'asem' tab focus 'w:2' >/dev/null && if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach 'asem'; fi",
+    ]);
   });
 
-  test("close resolves the current pane by stable herdr label", async () => {
+  test("close closes the captured workspace", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner();
     await runWithRefsOnly(template.close, runner, {
-      pane_id: "stale-pane",
       herdr_workspace_id: "w",
-      herdr_label: "s_0001",
       herdr_session: "asem",
     });
-    expect(commandsOf(runner)).toHaveLength(1);
-    expect(commandsOf(runner)[0]).toContain("HERDR_LABEL='s_0001'");
-    expect(commandsOf(runner)[0]).toContain("HERDR_SESSION='asem'");
-    expect(commandsOf(runner)[0]).not.toContain("session list");
-    expect(commandsOf(runner)[0]).not.toContain("HERDR_SESSION_NAME");
-    expect(commandsOf(runner)[0]).toContain(
-      "&& HERDR_SESSION='asem' herdr pane close \"$pane_id\"",
-    );
-    expect(commandsOf(runner)[0]).not.toContain("stale-pane");
+    expect(commandsOf(runner)).toEqual([
+      "herdr --session 'asem' workspace close 'w'",
+    ]);
   });
 });
 
 // --- tmux -----------------------------------------------------------------
 
 describe("builtin mux: tmux", () => {
-  // `new-window -P -F` prints a `|`-delimited line; create captures all three.
-  const TMUX_CREATE_OUT = "main|@3|%5\n";
+  const TMUX_CREATE_OUT = "s_0001|%5\n";
 
   test("create: command, cwd/env propagation, and captured refs", async () => {
     const template = muxTemplate("tmux");
@@ -215,119 +165,118 @@ describe("builtin mux: tmux", () => {
     });
 
     expect(runner.commands[0]!.command).toBe(
-      "tmux new-window -P -F '#{session_name}|#{window_id}|#{pane_id}' -c '/repo' -n 'reviewer-1'",
+      "tmux new-session -d -s 's_0001' -c '/repo' -P -F '#{session_name}|#{pane_id}'",
     );
     expect(runner.commands[0]!.cwd).toBe("/repo");
     expect(runner.commands[0]!.env).toEqual({ AS_X: "1" });
-    expect(refs).toEqual({
-      session_name: "main",
-      window_id: "@3",
-      pane_id: "%5",
-    });
+    expect(refs).toEqual({ tmux_session_name: "s_0001", pane_id: "%5" });
   });
 
   test("run_in_pane sends the launch command then Enter", async () => {
     const template = muxTemplate("tmux");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.run_in_pane, runner, { pane_id: "%5" });
-    expect(commandsOf(runner)).toEqual([
-      "tmux send-keys -t '%5' 'bash '\\''/repo/.asem/sessions/s_0001/launch.sh'\\''' Enter",
-    ]);
-  });
-
-  test("send sends the shell-escaped message then Enter", async () => {
-    const template = muxTemplate("tmux");
-    const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.send, runner, { pane_id: "%5" });
-    expect(commandsOf(runner)).toEqual([
-      "tmux send-keys -t '%5' 'hi; there' Enter",
-    ]);
-  });
-
-  test("attach selects the captured window+pane then attaches", async () => {
-    const template = muxTemplate("tmux");
-    const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.attach, runner, {
-      session_name: "main",
-      window_id: "@3",
-      pane_id: "%5",
+    await runWithRefsOnly(template.run_in_pane, runner, {
+      tmux_session_name: "s_0001",
     });
-    expect(commandsOf(runner)).toEqual([
-      "tmux select-window -t '@3'",
-      "tmux select-pane -t '%5'",
-      "tmux attach-session -t 'main'",
+    expect(commandsOf(runner)).toHaveLength(2);
+    expect(commandsOf(runner)[0]).toContain("tmux send-keys -t 's_0001' -l");
+    expect(commandsOf(runner)[0]).toContain("/repo/.asem/sessions/s_0001/launch.sh");
+    expect(commandsOf(runner)[1]).toBe("tmux send-keys -t 's_0001' Enter");
+    expect(runner.events.map((event) => event.type)).toEqual([
+      "run",
+      "wait_ms",
+      "run",
     ]);
   });
 
-  test("close kills the captured pane", async () => {
+  test("send sends literal text then Enter", async () => {
     const template = muxTemplate("tmux");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.close, runner, { pane_id: "%5" });
-    expect(commandsOf(runner)).toEqual(["tmux kill-pane -t '%5'"]);
+    await runWithRefsOnly(template.send, runner, { tmux_session_name: "s_0001" });
+    expect(commandsOf(runner)).toEqual([
+      "tmux send-keys -t 's_0001' -l 'hi; there'",
+      "tmux send-keys -t 's_0001' Enter",
+    ]);
+  });
+
+  test("attach attaches by tmux session name", async () => {
+    const template = muxTemplate("tmux");
+    const runner = new FakeTemplateRunner();
+    await runWithRefsOnly(template.attach, runner, { tmux_session_name: "main" });
+    expect(commandsOf(runner)).toEqual(["tmux attach-session -t 'main'"]);
+  });
+
+  test("close kills the tmux session", async () => {
+    const template = muxTemplate("tmux");
+    const runner = new FakeTemplateRunner();
+    await runWithRefsOnly(template.close, runner, { tmux_session_name: "main" });
+    expect(commandsOf(runner)).toEqual(["tmux kill-session -t 'main'"]);
   });
 });
 
 // --- zellij ---------------------------------------------------------------
 
 describe("builtin mux: zellij", () => {
-  test("create: command, cwd/env propagation, and captured tab name", async () => {
+  test("create: command, cwd/env propagation, and captured session name", async () => {
     const template = muxTemplate("zellij");
-    // [0] new-tab (no useful stdout); [1] printf echoes the name we capture.
-    const runner = new FakeTemplateRunner({
-      commands: [{}, { stdout: "s_0001" }],
-    });
+    const runner = new FakeTemplateRunner({ commands: [{}, { stdout: "s_0001" }] });
     const refs = await runCreate(template, runner, {
       cwd: "/repo",
       env: { AS_X: "1" },
     });
 
     expect(commandsOf(runner)).toEqual([
-      "zellij action new-tab --name 's_0001' --cwd '/repo'",
+      "zellij attach --create-background 's_0001' options --default-cwd '/repo'",
       "printf '%s' 's_0001'",
     ]);
     expect(runner.commands[0]!.cwd).toBe("/repo");
     expect(runner.commands[0]!.env).toEqual({ AS_X: "1" });
-    expect(refs).toEqual({ tab_name: "s_0001" });
+    expect(refs).toEqual({ zellij_session_name: "s_0001" });
   });
 
-  test("run_in_pane focuses the tab, writes the launch command, presses Enter", async () => {
+  test("run_in_pane writes the launch command then Enter", async () => {
     const template = muxTemplate("zellij");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.run_in_pane, runner, { tab_name: "s_0001" });
-    expect(commandsOf(runner)).toEqual([
-      "zellij action go-to-tab-name 's_0001'",
-      "zellij action write-chars 'bash '\\''/repo/.asem/sessions/s_0001/launch.sh'\\'''",
-      "zellij action write 13",
+    await runWithRefsOnly(template.run_in_pane, runner, {
+      zellij_session_name: "s_0001",
+    });
+    expect(commandsOf(runner)).toHaveLength(2);
+    expect(commandsOf(runner)[0]).toContain(
+      "zellij --session 's_0001' action write-chars",
+    );
+    expect(commandsOf(runner)[0]).toContain("/repo/.asem/sessions/s_0001/launch.sh");
+    expect(commandsOf(runner)[1]).toBe("zellij --session 's_0001' action write 13");
+    expect(runner.events.map((event) => event.type)).toEqual([
+      "run",
+      "wait_ms",
+      "run",
     ]);
   });
 
-  test("send focuses the tab, writes the message, presses Enter", async () => {
+  test("send writes the message then Enter", async () => {
     const template = muxTemplate("zellij");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.send, runner, { tab_name: "s_0001" });
+    await runWithRefsOnly(template.send, runner, { zellij_session_name: "s_0001" });
     expect(commandsOf(runner)).toEqual([
-      "zellij action go-to-tab-name 's_0001'",
-      "zellij action write-chars 'hi; there'",
-      "zellij action write 13",
+      "zellij --session 's_0001' action write-chars 'hi; there'",
+      "zellij --session 's_0001' action write 13",
     ]);
   });
 
-  test("attach focuses the captured tab", async () => {
+  test("attach attaches to the zellij session", async () => {
     const template = muxTemplate("zellij");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.attach, runner, { tab_name: "s_0001" });
-    expect(commandsOf(runner)).toEqual([
-      "zellij action go-to-tab-name 's_0001'",
-    ]);
+    await runWithRefsOnly(template.attach, runner, { zellij_session_name: "s_0001" });
+    expect(commandsOf(runner)).toEqual(["zellij attach 's_0001'"]);
   });
 
-  test("close focuses the captured tab then closes it", async () => {
+  test("close kills and deletes the zellij session", async () => {
     const template = muxTemplate("zellij");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.close, runner, { tab_name: "s_0001" });
+    await runWithRefsOnly(template.close, runner, { zellij_session_name: "s_0001" });
     expect(commandsOf(runner)).toEqual([
-      "zellij action go-to-tab-name 's_0001'",
-      "zellij action close-tab",
+      "zellij kill-session 's_0001'",
+      "zellij delete-session 's_0001'",
     ]);
   });
 });
@@ -335,30 +284,27 @@ describe("builtin mux: zellij", () => {
 // --- cross-cutting: same template addresses the pane it created ------------
 
 describe("builtin mux: a created pane is addressed by the same template", () => {
-  // Each case scripts the `create` stdout and the var each later sequence keys
-  // on. The captures from `create` are the ONLY inputs threaded into
-  // send/attach/close — exactly what a later op loads from the Store as muxRef.
   const cases = [
     {
       name: "herdr",
       createScript: [
+        { stdout: "asem" },
         {
           stdout: JSON.stringify({
             result: {
+              workspace: { workspace_id: "w" },
               root_pane: { pane_id: "w-7" },
-              tab: { tab_id: "w:9", workspace_id: "w" },
+              tab: { tab_id: "w:9" },
             },
           }),
         },
-        { stdout: "s_0001" },
-        { stdout: "asem" },
       ],
-      addressedBy: "asem",
+      addressedBy: "w",
     },
     {
       name: "tmux",
-      createScript: [{ stdout: "dev|@1|%12\n" }],
-      addressedBy: "%12",
+      createScript: [{ stdout: "dev|%12\n" }],
+      addressedBy: "dev",
     },
     {
       name: "zellij",
@@ -370,16 +316,11 @@ describe("builtin mux: a created pane is addressed by the same template", () => 
   for (const c of cases) {
     test(`${c.name}: send/attach/close reuse the create refs`, async () => {
       const template = muxTemplate(c.name);
-
-      const createRunner = new FakeTemplateRunner({
-        commands: [...c.createScript],
-      });
+      const createRunner = new FakeTemplateRunner({ commands: [...c.createScript] });
       const refs = await runCreate(template, createRunner);
 
       for (const sequence of [template.send, template.attach, template.close]) {
         const runner = new FakeTemplateRunner();
-        // Pass ONLY the captured refs (+ message): proves the create refs are
-        // sufficient to address the same pane later.
         await runWithRefsOnly(sequence, runner, refs);
         const joined = commandsOf(runner).join("\n");
         expect(joined).toContain(c.addressedBy);

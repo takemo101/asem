@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createTemplateRegistry,
   type MuxTemplate,
+  renderAttachCommand,
   renderAttachHint,
 } from "../src/index.ts";
 
@@ -21,56 +22,76 @@ function muxTemplate(name: string): MuxTemplate {
   return template as MuxTemplate;
 }
 
+describe("renderAttachCommand: builtin mux templates", () => {
+  test("tmux renders a structured attach argv instead of a shell string", () => {
+    const command = renderAttachCommand(muxTemplate("tmux").attach_command, {
+      tmux_session_name: "asem-s_0001",
+    });
+    expect(command).toEqual({
+      argv: ["tmux", "attach-session", "-t", "asem-s_0001"],
+    });
+  });
+
+  test("zellij renders a structured attach argv", () => {
+    const command = renderAttachCommand(muxTemplate("zellij").attach_command, {
+      zellij_session_name: "as-s_0001",
+    });
+    expect(command).toEqual({ argv: ["zellij", "attach", "as-s_0001"] });
+  });
+
+  test("herdr renders a structured sh attach argv", () => {
+    const command = renderAttachCommand(muxTemplate("herdr").attach_command, {
+      herdr_session: "asem",
+      herdr_workspace_id: "w 1",
+      tab_id: "w:2",
+    });
+    expect(command).toEqual({
+      argv: [
+        "sh",
+        "-c",
+        "herdr --session 'asem' workspace focus 'w 1' >/dev/null && herdr --session 'asem' tab focus 'w:2' >/dev/null && if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach 'asem'; fi",
+      ],
+    });
+  });
+});
+
 describe("renderAttachHint: builtin mux templates", () => {
-  test("herdr renders a stable-label resolver instead of a compactable pane ref", () => {
+  test("herdr renders a workspace-scoped attach hint", () => {
     const hint = renderAttachHint(muxTemplate("herdr").attach, {
-      pane_id: "stale-pane",
       herdr_workspace_id: "w",
-      herdr_label: "s_0001",
+      tab_id: "w:2",
       herdr_session: "asem",
     });
-    expect(hint).toContain("HERDR_LABEL='s_0001'");
-    expect(hint).toContain("HERDR_WORKSPACE_ID='w'");
-    expect(hint).toContain("HERDR_SESSION='asem'");
-    expect(hint).not.toContain("session list");
-    expect(hint).not.toContain("HERDR_SESSION_NAME");
+    expect(hint).toContain("herdr --session 'asem' workspace focus 'w'");
+    expect(hint).toContain("herdr --session 'asem' tab focus 'w:2'");
     expect(hint).toContain(
-      "HERDR_SESSION='asem' herdr tab focus \"$tab_id\" >/dev/null",
+      "if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach 'asem'; fi",
     );
-    expect(hint).toContain(
-      "if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else herdr session attach 'asem'; fi",
-    );
-    expect(hint).not.toContain("herdr agent attach");
-    expect(hint).not.toContain("stale-pane");
   });
 
-  test("tmux joins the multi-step attach into one runnable line", () => {
+  test("tmux renders a session attach hint", () => {
     const hint = renderAttachHint(muxTemplate("tmux").attach, {
-      session_name: "main",
-      window_id: "@1",
-      pane_id: "%2",
+      tmux_session_name: "main",
     });
-    expect(hint).toBe(
-      "tmux select-window -t '@1' && tmux select-pane -t '%2' && tmux attach-session -t 'main'",
-    );
+    expect(hint).toBe("tmux attach-session -t 'main'");
   });
 
-  test("zellij focuses the captured tab", () => {
+  test("zellij renders a session attach hint", () => {
     const hint = renderAttachHint(muxTemplate("zellij").attach, {
-      tab_name: "s_0001",
+      zellij_session_name: "s_0001",
     });
-    expect(hint).toBe("zellij action go-to-tab-name 's_0001'");
+    expect(hint).toBe("zellij attach 's_0001'");
   });
 
-  test("shell-escapes herdr resolver refs containing spaces or metacharacters", () => {
+  test("shell-escapes herdr refs containing spaces or metacharacters", () => {
     const hint = renderAttachHint(muxTemplate("herdr").attach, {
       herdr_workspace_id: "w; rm -rf /",
-      herdr_label: "label with space",
+      tab_id: "tab with space",
       herdr_session: "session with space",
     });
-    expect(hint).toContain("HERDR_LABEL='label with space'");
-    expect(hint).toContain("HERDR_WORKSPACE_ID='w; rm -rf /'");
-    expect(hint).toContain("HERDR_SESSION='session with space'");
+    expect(hint).toContain("herdr --session 'session with space'");
+    expect(hint).toContain("workspace focus 'w; rm -rf /'");
+    expect(hint).toContain("tab focus 'tab with space'");
   });
 });
 

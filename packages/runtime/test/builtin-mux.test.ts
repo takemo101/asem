@@ -18,6 +18,8 @@ const BASE_VARS: Record<string, string> = {
   session_id: "s_0001",
   cwd: "/repo",
   name: "reviewer-1",
+  session_dir: "/repo/.asem/sessions/s_0001",
+  launch_script: "/repo/.asem/sessions/s_0001/launch.sh",
   launch_cmd: "bash '/repo/.asem/sessions/s_0001/launch.sh'",
 };
 
@@ -239,8 +241,16 @@ describe("builtin mux: zellij", () => {
       env: { AS_X: "1" },
     });
 
+    expect(runner.writes).toHaveLength(1);
+    expect(runner.writes[0]!.path).toBe(
+      "/repo/.asem/sessions/s_0001/zellij-layout.kdl",
+    );
+    expect(runner.writes[0]!.contents).toContain('pane command="bash"');
+    expect(runner.writes[0]!.contents).toContain(
+      'args "/repo/.asem/sessions/s_0001/launch.sh"',
+    );
     expect(commandsOf(runner)).toEqual([
-      "zellij attach --create-background 's_0001' options --default-cwd '/repo'",
+      "mkdir -p \"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" && ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij attach --create-background 's_0001' options --default-cwd '/repo' --default-layout '/repo/.asem/sessions/s_0001'/zellij-layout.kdl",
       "printf '%s' 's_0001'",
     ]);
     expect(runner.commands[0]!.cwd).toBe("/repo");
@@ -248,27 +258,14 @@ describe("builtin mux: zellij", () => {
     expect(refs).toEqual({ zellij_session_name: "s_0001" });
   });
 
-  test("run_in_pane writes the launch command then Enter", async () => {
+  test("run_in_pane is a no-op because the default layout starts launch.sh", async () => {
     const template = muxTemplate("zellij");
     const runner = new FakeTemplateRunner();
     await runWithRefsOnly(template.run_in_pane, runner, {
       zellij_session_name: "s_0001",
     });
-    expect(commandsOf(runner)).toHaveLength(2);
-    expect(commandsOf(runner)[0]).toContain(
-      "zellij --session 's_0001' action write-chars",
-    );
-    expect(commandsOf(runner)[0]).toContain(
-      "/repo/.asem/sessions/s_0001/launch.sh",
-    );
-    expect(commandsOf(runner)[1]).toBe(
-      "zellij --session 's_0001' action write 13",
-    );
-    expect(runner.events.map((event) => event.type)).toEqual([
-      "run",
-      "wait_ms",
-      "run",
-    ]);
+    expect(commandsOf(runner)).toEqual([]);
+    expect(runner.events).toEqual([]);
   });
 
   test("send writes the message then Enter", async () => {
@@ -278,8 +275,8 @@ describe("builtin mux: zellij", () => {
       zellij_session_name: "s_0001",
     });
     expect(commandsOf(runner)).toEqual([
-      "zellij --session 's_0001' action write-chars 'hi; there'",
-      "zellij --session 's_0001' action write 13",
+      "ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij --session 's_0001' action write-chars --pane-id terminal_0 'hi; there'",
+      "ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij --session 's_0001' action write --pane-id terminal_0 13",
     ]);
   });
 
@@ -289,7 +286,9 @@ describe("builtin mux: zellij", () => {
     await runWithRefsOnly(template.attach, runner, {
       zellij_session_name: "s_0001",
     });
-    expect(commandsOf(runner)).toEqual(["zellij attach 's_0001'"]);
+    expect(commandsOf(runner)).toEqual([
+      "mkdir -p \"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" && ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij attach 's_0001'",
+    ]);
   });
 
   test("close kills and deletes the zellij session", async () => {
@@ -299,8 +298,8 @@ describe("builtin mux: zellij", () => {
       zellij_session_name: "s_0001",
     });
     expect(commandsOf(runner)).toEqual([
-      "zellij kill-session 's_0001'",
-      "zellij delete-session 's_0001'",
+      "ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij kill-session 's_0001'",
+      "ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij delete-session 's_0001'",
     ]);
   });
 });

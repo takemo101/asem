@@ -20,7 +20,10 @@ describe("FileCurrentSessionResolver", () => {
         worktreeRoot: "/repo/a",
       }),
     );
-    await fs.writeFileAtomic("/repo/a/.asem/tokens/s_pointer.token", "pointer-token\n");
+    await fs.writeFileAtomic(
+      "/repo/a/.asem/tokens/s_pointer.token",
+      "pointer-token\n",
+    );
 
     const previousSessionId = process.env.AS_SESSION_ID;
     const previousToken = process.env.AS_SESSION_TOKEN;

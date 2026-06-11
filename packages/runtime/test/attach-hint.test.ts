@@ -32,11 +32,17 @@ describe("renderAttachCommand: builtin mux templates", () => {
     });
   });
 
-  test("zellij renders a structured attach argv", () => {
+  test("zellij renders a structured attach argv with the short socket dir", () => {
     const command = renderAttachCommand(muxTemplate("zellij").attach_command, {
       zellij_session_name: "as-s_0001",
     });
-    expect(command).toEqual({ argv: ["zellij", "attach", "as-s_0001"] });
+    expect(command).toEqual({
+      argv: [
+        "sh",
+        "-c",
+        "mkdir -p \"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" && ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" exec zellij attach 'as-s_0001'",
+      ],
+    });
   });
 
   test("herdr renders a structured sh attach argv", () => {
@@ -76,11 +82,13 @@ describe("renderAttachHint: builtin mux templates", () => {
     expect(hint).toBe("tmux attach-session -t 'main'");
   });
 
-  test("zellij renders a session attach hint", () => {
+  test("zellij renders a session attach hint with the short socket dir", () => {
     const hint = renderAttachHint(muxTemplate("zellij").attach, {
       zellij_session_name: "s_0001",
     });
-    expect(hint).toBe("zellij attach 's_0001'");
+    expect(hint).toBe(
+      "mkdir -p \"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" && ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij attach 's_0001'",
+    );
   });
 
   test("shell-escapes herdr refs containing spaces or metacharacters", () => {

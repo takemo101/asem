@@ -153,18 +153,26 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
   },
 
   /**
-   * zellij — its CLI addresses tabs by **name**, not by a stable id, so each
-   * Session gets a named tab (named by `session_id`). `new-tab` prints only a
-   * numeric id, so `create` records the stable name we assigned as the mux ref
-   * (`tab_name`); every later sequence focuses that tab via `go-to-tab-name`
-   * before acting. Enter is the CR byte (`write 13`).
+   * zellij — follows cuekit's proven detached-session model. zellij cannot
+   * reliably apply `action write-chars` to a freshly-created background session
+   * with no attached clients, so create starts the launch script as the initial
+   * layout pane via `--default-layout`; `run_in_pane` is intentionally a no-op.
+   * Later steering targets the known initial pane (`terminal_0`). macOS temp
+   * paths can exceed zellij's socket length limit, so builtin commands default
+   * `ZELLIJ_SOCKET_DIR` to `/tmp/zellij` while respecting an existing override.
    */
   zellij: {
     create: [
       {
+        type: "write_file",
+        path: "{{session_dir}}/zellij-layout.kdl",
+        contents:
+          'layout {\n  pane command="bash" cwd="{{cwd}}" close_on_exit=false {\n    args "{{launch_script}}"\n  }\n}\n',
+      },
+      {
         type: "run",
         command:
-          "zellij attach --create-background {{session_id_shell}} options --default-cwd {{cwd_shell}}",
+          'mkdir -p "${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" && ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij attach --create-background {{session_id_shell}} options --default-cwd {{cwd_shell}} --default-layout {{session_dir_shell}}/zellij-layout.kdl',
       },
       {
         type: "run",
@@ -172,48 +180,43 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
         capture: [{ name: "zellij_session_name", regex: "^(.+)$", group: 1 }],
       },
     ],
-    run_in_pane: [
-      {
-        type: "run",
-        command:
-          "zellij --session {{zellij_session_name_shell}} action write-chars {{launch_cmd_shell}}",
-      },
-      { type: "wait_ms", ms: 200 },
-      {
-        type: "run",
-        command:
-          "zellij --session {{zellij_session_name_shell}} action write 13",
-      },
-    ],
+    run_in_pane: [],
     send: [
       {
         type: "run",
         command:
-          "zellij --session {{zellij_session_name_shell}} action write-chars {{message_shell}}",
+          'ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij --session {{zellij_session_name_shell}} action write-chars --pane-id terminal_0 {{message_shell}}',
       },
       { type: "wait_ms", ms: 200 },
       {
         type: "run",
         command:
-          "zellij --session {{zellij_session_name_shell}} action write 13",
+          'ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij --session {{zellij_session_name_shell}} action write --pane-id terminal_0 13',
       },
     ],
     attach: [
       {
         type: "run",
-        command: "zellij attach {{zellij_session_name_shell}}",
+        command:
+          'mkdir -p "${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" && ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij attach {{zellij_session_name_shell}}',
       },
     ],
-    attach_command: ["zellij", "attach", "{{zellij_session_name}}"],
+    attach_command: [
+      "sh",
+      "-c",
+      'mkdir -p "${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" && ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" exec zellij attach {{zellij_session_name_shell}}',
+    ],
     close: [
       {
         type: "run",
-        command: "zellij kill-session {{zellij_session_name_shell}}",
+        command:
+          'ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij kill-session {{zellij_session_name_shell}}',
         on_error: "ignore",
       },
       {
         type: "run",
-        command: "zellij delete-session {{zellij_session_name_shell}}",
+        command:
+          'ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij delete-session {{zellij_session_name_shell}}',
         on_error: "ignore",
       },
     ],

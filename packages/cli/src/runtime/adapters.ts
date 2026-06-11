@@ -242,7 +242,12 @@ export class FileCurrentSessionResolver implements CurrentSessionResolver {
   async resolve(scope: EffectiveScope): Promise<CurrentSessionRef | null> {
     const envSessionId = process.env.AS_SESSION_ID;
     const envToken = process.env.AS_SESSION_TOKEN;
-    if (envSessionId !== undefined && envSessionId !== "" && envToken !== undefined && envToken !== "") {
+    if (
+      envSessionId !== undefined &&
+      envSessionId !== "" &&
+      envToken !== undefined &&
+      envToken !== ""
+    ) {
       return { sessionId: envSessionId, token: envToken, scope };
     }
 

@@ -15,7 +15,10 @@
  *
  * - `create` — make a pane/tab and **capture enough mux ref data** that the
  *   later sequences (and a future `send_message` / `close_session` op loading
- *   the ref from the Store) can address the same pane;
+ *   the ref from the Store) can address the same pane; a ref already derivable
+ *   from the create base vars (e.g. a session name set from the Session id) is
+ *   declared in the template's `refs` map instead of being re-captured from a
+ *   fake echo step — captures win over a `refs` entry of the same name;
  * - `run_in_pane` — run the Session launch script in that pane;
  * - `send` — inject a Message into the pane (text, then Enter);
  * - `attach` — a human/operator attach command (never an MCP operation);
@@ -96,21 +99,19 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
   },
 
   /**
-   * tmux — `new-window -P -F` prints a `|`-delimited line so `create` captures
-   * the session name, window id, and pane id. The pane id (`%N`) addresses
-   * `send-keys`/`kill-pane`/`select-pane`; the session name + window id let
-   * `attach` bring an operator to exactly that pane.
+   * tmux — the session name is the Session id (`-s {{session_id}}`), so it is
+   * declared as a ref rather than re-captured from output; `create` only
+   * captures the pane id (`%N`) that `new-session -P -F` prints, which
+   * addresses `send-keys`/`kill-pane`/`select-pane`.
    */
   tmux: {
+    refs: { tmux_session_name: "{{session_id}}" },
     create: [
       {
         type: "run",
         command:
-          "tmux new-session -d -s {{session_id_shell}} -c {{cwd_shell}} -P -F '#{session_name}|#{pane_id}'",
-        capture: [
-          { name: "tmux_session_name", regex: "^([^|]*)\\|", group: 1 },
-          { name: "pane_id", regex: "\\|([^|\\s]+)\\s*$", group: 1 },
-        ],
+          "tmux new-session -d -s {{session_id_shell}} -c {{cwd_shell}} -P -F '#{pane_id}'",
+        capture: [{ name: "pane_id", regex: "^(\\S+)\\s*$", group: 1 }],
       },
     ],
     run_in_pane: [
@@ -162,22 +163,20 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
    * `ZELLIJ_SOCKET_DIR` to `/tmp/zellij` while respecting an existing override.
    */
   zellij: {
+    // The zellij session name is the Session id, declared as a ref — no
+    // capture-only echo step is needed to record it.
+    refs: { zellij_session_name: "{{session_id}}" },
     create: [
       {
         type: "write_file",
         path: "{{session_dir}}/zellij-layout.kdl",
         contents:
-          'layout {\n  pane command="bash" cwd="{{cwd}}" close_on_exit=false {\n    args "{{launch_script}}"\n  }\n}\n',
+          'layout {\n  pane command="bash" cwd="{{cwd_kdl}}" close_on_exit=false {\n    args "{{launch_script_kdl}}"\n  }\n}\n',
       },
       {
         type: "run",
         command:
           'mkdir -p "${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" && ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij attach --create-background {{session_id_shell}} options --default-cwd {{cwd_shell}} --default-layout {{session_dir_shell}}/zellij-layout.kdl',
-      },
-      {
-        type: "run",
-        command: "printf '%s' {{session_id_shell}}",
-        capture: [{ name: "zellij_session_name", regex: "^(.+)$", group: 1 }],
       },
     ],
     run_in_pane: [],

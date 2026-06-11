@@ -3,6 +3,7 @@ import {
   type CommandSequence,
   createTemplateRegistry,
   FakeTemplateRunner,
+  interpolateValues,
   type MuxTemplate,
   SequenceEngine,
 } from "../src/index.ts";
@@ -17,9 +18,11 @@ import {
 const BASE_VARS: Record<string, string> = {
   session_id: "s_0001",
   cwd: "/repo",
+  cwd_kdl: "/repo",
   name: "reviewer-1",
   session_dir: "/repo/.asem/sessions/s_0001",
   launch_script: "/repo/.asem/sessions/s_0001/launch.sh",
+  launch_script_kdl: "/repo/.asem/sessions/s_0001/launch.sh",
   launch_cmd: "bash '/repo/.asem/sessions/s_0001/launch.sh'",
 };
 
@@ -47,7 +50,12 @@ async function runCreate(
   });
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error("create failed");
-  return result.value.captures;
+  // Mirror create_session: declared template refs interpolate from the base
+  // vars and merge under the create captures (a capture wins on conflict).
+  return {
+    ...interpolateValues(template.refs, BASE_VARS),
+    ...result.value.captures,
+  };
 }
 
 async function runWithRefsOnly(
@@ -160,9 +168,9 @@ describe("builtin mux: herdr", () => {
 // --- tmux -----------------------------------------------------------------
 
 describe("builtin mux: tmux", () => {
-  const TMUX_CREATE_OUT = "s_0001|%5\n";
+  const TMUX_CREATE_OUT = "%5\n";
 
-  test("create: command, cwd/env propagation, and captured refs", async () => {
+  test("create: starts a detached session, captures the pane id, and declares the session name as a ref (no fake capture step)", async () => {
     const template = muxTemplate("tmux");
     const runner = new FakeTemplateRunner({
       commands: [{ stdout: TMUX_CREATE_OUT }],
@@ -172,9 +180,13 @@ describe("builtin mux: tmux", () => {
       env: { AS_X: "1" },
     });
 
-    expect(runner.commands[0]!.command).toBe(
-      "tmux new-session -d -s 's_0001' -c '/repo' -P -F '#{session_name}|#{pane_id}'",
-    );
+    // One real tmux command; the session name is known from base vars, so no
+    // extra capture-only step runs.
+    expect(runner.commands).toHaveLength(1);
+    const command = runner.commands[0]!.command;
+    expect(command).toContain("tmux new-session -d");
+    expect(command).toContain("-s 's_0001'");
+    expect(command).toContain("-c '/repo'");
     expect(runner.commands[0]!.cwd).toBe("/repo");
     expect(runner.commands[0]!.env).toEqual({ AS_X: "1" });
     expect(refs).toEqual({ tmux_session_name: "s_0001", pane_id: "%5" });
@@ -233,10 +245,10 @@ describe("builtin mux: tmux", () => {
 // --- zellij ---------------------------------------------------------------
 
 describe("builtin mux: zellij", () => {
-  test("create: command, cwd/env propagation, and captured session name", async () => {
+  test("create: declares the session name as a ref instead of a fake printf capture", async () => {
     const template = muxTemplate("zellij");
     const runner = new FakeTemplateRunner({
-      commands: [{}, { stdout: "s_0001" }],
+      commands: [{}],
     });
     const refs = await runCreate(template, runner, {
       cwd: "/repo",
@@ -251,13 +263,39 @@ describe("builtin mux: zellij", () => {
     expect(runner.writes[0]!.contents).toContain(
       'args "/repo/.asem/sessions/s_0001/launch.sh"',
     );
-    expect(commandsOf(runner)).toEqual([
-      "mkdir -p \"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" && ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij attach --create-background 's_0001' options --default-cwd '/repo' --default-layout '/repo/.asem/sessions/s_0001'/zellij-layout.kdl",
-      "printf '%s' 's_0001'",
-    ]);
+    // The only run step is the real zellij create; no printf echo runs just to
+    // re-capture a value already known from base vars.
+    expect(commandsOf(runner)).toHaveLength(1);
+    expect(commandsOf(runner)[0]).toContain(
+      "zellij attach --create-background 's_0001'",
+    );
+    expect(commandsOf(runner)[0]).toContain("--default-cwd '/repo'");
+    expect(commandsOf(runner)[0]).toContain("zellij-layout.kdl");
+    expect(commandsOf(runner).some((c) => c.includes("printf"))).toBe(false);
     expect(runner.commands[0]!.cwd).toBe("/repo");
     expect(runner.commands[0]!.env).toEqual({ AS_X: "1" });
     expect(refs).toEqual({ zellij_session_name: "s_0001" });
+  });
+
+  test("escapes cwd and launch script when writing the KDL layout", async () => {
+    const template = muxTemplate("zellij");
+    const runner = new FakeTemplateRunner({ commands: [{}] });
+    const result = await engine(runner).run(template.create, {
+      cwd: '/repo "quoted"',
+      variables: {
+        ...BASE_VARS,
+        cwd: '/repo "quoted"',
+        cwd_kdl: '/repo \\"quoted\\"',
+        launch_script: '/repo/path with "quote"/launch.sh',
+        launch_script_kdl: '/repo/path with \\"quote\\"/launch.sh',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(runner.writes[0]!.contents).toContain('cwd="/repo \\"quoted\\""');
+    expect(runner.writes[0]!.contents).toContain(
+      'args "/repo/path with \\"quote\\"/launch.sh"',
+    );
   });
 
   test("run_in_pane is a no-op because the default layout starts launch.sh", async () => {
@@ -327,13 +365,15 @@ describe("builtin mux: a created pane is addressed by the same template", () => 
       addressedBy: "w",
     },
     {
+      // tmux/zellij address later sequences by the declared session-name ref
+      // (derived from the session id), not a captured value.
       name: "tmux",
-      createScript: [{ stdout: "dev|%12\n" }],
-      addressedBy: "dev",
+      createScript: [{ stdout: "%12\n" }],
+      addressedBy: "s_0001",
     },
     {
       name: "zellij",
-      createScript: [{}, { stdout: "s_0001" }],
+      createScript: [{}],
       addressedBy: "s_0001",
     },
   ] as const;

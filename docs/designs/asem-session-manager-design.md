@@ -329,7 +329,7 @@ Template variables should expose raw and shell-escaped values:
 {{cwd_shell}}
 ```
 
-Command strings should use `_shell` variants.
+Command strings should use `_shell` variants. Template-generated non-shell files may expose explicit format-specific variables only where needed; for example the builtin zellij layout uses `{{cwd_kdl}}` and `{{launch_script_kdl}}` for quoted KDL string literals.
 
 ### Mux template shape
 
@@ -342,7 +342,10 @@ send: []            # inject text into pane
 attach: []          # legacy shell attach hint for humans
 attach_command: []  # argv form preferred by CLI/TUI attach runners
 close: []           # close pane/session process
+refs: {}            # derivable mux refs interpolated from create base vars
 ```
+
+`refs` records coordinates that are known before the mux `create` sequence runs, such as a native tmux/zellij session name derived from the asem Session id. Runtime merges `refs` with `create` captures into `mux_ref_json`; if both define the same key, the `create` capture wins because it carries the live mux coordinate.
 
 Initial builtin mux templates:
 

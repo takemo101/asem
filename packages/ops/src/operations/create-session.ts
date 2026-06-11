@@ -52,6 +52,8 @@ import {
   type AgentTemplate,
   type CommandSequence,
   createRedactor,
+  interpolateValues,
+  MissingVariableError,
   type MuxTemplate,
   renderAgentCommand,
   SequenceEngine,
@@ -236,14 +238,35 @@ export async function createSession(
     workspace_id: scope.workspaceId,
     worktree_root: scope.worktreeRoot,
     cwd,
+    cwd_kdl: escapeKdlString(cwd),
     name: input.name,
     agent,
     mux,
     session_dir: sessionDir,
     prompt_path: promptPath,
     launch_script: launchScriptPath,
+    launch_script_kdl: escapeKdlString(launchScriptPath),
     launch_cmd: `bash ${shellEscape(launchScriptPath)}`,
   };
+
+  // Declared template refs interpolate from the base vars alone, so a ref
+  // referencing an unknown variable is a template defect caught here — before
+  // any filesystem or mux side effects.
+  let declaredRefs: Record<string, string>;
+  try {
+    declaredRefs = interpolateValues(muxTemplate.refs, baseVars);
+  } catch (error) {
+    if (error instanceof MissingVariableError) {
+      return err(
+        operationError(
+          "invalid_template",
+          `mux template ref references unknown variable {{${error.variable}}}`,
+          { kind: "mux", name: mux, variable: error.variable },
+        ),
+      );
+    }
+    throw error;
+  }
 
   // Step 4 & 5: create the Session dir and always write prompt.md.
   await deps.fs.mkdirp(sessionDir);
@@ -265,7 +288,9 @@ export async function createSession(
     });
     return err(withLogPath(createResult.error, sessionDir));
   }
-  const muxRef = createResult.value.captures;
+  // The Session's mux ref is the declared refs plus the create captures; a
+  // capture wins on a name conflict because it carries the live coordinate.
+  const muxRef = { ...declaredRefs, ...createResult.value.captures };
   const runVars: Record<string, string> = { ...baseVars, ...muxRef };
 
   // Step 7: generate the launch script (after mux create) with env + agent
@@ -462,4 +487,12 @@ async function attemptMuxCleanup(
 
 function ensureTrailingNewline(text: string): string {
   return text.endsWith("\n") ? text : `${text}\n`;
+}
+
+/** Escape a value for a quoted KDL string literal. */
+function escapeKdlString(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\n");
 }

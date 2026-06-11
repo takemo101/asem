@@ -461,7 +461,9 @@ describe("createSession — project-local templates from .asem.yaml", () => {
 
     expectOk(await createSession(d, ROOT_INPUT, CTX));
 
-    expect(d.runner.commands[1]!.command).toContain("herdr --session 'asem' workspace create");
+    expect(d.runner.commands[1]!.command).toContain(
+      "herdr --session 'asem' workspace create",
+    );
     expect(d.fs.files.get(LAUNCH_PATH)!.contents).toContain(
       `claude "$(cat '${PROMPT_PATH}')"`,
     );
@@ -506,6 +508,120 @@ describe("createSession — project-local templates from .asem.yaml", () => {
     expect(error.details?.name).toBe("claude");
     expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
     expect(d.store.sessions).toHaveLength(0);
+  });
+});
+
+describe("createSession — mux template refs", () => {
+  function configLoaderWith(config: ReturnType<typeof makeConfig>) {
+    return new FakeConfigLoader({
+      kind: "found",
+      config,
+      configPath: `${scopeA.worktreeRoot}/.asem.yaml`,
+    } satisfies ConfigDiscovery);
+  }
+
+  /** A project-local herdr override whose create captures `pane_id`. */
+  function muxConfigWithRefs(refs: Record<string, string>) {
+    return makeConfig({
+      mux: {
+        default: "herdr",
+        templates: {
+          herdr: {
+            create: [
+              {
+                type: "run",
+                command: "my-mux create",
+                capture: [{ name: "pane_id", regex: "pane=(.+)", group: 1 }],
+              },
+            ],
+            run_in_pane: [
+              { type: "run", command: "my-mux run {{pane_id_shell}}" },
+            ],
+            refs,
+          },
+        },
+      },
+    });
+  }
+
+  test("interpolates declared refs from base vars and merges them into muxRef alongside captures", async () => {
+    const runner = new FakeTemplateRunner({
+      commands: [{ stdout: "pane=p9" }],
+    });
+    const d = {
+      ...deps({ runner }),
+      configLoader: configLoaderWith(
+        muxConfigWithRefs({ mux_session_name: "asem-{{session_id}}" }),
+      ),
+    };
+
+    const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
+    expect(session.muxRef).toEqual({
+      mux_session_name: `asem-${FIRST_ID}`,
+      pane_id: "p9",
+    });
+  });
+
+  test("a create capture wins over a declared ref with the same name (the capture carries the live coordinate)", async () => {
+    const runner = new FakeTemplateRunner({
+      commands: [{ stdout: "pane=p9" }],
+    });
+    const d = {
+      ...deps({ runner }),
+      configLoader: configLoaderWith(
+        muxConfigWithRefs({ pane_id: "declared-{{session_id}}" }),
+      ),
+    };
+
+    const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
+    expect(session.muxRef).toEqual({ pane_id: "p9" });
+  });
+
+  test("a ref referencing an unknown variable returns invalid_template before any side effects", async () => {
+    const d = {
+      ...deps(),
+      configLoader: configLoaderWith(
+        muxConfigWithRefs({ bad: "{{no_such_var}}" }),
+      ),
+    };
+
+    const error = expectErr(
+      await createSession(d, ROOT_INPUT, CTX),
+      "invalid_template",
+    );
+    expect(error.details?.kind).toBe("mux");
+    expect(d.runner.commands).toHaveLength(0);
+    expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
+    expect(d.store.sessions).toHaveLength(0);
+  });
+
+  test("builtin zellij records the session name via refs without a fake printf capture step", async () => {
+    // write_file is not a command; the only run step is the real zellij create.
+    const runner = new FakeTemplateRunner({ commands: [{}] });
+    const d = deps({ runner });
+
+    const { session } = expectOk(
+      await createSession(d, { ...ROOT_INPUT, mux: "zellij" }, CTX),
+    );
+
+    expect(session.muxRef).toEqual({ zellij_session_name: FIRST_ID });
+    expect(d.runner.commands.some((c) => c.command.includes("printf"))).toBe(
+      false,
+    );
+  });
+
+  test("builtin tmux records the session name via refs and captures only the pane id", async () => {
+    const runner = new FakeTemplateRunner({ commands: [{ stdout: "%7\n" }] });
+    const d = deps({ runner });
+
+    const { session } = expectOk(
+      await createSession(d, { ...ROOT_INPUT, mux: "tmux" }, CTX),
+    );
+
+    expect(session.muxRef).toEqual({
+      tmux_session_name: FIRST_ID,
+      pane_id: "%7",
+    });
   });
 });
 

@@ -16,17 +16,16 @@
  * hint is surfaced and the surface falls back to safe manual guidance.
  */
 import {
+  type AttachCommand,
   type Clock,
   type Config,
   type ConfigLoader,
   type CurrentSessionResolver,
   err,
   type GetSessionInput,
-  type AttachCommand,
   type GetSessionOutput,
   getSessionInputSchema,
   type LivenessProbe,
-  type MuxRef,
   type OperationResult,
   ok,
   operationError,
@@ -38,6 +37,7 @@ import {
 import { renderAttachCommand, renderAttachHint } from "@asem/runtime";
 import { authenticateAgentOrigin, resolveContext } from "../context.ts";
 import type { OpContext } from "../deps.ts";
+import { muxRefVars } from "../mux-vars.ts";
 import { resolveMuxTemplate } from "../templates.ts";
 import { refreshLiveness } from "./liveness.ts";
 
@@ -133,7 +133,10 @@ function resolveAttach(
   }
   const vars = attachVars(session);
   const attachHint = renderAttachHint(muxResult.value.attach, vars);
-  const attachCommand = renderAttachCommand(muxResult.value.attach_command, vars);
+  const attachCommand = renderAttachCommand(
+    muxResult.value.attach_command,
+    vars,
+  );
   return ok({
     ...(attachHint !== undefined ? { attachHint } : {}),
     ...(attachCommand !== undefined ? { attachCommand } : {}),
@@ -156,19 +159,6 @@ function attachVars(session: Session): Record<string, string> {
     agent: session.agent,
     mux: session.mux,
     session_dir: session.sessionDir,
-    ...stringifyMuxRef(session.muxRef),
+    ...muxRefVars(session.muxRef),
   };
-}
-
-/** Coerce a stored {@link MuxRef} (`Record<string, unknown>`) to string values. */
-function stringifyMuxRef(muxRef: MuxRef): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(muxRef)) {
-    if (typeof value === "string") {
-      out[key] = value;
-    } else if (typeof value === "number" || typeof value === "boolean") {
-      out[key] = String(value);
-    }
-  }
-  return out;
 }

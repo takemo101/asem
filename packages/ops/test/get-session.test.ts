@@ -96,15 +96,24 @@ describe("getSession", () => {
   });
 
   describe("attach hint", () => {
-    test("surfaces the herdr attach command from the captured mux ref", async () => {
+    test("surfaces the herdr attach command from stable label refs", async () => {
       const store = new FakeStore();
-      const s = makeSession({ mux: "herdr", muxRef: { pane_id: "w-7" } });
+      const s = makeSession({
+        mux: "herdr",
+        muxRef: {
+          pane_id: "stale-pane",
+          herdr_workspace_id: "w",
+          herdr_label: "s_0001",
+        },
+      });
       store.sessions.push(s);
 
       const result = expectOk(
         await getSession(depsWith(store), { id: s.id }, CTX),
       );
-      expect(result.attachHint).toBe("herdr agent attach 'w-7'");
+      expect(result.attachHint).toContain("HERDR_LABEL='s_0001'");
+      expect(result.attachHint).toContain('&& herdr agent attach "$pane_id"');
+      expect(result.attachHint).not.toContain("stale-pane");
     });
 
     test("surfaces the tmux multi-step attach as one line", async () => {
@@ -125,7 +134,7 @@ describe("getSession", () => {
 
     test("omits the hint when the captured mux ref is incomplete", async () => {
       const store = new FakeStore();
-      // herdr's attach references `pane_id`, which this ref lacks → no hint.
+      // herdr's attach references stable label/workspace refs, which this lacks → no hint.
       const s = makeSession({ mux: "herdr", muxRef: { tab_id: "t-1" } });
       store.sessions.push(s);
 

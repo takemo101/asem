@@ -65,7 +65,7 @@ describe("CockpitApp effects", () => {
     const store = new FakeStore();
     store.sessions.push(
       makeSession({ id: "a", name: "a" }),
-      makeSession({ id: "b", name: "b" }),
+      makeSession({ id: "b", name: "b", status: "closed" }),
     );
     const { app } = makeApp({ store });
 
@@ -90,18 +90,20 @@ describe("CockpitApp effects", () => {
 
   test("attach leaves to the host with the get_session hint and refreshes", async () => {
     const store = new FakeStore();
-    // The default muxRef carries `pane_id`, so the herdr attach hint renders.
+    // The default muxRef carries the stable herdr label/workspace, so the
+    // attach hint renders a resolver command instead of trusting `pane_id`.
     store.sessions.push(makeSession({ id: "s1", name: "one" }));
     const { app, host } = makeApp({ store });
     await app.dispatch({ type: "attach" });
     expect(host.attaches).toHaveLength(1);
     expect(host.attaches[0]!.session.id).toBe("s1");
-    expect(host.attaches[0]!.attachHint).toBe("herdr agent attach 'pane-1'");
+    expect(host.attaches[0]!.attachHint).toContain("HERDR_LABEL='s1'");
+    expect(host.attaches[0]!.attachHint).toContain("herdr agent attach");
   });
 
   test("attach passes a null hint when the mux ref cannot render one", async () => {
     const store = new FakeStore();
-    // herdr's attach references `pane_id`, which this ref lacks → no hint.
+    // herdr's attach references the stable label/workspace, which this ref lacks → no hint.
     store.sessions.push(
       makeSession({ id: "s1", name: "one", muxRef: { tab_id: "tab-1" } }),
     );

@@ -29,6 +29,13 @@ async function run(argv: string[], deps = makeCliFixture().deps) {
   return { io, code };
 }
 
+const HERDR_REF = {
+  pane_id: "stale-pane",
+  tab_id: "stale-tab",
+  herdr_workspace_id: "herdr-workspace-1",
+  herdr_label: "s_0001",
+};
+
 describe("runCli help & usage", () => {
   test("no args prints usage and exits 0", async () => {
     const { io, code } = await run([]);
@@ -340,7 +347,10 @@ describe("runCli init-session", () => {
 describe("runCli session create", () => {
   /** Minimal `herdr tab create` JSON the builtin herdr mux template captures. */
   const HERDR_CREATE_JSON = JSON.stringify({
-    result: { root_pane: { pane_id: "pane-1" }, tab: { tab_id: "tab-1" } },
+    result: {
+      root_pane: { pane_id: "pane-1" },
+      tab: { tab_id: "tab-1", workspace_id: "herdr-workspace-1" },
+    },
   });
 
   /** Deps whose mux `create` step yields capturable refs so a launch succeeds. */
@@ -352,7 +362,7 @@ describe("runCli session create", () => {
       scopeResolver: new FakeScopeResolver(SCOPE),
       currentSessionResolver: new FakeCurrentSessionResolver(null),
       templateRunner: new FakeTemplateRunner({
-        commands: [{ stdout: HERDR_CREATE_JSON }],
+        commands: [{ stdout: HERDR_CREATE_JSON }, { stdout: "s_0001" }],
       }),
     });
     return { deps, store };
@@ -522,13 +532,15 @@ describe("runCli session attach", () => {
 
   test("renders the rendered attach hint when the mux ref supplies one", async () => {
     const store = new FakeStore();
-    const s = makeSession({ mux: "herdr", muxRef: { pane_id: "w-7" } });
+    const s = makeSession({ mux: "herdr", muxRef: HERDR_REF });
     store.sessions.push(s);
     const { deps } = makeCliFixture({ store });
 
     const { io, code } = await run(["session", "attach", s.id], deps);
     expect(code).toBe(EXIT_OK);
-    expect(io.outText()).toContain("herdr agent attach 'w-7'");
+    expect(io.outText()).toContain("HERDR_LABEL='s_0001'");
+    expect(io.outText()).toContain('herdr agent attach "$pane_id"');
+    expect(io.outText()).not.toContain("stale-pane");
   });
 
   test("attach of an unknown id surfaces session_not_found (exit 1)", async () => {
@@ -544,7 +556,7 @@ describe("runCli session close", () => {
     const s = makeSession({
       name: "to-close",
       mux: "herdr",
-      muxRef: { pane_id: "pane-1" },
+      muxRef: HERDR_REF,
     });
     store.sessions.push(s);
     const { deps } = makeCliFixture({ store });
@@ -568,7 +580,7 @@ describe("runCli session close", () => {
 describe("runCli session delete", () => {
   test("--force deletes the Session and its related Messages", async () => {
     const store = new FakeStore();
-    const s = makeSession({ id: "s_del", name: "to-delete" });
+    const s = makeSession({ id: "s_del", name: "to-delete", status: "closed" });
     store.sessions.push(s);
     store.messages.push(
       makeMessage({ id: "m1", toSessionId: "s_del" }),
@@ -659,7 +671,7 @@ describe("runCli message send", () => {
     const target = makeSession({
       name: "reviewer-1",
       mux: "herdr",
-      muxRef: { pane_id: "pane-1" },
+      muxRef: HERDR_REF,
     });
     store.sessions.push(target);
     const { deps } = makeCliFixture({ store });
@@ -689,7 +701,7 @@ describe("runCli report parent", () => {
     const parent = makeSession({
       name: "parent",
       mux: "herdr",
-      muxRef: { pane_id: "pane-9" },
+      muxRef: HERDR_REF,
     });
     store.sessions.push(parent);
     // Seed a current Session whose token verifies and whose parent is `parent`.

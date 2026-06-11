@@ -27,14 +27,19 @@ const LAUNCH_PATH = `${SESSION_DIR}/launch.sh`;
 
 /** A runner whose mux `create` step prints the herdr JSON that carries refs. */
 function happyRunner(): FakeTemplateRunner {
-  // [0] mux create -> herdr `tab create` JSON; pane_id/tab_id captured via
-  // JSONPath. Later calls default to ok.
-  return new FakeTemplateRunner({ commands: [{ stdout: HERDR_CREATE_JSON }] });
+  // [0] mux create -> herdr `tab create` JSON; [1] captures the stable
+  // Session-id label. Later calls default to ok.
+  return new FakeTemplateRunner({
+    commands: [{ stdout: HERDR_CREATE_JSON }, { stdout: FIRST_ID }],
+  });
 }
 
 /** Minimal `herdr tab create` JSON shape the builtin herdr template parses. */
 const HERDR_CREATE_JSON = JSON.stringify({
-  result: { root_pane: { pane_id: "pane-1" }, tab: { tab_id: "tab-1" } },
+  result: {
+    root_pane: { pane_id: "pane-1" },
+    tab: { tab_id: "tab-1", workspace_id: "herdr-workspace-1" },
+  },
 });
 
 /** Build a deps bundle keeping typed references to the inspectable fakes. */
@@ -69,10 +74,11 @@ describe("createSession — happy path", () => {
     const d = deps();
     const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
 
-    // Sequence order: create (capture pane) then run_in_pane.
-    expect(d.runner.commands).toHaveLength(2);
+    // Sequence order: create (capture pane), capture stable label, then run_in_pane.
+    expect(d.runner.commands).toHaveLength(3);
     expect(d.runner.commands[0]!.command).toContain("herdr tab create");
-    expect(d.runner.commands[1]!.command).toContain("herdr pane run");
+    expect(d.runner.commands[1]!.command).toContain("printf");
+    expect(d.runner.commands[2]!.command).toContain("herdr pane run");
 
     // The row is persisted exactly once, after the start.
     expect(d.store.sessions).toHaveLength(1);
@@ -96,7 +102,12 @@ describe("createSession — happy path", () => {
   test("captures mux refs from the create sequence onto the Session", async () => {
     const d = deps();
     const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
-    expect(session.muxRef).toEqual({ pane_id: "pane-1", tab_id: "tab-1" });
+    expect(session.muxRef).toEqual({
+      pane_id: "pane-1",
+      tab_id: "tab-1",
+      herdr_workspace_id: "herdr-workspace-1",
+      herdr_label: FIRST_ID,
+    });
   });
 
   test("writes a mode-0600 launch script injecting env and the agent command", async () => {
@@ -286,7 +297,8 @@ describe("createSession — failure leaves no stale row + best-effort cleanup", 
   test("a failed run_in_pane attempts mux close and leaves no row", async () => {
     const runner = new FakeTemplateRunner({
       commands: [
-        { stdout: HERDR_CREATE_JSON }, // create ok (captures pane_id/tab_id)
+        { stdout: HERDR_CREATE_JSON }, // create ok (captures pane_id/tab_id/workspace)
+        { stdout: FIRST_ID }, // stable herdr label capture
         { exitCode: 1, stderr: "send boom" }, // run_in_pane fails
         {}, // close ok
       ],

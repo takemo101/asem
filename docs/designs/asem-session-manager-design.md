@@ -288,7 +288,8 @@ Message guarantees:
 
 Deletion rule:
 
-- `delete_session --force` deletes the Session and all related messages where `from_session_id = id OR to_session_id = id`.
+- `delete_session --force` deletes only non-live Sessions. A `starting` or `running` Session must be closed first so pane/process cleanup is not bypassed by store deletion.
+- Once a Session is non-live, `delete_session --force` deletes the Session and all related messages where `from_session_id = id OR to_session_id = id`.
 - Related-message deletion semantics live in `@asem/ops`, not in FK cascade.
 - `@asem/store` exposes scoped transactional primitives such as `deleteSessionScoped`, `deleteRelatedMessagesScoped`, and `withTransaction`; it does not decide when a delete operation should remove related messages.
 
@@ -347,6 +348,8 @@ Initial builtin mux templates:
 - `herdr`
 - `tmux`
 - `zellij`
+
+`herdr` note: herdr display pane/tab ids can compact when panes close, so they are not safe as durable Session coordinates by themselves. The builtin herdr template labels the tab with the generated Session id, stores that stable label plus the herdr workspace id in `mux_ref_json`, and resolves the current pane id from `herdr tab list` / `herdr pane list` immediately before `send`, `attach`, or `close`. This keeps later operations from accidentally targeting a different pane that reused an old compacted id.
 
 ### Agent template shape
 

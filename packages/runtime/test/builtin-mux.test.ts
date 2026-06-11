@@ -81,29 +81,38 @@ const commandsOf = (runner: FakeTemplateRunner): string[] =>
 // --- herdr ----------------------------------------------------------------
 
 describe("builtin mux: herdr", () => {
-  // herdr's CLI emits JSON; `create` captures pane_id + tab_id via JSONPath.
+  // herdr's CLI emits JSON; `create` captures initial compactable ids plus
+  // stable label/workspace refs used to resolve the current pane later.
   const HERDR_CREATE_JSON = JSON.stringify({
-    result: { root_pane: { pane_id: "w-3" }, tab: { tab_id: "w:2" } },
+    result: {
+      root_pane: { pane_id: "w-3" },
+      tab: { tab_id: "w:2", workspace_id: "w" },
+    },
   });
 
   test("create: command, cwd/env propagation, and captured refs", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner({
-      commands: [{ stdout: HERDR_CREATE_JSON }],
+      commands: [{ stdout: HERDR_CREATE_JSON }, { stdout: "s_0001" }],
     });
     const refs = await runCreate(template, runner, {
       cwd: "/repo",
       env: { AS_X: "1" },
     });
 
-    expect(runner.commands).toHaveLength(1);
+    expect(runner.commands).toHaveLength(2);
     expect(runner.commands[0]!.command).toBe(
-      "herdr tab create --cwd '/repo' --no-focus --label 'reviewer-1'",
+      "herdr tab create --cwd '/repo' --no-focus --label 's_0001'",
     );
     expect(runner.commands[0]!.cwd).toBe("/repo");
     expect(runner.commands[0]!.env).toEqual({ AS_X: "1" });
-    // Enough ref data for later send/attach/close.
-    expect(refs).toEqual({ pane_id: "w-3", tab_id: "w:2" });
+    // Enough ref data for later send/attach/close without trusting compactable ids.
+    expect(refs).toEqual({
+      pane_id: "w-3",
+      tab_id: "w:2",
+      herdr_workspace_id: "w",
+      herdr_label: "s_0001",
+    });
   });
 
   test("run_in_pane runs the launch command in the captured pane", async () => {
@@ -115,28 +124,52 @@ describe("builtin mux: herdr", () => {
     ]);
   });
 
-  test("send writes text then Enter, shell-escaping the message", async () => {
+  test("send resolves the current pane by stable herdr label", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.send, runner, { pane_id: "w-3" });
-    expect(commandsOf(runner)).toEqual([
-      "herdr pane send-text 'w-3' 'hi; there'",
-      "herdr pane send-keys 'w-3' Enter",
-    ]);
+    await runWithRefsOnly(template.send, runner, {
+      pane_id: "stale-pane",
+      herdr_workspace_id: "w",
+      herdr_label: "s_0001",
+    });
+    expect(commandsOf(runner)).toHaveLength(2);
+    expect(commandsOf(runner).join("\n")).toContain("HERDR_LABEL='s_0001'");
+    expect(commandsOf(runner).join("\n")).toContain("HERDR_WORKSPACE_ID='w'");
+    expect(commandsOf(runner)[0]).toContain(
+      "&& herdr pane send-text \"$pane_id\" 'hi; there'",
+    );
+    expect(commandsOf(runner)[1]).toContain(
+      '&& herdr pane send-keys "$pane_id" Enter',
+    );
+    expect(commandsOf(runner).join("\n")).not.toContain("stale-pane");
   });
 
-  test("attach is an operator command targeting the captured pane", async () => {
+  test("attach resolves the current pane by stable herdr label", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.attach, runner, { pane_id: "w-3" });
-    expect(commandsOf(runner)).toEqual(["herdr agent attach 'w-3'"]);
+    await runWithRefsOnly(template.attach, runner, {
+      pane_id: "stale-pane",
+      herdr_workspace_id: "w",
+      herdr_label: "s_0001",
+    });
+    expect(commandsOf(runner)).toHaveLength(1);
+    expect(commandsOf(runner)[0]).toContain("HERDR_LABEL='s_0001'");
+    expect(commandsOf(runner)[0]).toContain('&& herdr agent attach "$pane_id"');
+    expect(commandsOf(runner)[0]).not.toContain("stale-pane");
   });
 
-  test("close closes the captured pane", async () => {
+  test("close resolves the current pane by stable herdr label", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.close, runner, { pane_id: "w-3" });
-    expect(commandsOf(runner)).toEqual(["herdr pane close 'w-3'"]);
+    await runWithRefsOnly(template.close, runner, {
+      pane_id: "stale-pane",
+      herdr_workspace_id: "w",
+      herdr_label: "s_0001",
+    });
+    expect(commandsOf(runner)).toHaveLength(1);
+    expect(commandsOf(runner)[0]).toContain("HERDR_LABEL='s_0001'");
+    expect(commandsOf(runner)[0]).toContain('&& herdr pane close "$pane_id"');
+    expect(commandsOf(runner)[0]).not.toContain("stale-pane");
   });
 });
 
@@ -286,11 +319,15 @@ describe("builtin mux: a created pane is addressed by the same template", () => 
       createScript: [
         {
           stdout: JSON.stringify({
-            result: { root_pane: { pane_id: "w-7" }, tab: { tab_id: "w:9" } },
+            result: {
+              root_pane: { pane_id: "w-7" },
+              tab: { tab_id: "w:9", workspace_id: "w" },
+            },
           }),
         },
+        { stdout: "s_0001" },
       ],
-      addressedBy: "w-7",
+      addressedBy: "s_0001",
     },
     {
       name: "tmux",

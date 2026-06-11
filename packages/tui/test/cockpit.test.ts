@@ -130,7 +130,7 @@ describe("executeCockpitEffect", () => {
 
   test("delete dispatches delete_session with force and removes the Session", async () => {
     const store = new FakeStore();
-    store.sessions.push(makeSession({ id: "d1" }));
+    store.sessions.push(makeSession({ id: "d1", status: "closed" }));
     store.messages.push(makeMessage({ id: "m1", toSessionId: "d1" }));
 
     const deps = makeOpsDeps({ store });

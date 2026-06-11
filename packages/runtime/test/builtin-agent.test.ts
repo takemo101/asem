@@ -253,15 +253,24 @@ describe("paste flow: after_start triggers a mux send after the agent starts", (
     // ...then the mux `send` sequence pastes the prompt into the same pane.
     const sendResult = await engine.run(muxSend, {
       cwd: "/repo",
-      variables: { pane_id: "w-3", message: "do the work" },
+      variables: {
+        pane_id: "w-3",
+        herdr_workspace_id: "workspace-1",
+        herdr_label: "s_0001",
+        message: "do the work",
+      },
     });
     expect(sendResult.ok).toBe(true);
 
     // The paste lands as input then is submitted — after the agent started.
-    expect(commandsOf(runner)).toEqual([
-      "herdr pane send-text 'w-3' 'do the work'",
-      "herdr pane send-keys 'w-3' Enter",
-    ]);
+    const muxCommands = commandsOf(runner);
+    expect(muxCommands).toHaveLength(2);
+    expect(muxCommands[0]).toContain(
+      '&& herdr pane send-text "$pane_id" \'do the work\'',
+    );
+    expect(muxCommands[1]).toContain(
+      '&& herdr pane send-keys "$pane_id" Enter',
+    );
   });
 
   test("after_start declares a boot delay so the paste lands after the TUI is ready", () => {

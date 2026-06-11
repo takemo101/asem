@@ -14,11 +14,17 @@ import {
 import { expectErr, expectOk, makeSession, scopeA, scopeB } from "./helpers.ts";
 
 const CTX = { cwd: scopeA.worktreeRoot };
+const HERDR_REF = {
+  pane_id: "stale-pane",
+  tab_id: "stale-tab",
+  herdr_workspace_id: "herdr-workspace-1",
+  herdr_label: "s_0001",
+};
 
 /**
  * Build a deps bundle scoped to {@link scopeA}, keeping typed references to the
- * inspectable fakes. A herdr target needs a `pane_id` mux ref for the builtin
- * `send` sequence (`herdr pane send-text {{pane_id_shell}} {{message_shell}}`).
+ * inspectable fakes. A herdr target needs stable label/workspace refs because
+ * compactable pane ids are resolved immediately before delivery.
  */
 function deps(
   overrides: {
@@ -47,7 +53,7 @@ function makeTarget(overrides = {}) {
   return makeSession({
     name: "reviewer-1",
     mux: "herdr",
-    muxRef: { pane_id: "pane-1", tab_id: "tab-1" },
+    muxRef: HERDR_REF,
     ...overrides,
   });
 }
@@ -83,10 +89,11 @@ describe("sendMessage — same-worktree delivery", () => {
     expect(message.fromSessionId).toBeNull();
     expect(message.kind).toBe("message");
 
-    // Delivered through the herdr `send` sequence using the stored mux ref.
+    // Delivered through the herdr `send` sequence by resolving the current pane.
     expect(d.runner.commands).toHaveLength(2);
     expect(d.runner.commands[0]!.command).toContain("herdr pane send-text");
-    expect(d.runner.commands[0]!.command).toContain("pane-1");
+    expect(d.runner.commands[0]!.command).toContain("HERDR_LABEL='s_0001'");
+    expect(d.runner.commands[0]!.command).not.toContain("stale-pane");
     expect(d.runner.commands[1]!.command).toContain("herdr pane send-keys");
 
     // Success sets delivered_at and leaves no delivery_error (no fabricated ack).

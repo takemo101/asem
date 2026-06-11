@@ -29,28 +29,42 @@
  * (`launch_cmd` for `run_in_pane`, `message` for `send`).
  */
 
+const HERDR_RESOLVE_PANE_BY_LABEL =
+  'HERDR_LABEL={{herdr_label_shell}} HERDR_WORKSPACE_ID={{herdr_workspace_id_shell}} python3 -c \'import json, os, subprocess; label = os.environ["HERDR_LABEL"]; workspace = os.environ["HERDR_WORKSPACE_ID"]; tabs = json.loads(subprocess.check_output(["herdr", "tab", "list", "--workspace", workspace], text=True))["result"]["tabs"]; tab = next((t for t in tabs if t.get("label") == label), None); assert tab is not None, "herdr tab label not found"; panes = json.loads(subprocess.check_output(["herdr", "pane", "list", "--workspace", workspace], text=True))["result"]["panes"]; pane = next((p for p in panes if p.get("tab_id") == tab.get("tab_id")), None); assert pane is not None, "herdr pane for tab not found"; print(pane["pane_id"])\'';
+
+const HERDR_RESOLVE_PANE_VAR = `pane_id=$(${HERDR_RESOLVE_PANE_BY_LABEL})`;
+
 /** Raw builtin mux templates, keyed by name. */
 export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
   /**
    * herdr — the asem-native multiplexer. Its CLI speaks JSON over the session
-   * socket, so `create` captures the new pane/tab ids via JSONPath. A pane id
-   * (`w…-N`) addresses `pane run`/`send-text`/`send-keys`/`close`; the tab id
-   * is captured too as durable ref data. `attach` is the operator command
-   * `herdr agent attach`, which brings a human to the pane — not an MCP op.
+   * socket. herdr's display pane/tab ids can compact when panes close, so they
+   * are captured as initial refs only; later send/attach/close commands resolve
+   * the current pane by the stable Session-id tab label in the same workspace.
+   * `attach` is the operator command `herdr agent attach`, which brings a human
+   * to the pane — not an MCP op.
    */
   herdr: {
     // `tab create` returns the new tab plus its root pane as JSON. A new tab
     // (not a split) keeps each Session isolated; `--no-focus` avoids stealing
-    // the operator's focus when a Session is created in the background.
+    // the operator's focus when a Session is created in the background. The tab
+    // label uses the Session id because it is unique and stable; the human
+    // Session name remains in the durable Session row and TUI/CLI surfaces.
     create: [
       {
         type: "run",
         command:
-          "herdr tab create --cwd {{cwd_shell}} --no-focus --label {{name_shell}}",
+          "herdr tab create --cwd {{cwd_shell}} --no-focus --label {{session_id_shell}}",
         capture: [
           { name: "pane_id", jsonpath: "$.result.root_pane.pane_id" },
           { name: "tab_id", jsonpath: "$.result.tab.tab_id" },
+          { name: "herdr_workspace_id", jsonpath: "$.result.tab.workspace_id" },
         ],
+      },
+      {
+        type: "run",
+        command: "printf '%s' {{session_id_shell}}",
+        capture: [{ name: "herdr_label", regex: "^(.+)$", group: 1 }],
       },
     ],
     // `pane run` writes the command text and presses Enter, so the launch
@@ -66,15 +80,25 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
     send: [
       {
         type: "run",
-        command: "herdr pane send-text {{pane_id_shell}} {{message_shell}}",
+        command: `${HERDR_RESOLVE_PANE_VAR} && herdr pane send-text "$pane_id" {{message_shell}}`,
       },
       {
         type: "run",
-        command: "herdr pane send-keys {{pane_id_shell}} Enter",
+        command: `${HERDR_RESOLVE_PANE_VAR} && herdr pane send-keys "$pane_id" Enter`,
       },
     ],
-    attach: [{ type: "run", command: "herdr agent attach {{pane_id_shell}}" }],
-    close: [{ type: "run", command: "herdr pane close {{pane_id_shell}}" }],
+    attach: [
+      {
+        type: "run",
+        command: `${HERDR_RESOLVE_PANE_VAR} && herdr agent attach "$pane_id"`,
+      },
+    ],
+    close: [
+      {
+        type: "run",
+        command: `${HERDR_RESOLVE_PANE_VAR} && herdr pane close "$pane_id"`,
+      },
+    ],
   },
 
   /**

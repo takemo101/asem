@@ -18,7 +18,12 @@
  * Tests exercise this with fake `@asem/ops` deps (the `@asem/ops` in-memory
  * fakes), never a real store, multiplexer, or agent.
  */
-import type { AttachCommand, Message, OperationResult, Session } from "@asem/core";
+import type {
+  AttachCommand,
+  Message,
+  OperationResult,
+  Session,
+} from "@asem/core";
 import {
   closeSession,
   deleteSession,

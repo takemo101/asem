@@ -78,8 +78,12 @@ describe("createSession — happy path", () => {
     // Sequence order: capture herdr session, create workspace, then run_in_pane.
     expect(d.runner.commands).toHaveLength(3);
     expect(d.runner.commands[0]!.command).toContain("HERDR_SESSION");
-    expect(d.runner.commands[1]!.command).toContain("herdr --session 'asem' workspace create");
-    expect(d.runner.commands[2]!.command).toContain("herdr --session 'asem' pane run");
+    expect(d.runner.commands[1]!.command).toContain(
+      "herdr --session 'asem' workspace create",
+    );
+    expect(d.runner.commands[2]!.command).toContain(
+      "herdr --session 'asem' pane run",
+    );
 
     // The row is persisted exactly once, after the start.
     expect(d.store.sessions).toHaveLength(1);
@@ -312,7 +316,9 @@ describe("createSession — failure leaves no stale row + best-effort cleanup", 
 
     // Best-effort cleanup ran the mux `close` sequence with the captured workspace.
     const closed = d.runner.commands.some((c) =>
-      c.command.includes("herdr --session 'asem' workspace close 'herdr-workspace-1'"),
+      c.command.includes(
+        "herdr --session 'asem' workspace close 'herdr-workspace-1'",
+      ),
     );
     expect(closed).toBe(true);
 

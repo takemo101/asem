@@ -53,7 +53,10 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
         capture: [
           { name: "pane_id", jsonpath: "$.result.root_pane.pane_id" },
           { name: "tab_id", jsonpath: "$.result.tab.tab_id" },
-          { name: "herdr_workspace_id", jsonpath: "$.result.workspace.workspace_id" },
+          {
+            name: "herdr_workspace_id",
+            jsonpath: "$.result.workspace.workspace_id",
+          },
         ],
       },
     ],
@@ -125,7 +128,8 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
     send: [
       {
         type: "run",
-        command: "tmux send-keys -t {{tmux_session_name_shell}} -l {{message_shell}}",
+        command:
+          "tmux send-keys -t {{tmux_session_name_shell}} -l {{message_shell}}",
       },
       { type: "wait_ms", ms: 200 },
       {
@@ -141,7 +145,10 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
     ],
     attach_command: ["tmux", "attach-session", "-t", "{{tmux_session_name}}"],
     close: [
-      { type: "run", command: "tmux kill-session -t {{tmux_session_name_shell}}" },
+      {
+        type: "run",
+        command: "tmux kill-session -t {{tmux_session_name_shell}}",
+      },
     ],
   },
 
@@ -174,7 +181,8 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
       { type: "wait_ms", ms: 200 },
       {
         type: "run",
-        command: "zellij --session {{zellij_session_name_shell}} action write 13",
+        command:
+          "zellij --session {{zellij_session_name_shell}} action write 13",
       },
     ],
     send: [
@@ -186,7 +194,8 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
       { type: "wait_ms", ms: 200 },
       {
         type: "run",
-        command: "zellij --session {{zellij_session_name_shell}} action write 13",
+        command:
+          "zellij --session {{zellij_session_name_shell}} action write 13",
       },
     ],
     attach: [

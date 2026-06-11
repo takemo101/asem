@@ -85,7 +85,9 @@ describe("builtin mux: herdr", () => {
     });
 
     expect(runner.commands).toHaveLength(2);
-    expect(runner.commands[0]!.command).toBe("printf '%s' \"${HERDR_SESSION:-default}\"");
+    expect(runner.commands[0]!.command).toBe(
+      "printf '%s' \"${HERDR_SESSION:-default}\"",
+    );
     expect(runner.commands[1]!.command).toBe(
       "herdr --session 'asem' workspace create --cwd '/repo' --label 's_0001'",
     );
@@ -107,8 +109,12 @@ describe("builtin mux: herdr", () => {
       herdr_session: "asem",
     });
     expect(commandsOf(runner)).toHaveLength(1);
-    expect(commandsOf(runner)[0]).toContain("herdr --session 'asem' pane run 'w-3'");
-    expect(commandsOf(runner)[0]).toContain("/repo/.asem/sessions/s_0001/launch.sh");
+    expect(commandsOf(runner)[0]).toContain(
+      "herdr --session 'asem' pane run 'w-3'",
+    );
+    expect(commandsOf(runner)[0]).toContain(
+      "/repo/.asem/sessions/s_0001/launch.sh",
+    );
   });
 
   test("send submits the message through the captured pane", async () => {
@@ -192,7 +198,9 @@ describe("builtin mux: tmux", () => {
   test("send sends literal text then Enter", async () => {
     const template = muxTemplate("tmux");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.send, runner, { tmux_session_name: "s_0001" });
+    await runWithRefsOnly(template.send, runner, {
+      tmux_session_name: "s_0001",
+    });
     expect(commandsOf(runner)).toEqual([
       "tmux send-keys -t 's_0001' -l 'hi; there'",
       "tmux send-keys -t 's_0001' Enter",
@@ -202,14 +210,18 @@ describe("builtin mux: tmux", () => {
   test("attach attaches by tmux session name", async () => {
     const template = muxTemplate("tmux");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.attach, runner, { tmux_session_name: "main" });
+    await runWithRefsOnly(template.attach, runner, {
+      tmux_session_name: "main",
+    });
     expect(commandsOf(runner)).toEqual(["tmux attach-session -t 'main'"]);
   });
 
   test("close kills the tmux session", async () => {
     const template = muxTemplate("tmux");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.close, runner, { tmux_session_name: "main" });
+    await runWithRefsOnly(template.close, runner, {
+      tmux_session_name: "main",
+    });
     expect(commandsOf(runner)).toEqual(["tmux kill-session -t 'main'"]);
   });
 });
@@ -219,7 +231,9 @@ describe("builtin mux: tmux", () => {
 describe("builtin mux: zellij", () => {
   test("create: command, cwd/env propagation, and captured session name", async () => {
     const template = muxTemplate("zellij");
-    const runner = new FakeTemplateRunner({ commands: [{}, { stdout: "s_0001" }] });
+    const runner = new FakeTemplateRunner({
+      commands: [{}, { stdout: "s_0001" }],
+    });
     const refs = await runCreate(template, runner, {
       cwd: "/repo",
       env: { AS_X: "1" },
@@ -244,8 +258,12 @@ describe("builtin mux: zellij", () => {
     expect(commandsOf(runner)[0]).toContain(
       "zellij --session 's_0001' action write-chars",
     );
-    expect(commandsOf(runner)[0]).toContain("/repo/.asem/sessions/s_0001/launch.sh");
-    expect(commandsOf(runner)[1]).toBe("zellij --session 's_0001' action write 13");
+    expect(commandsOf(runner)[0]).toContain(
+      "/repo/.asem/sessions/s_0001/launch.sh",
+    );
+    expect(commandsOf(runner)[1]).toBe(
+      "zellij --session 's_0001' action write 13",
+    );
     expect(runner.events.map((event) => event.type)).toEqual([
       "run",
       "wait_ms",
@@ -256,7 +274,9 @@ describe("builtin mux: zellij", () => {
   test("send writes the message then Enter", async () => {
     const template = muxTemplate("zellij");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.send, runner, { zellij_session_name: "s_0001" });
+    await runWithRefsOnly(template.send, runner, {
+      zellij_session_name: "s_0001",
+    });
     expect(commandsOf(runner)).toEqual([
       "zellij --session 's_0001' action write-chars 'hi; there'",
       "zellij --session 's_0001' action write 13",
@@ -266,14 +286,18 @@ describe("builtin mux: zellij", () => {
   test("attach attaches to the zellij session", async () => {
     const template = muxTemplate("zellij");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.attach, runner, { zellij_session_name: "s_0001" });
+    await runWithRefsOnly(template.attach, runner, {
+      zellij_session_name: "s_0001",
+    });
     expect(commandsOf(runner)).toEqual(["zellij attach 's_0001'"]);
   });
 
   test("close kills and deletes the zellij session", async () => {
     const template = muxTemplate("zellij");
     const runner = new FakeTemplateRunner();
-    await runWithRefsOnly(template.close, runner, { zellij_session_name: "s_0001" });
+    await runWithRefsOnly(template.close, runner, {
+      zellij_session_name: "s_0001",
+    });
     expect(commandsOf(runner)).toEqual([
       "zellij kill-session 's_0001'",
       "zellij delete-session 's_0001'",
@@ -316,7 +340,9 @@ describe("builtin mux: a created pane is addressed by the same template", () => 
   for (const c of cases) {
     test(`${c.name}: send/attach/close reuse the create refs`, async () => {
       const template = muxTemplate(c.name);
-      const createRunner = new FakeTemplateRunner({ commands: [...c.createScript] });
+      const createRunner = new FakeTemplateRunner({
+        commands: [...c.createScript],
+      });
       const refs = await runCreate(template, createRunner);
 
       for (const sequence of [template.send, template.attach, template.close]) {

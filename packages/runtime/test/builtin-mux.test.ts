@@ -154,7 +154,11 @@ describe("builtin mux: herdr", () => {
     });
     expect(commandsOf(runner)).toHaveLength(1);
     expect(commandsOf(runner)[0]).toContain("HERDR_LABEL='s_0001'");
-    expect(commandsOf(runner)[0]).toContain('&& herdr agent attach "$pane_id"');
+    expect(commandsOf(runner)[0]).toContain('&& herdr agent focus "$pane_id"');
+    expect(commandsOf(runner)[0]).toContain(
+      '&& herdr session attach "${HERDR_SESSION:-default}"',
+    );
+    expect(commandsOf(runner)[0]).not.toContain("herdr agent attach");
     expect(commandsOf(runner)[0]).not.toContain("stale-pane");
   });
 

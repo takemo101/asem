@@ -530,7 +530,7 @@ describe("runCli session attach", () => {
     expect(io.outText()).toContain("tmux");
   });
 
-  test("renders the rendered attach hint when the mux ref supplies one", async () => {
+  test("renders the rendered attach hint when no attach runner is injected", async () => {
     const store = new FakeStore();
     const s = makeSession({ mux: "herdr", muxRef: HERDR_REF });
     store.sessions.push(s);
@@ -539,8 +539,41 @@ describe("runCli session attach", () => {
     const { io, code } = await run(["session", "attach", s.id], deps);
     expect(code).toBe(EXIT_OK);
     expect(io.outText()).toContain("HERDR_LABEL='s_0001'");
-    expect(io.outText()).toContain('herdr agent attach "$pane_id"');
+    expect(io.outText()).toContain('herdr agent focus "$pane_id"');
+    expect(io.outText()).toContain(
+      'herdr session attach "${HERDR_SESSION:-default}"',
+    );
+    expect(io.outText()).not.toContain("herdr agent attach");
     expect(io.outText()).not.toContain("stale-pane");
+  });
+
+  test("executes the rendered attach hint when an attach runner is injected", async () => {
+    const store = new FakeStore();
+    const s = makeSession({ mux: "herdr", muxRef: HERDR_REF });
+    store.sessions.push(s);
+    const { deps } = makeCliFixture({ store });
+    const io = new BufferIo();
+    const commands: string[] = [];
+
+    const code = await runCli({
+      argv: ["session", "attach", s.id],
+      cwd: CWD,
+      deps,
+      io,
+      attachRunner: async (command) => {
+        commands.push(command);
+        return EXIT_OK;
+      },
+    });
+
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toBe("");
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toContain("HERDR_LABEL='s_0001'");
+    expect(commands[0]).toContain('herdr agent focus "$pane_id"');
+    expect(commands[0]).toContain(
+      'herdr session attach "${HERDR_SESSION:-default}"',
+    );
   });
 
   test("attach of an unknown id surfaces session_not_found (exit 1)", async () => {

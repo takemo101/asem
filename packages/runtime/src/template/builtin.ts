@@ -41,8 +41,8 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
    * socket. herdr's display pane/tab ids can compact when panes close, so they
    * are captured as initial refs only; later send/attach/close commands resolve
    * the current pane by the stable Session-id tab label in the same workspace.
-   * `attach` is the operator command `herdr agent attach`, which brings a human
-   * to the pane — not an MCP op.
+   * `attach` focuses that pane and then opens the current herdr session UI — not
+   * an MCP op.
    */
   herdr: {
     // `tab create` returns the new tab plus its root pane as JSON. A new tab
@@ -90,7 +90,9 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
     attach: [
       {
         type: "run",
-        command: `${HERDR_RESOLVE_PANE_VAR} && herdr agent attach "$pane_id"`,
+        command:
+          HERDR_RESOLVE_PANE_VAR +
+          ' && herdr agent focus "$pane_id" && herdr session attach "${HERDR_SESSION:-default}"',
       },
     ],
     close: [

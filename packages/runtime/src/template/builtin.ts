@@ -30,9 +30,9 @@
  */
 
 const HERDR_RESOLVE_PANE_BY_LABEL =
-  'HERDR_LABEL={{herdr_label_shell}} HERDR_WORKSPACE_ID={{herdr_workspace_id_shell}} python3 -c \'import json, os, subprocess; label = os.environ["HERDR_LABEL"]; workspace = os.environ["HERDR_WORKSPACE_ID"]; tabs = json.loads(subprocess.check_output(["herdr", "tab", "list", "--workspace", workspace], text=True))["result"]["tabs"]; tab = next((t for t in tabs if t.get("label") == label), None); assert tab is not None, "herdr tab label not found"; panes = json.loads(subprocess.check_output(["herdr", "pane", "list", "--workspace", workspace], text=True))["result"]["panes"]; pane = next((p for p in panes if p.get("tab_id") == tab.get("tab_id")), None); assert pane is not None, "herdr pane for tab not found"; print(pane["pane_id"])\'';
+  'HERDR_LABEL={{herdr_label_shell}} HERDR_WORKSPACE_ID={{herdr_workspace_id_shell}} python3 -c \'exec("""import json, os, shlex, subprocess, sys\nlabel = os.environ["HERDR_LABEL"]\nworkspace = os.environ["HERDR_WORKSPACE_ID"]\nsessions = json.loads(subprocess.check_output(["herdr", "session", "list", "--json"], text=True))["sessions"]\nnames = [os.environ.get("HERDR_SESSION")] + [s["name"] for s in sessions if s.get("running")]\nseen = set()\nfor name in names:\n    if not name or name in seen:\n        continue\n    seen.add(name)\n    try:\n        tabs = json.loads(subprocess.check_output(["herdr", "--session", name, "tab", "list", "--workspace", workspace], text=True, stderr=subprocess.DEVNULL))["result"]["tabs"]\n    except Exception:\n        continue\n    tab = next((t for t in tabs if t.get("label") == label), None)\n    if tab is None:\n        continue\n    panes = json.loads(subprocess.check_output(["herdr", "--session", name, "pane", "list", "--workspace", workspace], text=True, stderr=subprocess.DEVNULL))["result"]["panes"]\n    pane = next((p for p in panes if p.get("tab_id") == tab.get("tab_id")), None)\n    if pane is None:\n        continue\n    print("HERDR_SESSION_NAME=" + shlex.quote(name))\n    print("pane_id=" + shlex.quote(pane["pane_id"]))\n    sys.exit(0)\nraise SystemExit("herdr pane for label not found")\n""")\'';
 
-const HERDR_RESOLVE_PANE_VAR = `pane_id=$(${HERDR_RESOLVE_PANE_BY_LABEL})`;
+const HERDR_RESOLVE_PANE_VAR = `eval "$(${HERDR_RESOLVE_PANE_BY_LABEL})"`;
 
 /** Raw builtin mux templates, keyed by name. */
 export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
@@ -80,11 +80,11 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
     send: [
       {
         type: "run",
-        command: `${HERDR_RESOLVE_PANE_VAR} && herdr pane send-text "$pane_id" {{message_shell}}`,
+        command: `${HERDR_RESOLVE_PANE_VAR} && HERDR_SESSION="$HERDR_SESSION_NAME" herdr pane send-text "$pane_id" {{message_shell}}`,
       },
       {
         type: "run",
-        command: `${HERDR_RESOLVE_PANE_VAR} && herdr pane send-keys "$pane_id" Enter`,
+        command: `${HERDR_RESOLVE_PANE_VAR} && HERDR_SESSION="$HERDR_SESSION_NAME" herdr pane send-keys "$pane_id" Enter`,
       },
     ],
     attach: [
@@ -92,13 +92,13 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
         type: "run",
         command:
           HERDR_RESOLVE_PANE_VAR +
-          ' && herdr agent focus "$pane_id" && herdr session attach "${HERDR_SESSION:-default}"',
+          ' && HERDR_SESSION="$HERDR_SESSION_NAME" herdr agent focus "$pane_id" && herdr session attach "$HERDR_SESSION_NAME"',
       },
     ],
     close: [
       {
         type: "run",
-        command: `${HERDR_RESOLVE_PANE_VAR} && herdr pane close "$pane_id"`,
+        command: `${HERDR_RESOLVE_PANE_VAR} && HERDR_SESSION="$HERDR_SESSION_NAME" herdr pane close "$pane_id"`,
       },
     ],
   },

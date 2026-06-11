@@ -112,9 +112,11 @@ describe("getSession", () => {
         await getSession(depsWith(store), { id: s.id }, CTX),
       );
       expect(result.attachHint).toContain("HERDR_LABEL='s_0001'");
-      expect(result.attachHint).toContain('&& herdr agent focus "$pane_id"');
       expect(result.attachHint).toContain(
-        '&& herdr session attach "${HERDR_SESSION:-default}"',
+        '&& HERDR_SESSION="$HERDR_SESSION_NAME" herdr agent focus "$pane_id"',
+      );
+      expect(result.attachHint).toContain(
+        '&& herdr session attach "$HERDR_SESSION_NAME"',
       );
       expect(result.attachHint).not.toContain("herdr agent attach");
       expect(result.attachHint).not.toContain("stale-pane");

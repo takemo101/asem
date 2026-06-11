@@ -136,10 +136,10 @@ describe("builtin mux: herdr", () => {
     expect(commandsOf(runner).join("\n")).toContain("HERDR_LABEL='s_0001'");
     expect(commandsOf(runner).join("\n")).toContain("HERDR_WORKSPACE_ID='w'");
     expect(commandsOf(runner)[0]).toContain(
-      "&& herdr pane send-text \"$pane_id\" 'hi; there'",
+      '&& HERDR_SESSION="$HERDR_SESSION_NAME" herdr pane send-text "$pane_id" \'hi; there\'',
     );
     expect(commandsOf(runner)[1]).toContain(
-      '&& herdr pane send-keys "$pane_id" Enter',
+      '&& HERDR_SESSION="$HERDR_SESSION_NAME" herdr pane send-keys "$pane_id" Enter',
     );
     expect(commandsOf(runner).join("\n")).not.toContain("stale-pane");
   });
@@ -154,9 +154,11 @@ describe("builtin mux: herdr", () => {
     });
     expect(commandsOf(runner)).toHaveLength(1);
     expect(commandsOf(runner)[0]).toContain("HERDR_LABEL='s_0001'");
-    expect(commandsOf(runner)[0]).toContain('&& herdr agent focus "$pane_id"');
     expect(commandsOf(runner)[0]).toContain(
-      '&& herdr session attach "${HERDR_SESSION:-default}"',
+      '&& HERDR_SESSION="$HERDR_SESSION_NAME" herdr agent focus "$pane_id"',
+    );
+    expect(commandsOf(runner)[0]).toContain(
+      '&& herdr session attach "$HERDR_SESSION_NAME"',
     );
     expect(commandsOf(runner)[0]).not.toContain("herdr agent attach");
     expect(commandsOf(runner)[0]).not.toContain("stale-pane");
@@ -172,7 +174,9 @@ describe("builtin mux: herdr", () => {
     });
     expect(commandsOf(runner)).toHaveLength(1);
     expect(commandsOf(runner)[0]).toContain("HERDR_LABEL='s_0001'");
-    expect(commandsOf(runner)[0]).toContain('&& herdr pane close "$pane_id"');
+    expect(commandsOf(runner)[0]).toContain(
+      '&& HERDR_SESSION="$HERDR_SESSION_NAME" herdr pane close "$pane_id"',
+    );
     expect(commandsOf(runner)[0]).not.toContain("stale-pane");
   });
 });

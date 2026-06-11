@@ -30,8 +30,14 @@ describe("renderAttachHint: builtin mux templates", () => {
     });
     expect(hint).toContain("HERDR_LABEL='s_0001'");
     expect(hint).toContain("HERDR_WORKSPACE_ID='w'");
-    expect(hint).toContain('&& herdr agent focus "$pane_id"');
-    expect(hint).toContain('&& herdr session attach "${HERDR_SESSION:-default}"');
+    expect(hint).toContain('["herdr", "session", "list", "--json"]');
+    expect(hint).toContain('["herdr", "--session", name');
+    expect(hint).toContain(
+      'HERDR_SESSION="$HERDR_SESSION_NAME" herdr agent focus "$pane_id"',
+    );
+    expect(hint).toContain(
+      '&& herdr session attach "$HERDR_SESSION_NAME"',
+    );
     expect(hint).not.toContain("herdr agent attach");
     expect(hint).not.toContain("stale-pane");
   });

@@ -96,8 +96,9 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
       {
         type: "run",
         command:
-          HERDR_RESOLVE_PANE_VAR +
-          ' && HERDR_SESSION={{herdr_session_shell}} herdr tab focus "$tab_id" && herdr session attach {{herdr_session_shell}}',
+          `${HERDR_RESOLVE_PANE_VAR} && ` +
+          `HERDR_SESSION={{herdr_session_shell}} herdr tab focus "$tab_id" >/dev/null && ` +
+          `if [ "\${HERDR_ENV:-}" = '1' ]; then :; else herdr session attach {{herdr_session_shell}}; fi`,
       },
     ],
     close: [

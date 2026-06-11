@@ -100,7 +100,9 @@ describe("CockpitApp effects", () => {
     expect(host.attaches[0]!.attachHint).toContain("HERDR_LABEL='s1'");
     expect(host.attaches[0]!.attachHint).toContain("HERDR_SESSION='asem'");
     expect(host.attaches[0]!.attachHint).toContain("herdr tab focus");
-    expect(host.attaches[0]!.attachHint).toContain("herdr session attach 'asem'");
+    expect(host.attaches[0]!.attachHint).toContain(
+      "herdr session attach 'asem'",
+    );
     expect(host.attaches[0]!.attachHint).not.toContain("herdr agent attach");
   });
 

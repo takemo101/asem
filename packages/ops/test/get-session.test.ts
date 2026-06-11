@@ -117,9 +117,11 @@ describe("getSession", () => {
       expect(result.attachHint).not.toContain("session list");
       expect(result.attachHint).not.toContain("HERDR_SESSION_NAME");
       expect(result.attachHint).toContain(
-        '&& HERDR_SESSION=\'asem\' herdr tab focus "$tab_id"',
+        "&& HERDR_SESSION='asem' herdr tab focus \"$tab_id\" >/dev/null",
       );
-      expect(result.attachHint).toContain("&& herdr session attach 'asem'");
+      expect(result.attachHint).toContain(
+        "if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else herdr session attach 'asem'; fi",
+      );
       expect(result.attachHint).not.toContain("herdr agent attach");
       expect(result.attachHint).not.toContain("stale-pane");
     });

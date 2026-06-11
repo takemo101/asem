@@ -267,10 +267,10 @@ describe("paste flow: after_start triggers a mux send after the agent starts", (
     const muxCommands = commandsOf(runner);
     expect(muxCommands).toHaveLength(2);
     expect(muxCommands[0]).toContain(
-      '&& HERDR_SESSION=\'asem\' herdr pane send-text "$pane_id" \'do the work\'',
+      "&& HERDR_SESSION='asem' herdr pane send-text \"$pane_id\" 'do the work'",
     );
     expect(muxCommands[1]).toContain(
-      '&& HERDR_SESSION=\'asem\' herdr pane send-keys "$pane_id" Enter',
+      "&& HERDR_SESSION='asem' herdr pane send-keys \"$pane_id\" Enter",
     );
     expect(muxCommands.join("\n")).not.toContain("session list");
     expect(muxCommands.join("\n")).not.toContain("HERDR_SESSION_NAME");

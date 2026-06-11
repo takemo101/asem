@@ -547,7 +547,9 @@ describe("runCli session attach", () => {
     expect(io.outText()).toContain("HERDR_SESSION='asem'");
     expect(io.outText()).not.toContain("session list");
     expect(io.outText()).not.toContain("HERDR_SESSION_NAME");
-    expect(io.outText()).toContain('HERDR_SESSION=\'asem\' herdr tab focus "$tab_id"');
+    expect(io.outText()).toContain(
+      "HERDR_SESSION='asem' herdr tab focus \"$tab_id\"",
+    );
     expect(io.outText()).toContain("herdr session attach 'asem'");
     expect(io.outText()).not.toContain("herdr agent attach");
     expect(io.outText()).not.toContain("stale-pane");
@@ -579,7 +581,9 @@ describe("runCli session attach", () => {
     expect(commands[0]).toContain("HERDR_SESSION='asem'");
     expect(commands[0]).not.toContain("session list");
     expect(commands[0]).not.toContain("HERDR_SESSION_NAME");
-    expect(commands[0]).toContain('HERDR_SESSION=\'asem\' herdr tab focus "$tab_id"');
+    expect(commands[0]).toContain(
+      "HERDR_SESSION='asem' herdr tab focus \"$tab_id\"",
+    );
     expect(commands[0]).toContain("herdr session attach 'asem'");
   });
 

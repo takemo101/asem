@@ -145,10 +145,10 @@ describe("builtin mux: herdr", () => {
     expect(commandsOf(runner).join("\n")).not.toContain("session list");
     expect(commandsOf(runner).join("\n")).not.toContain("HERDR_SESSION_NAME");
     expect(commandsOf(runner)[0]).toContain(
-      '&& HERDR_SESSION=\'asem\' herdr pane send-text "$pane_id" \'hi; there\'',
+      "&& HERDR_SESSION='asem' herdr pane send-text \"$pane_id\" 'hi; there'",
     );
     expect(commandsOf(runner)[1]).toContain(
-      '&& HERDR_SESSION=\'asem\' herdr pane send-keys "$pane_id" Enter',
+      "&& HERDR_SESSION='asem' herdr pane send-keys \"$pane_id\" Enter",
     );
     expect(commandsOf(runner).join("\n")).not.toContain("stale-pane");
   });
@@ -168,9 +168,11 @@ describe("builtin mux: herdr", () => {
     expect(commandsOf(runner)[0]).not.toContain("session list");
     expect(commandsOf(runner)[0]).not.toContain("HERDR_SESSION_NAME");
     expect(commandsOf(runner)[0]).toContain(
-      '&& HERDR_SESSION=\'asem\' herdr tab focus "$tab_id"',
+      "&& HERDR_SESSION='asem' herdr tab focus \"$tab_id\" >/dev/null",
     );
-    expect(commandsOf(runner)[0]).toContain("&& herdr session attach 'asem'");
+    expect(commandsOf(runner)[0]).toContain(
+      "&& if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else herdr session attach 'asem'; fi",
+    );
     expect(commandsOf(runner)[0]).not.toContain("herdr agent attach");
     expect(commandsOf(runner)[0]).not.toContain("stale-pane");
   });
@@ -190,7 +192,7 @@ describe("builtin mux: herdr", () => {
     expect(commandsOf(runner)[0]).not.toContain("session list");
     expect(commandsOf(runner)[0]).not.toContain("HERDR_SESSION_NAME");
     expect(commandsOf(runner)[0]).toContain(
-      '&& HERDR_SESSION=\'asem\' herdr pane close "$pane_id"',
+      "&& HERDR_SESSION='asem' herdr pane close \"$pane_id\"",
     );
     expect(commandsOf(runner)[0]).not.toContain("stale-pane");
   });

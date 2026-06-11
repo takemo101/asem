@@ -35,9 +35,11 @@ describe("renderAttachHint: builtin mux templates", () => {
     expect(hint).not.toContain("session list");
     expect(hint).not.toContain("HERDR_SESSION_NAME");
     expect(hint).toContain(
-      'HERDR_SESSION=\'asem\' herdr tab focus "$tab_id"',
+      "HERDR_SESSION='asem' herdr tab focus \"$tab_id\" >/dev/null",
     );
-    expect(hint).toContain("&& herdr session attach 'asem'");
+    expect(hint).toContain(
+      "if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else herdr session attach 'asem'; fi",
+    );
     expect(hint).not.toContain("herdr agent attach");
     expect(hint).not.toContain("stale-pane");
   });

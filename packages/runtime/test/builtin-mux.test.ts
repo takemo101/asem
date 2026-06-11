@@ -188,7 +188,9 @@ describe("builtin mux: tmux", () => {
     });
     expect(commandsOf(runner)).toHaveLength(2);
     expect(commandsOf(runner)[0]).toContain("tmux send-keys -t 's_0001' -l");
-    expect(commandsOf(runner)[0]).toContain("/repo/.asem/sessions/s_0001/launch.sh");
+    expect(commandsOf(runner)[0]).toContain(
+      "/repo/.asem/sessions/s_0001/launch.sh",
+    );
     expect(commandsOf(runner)[1]).toBe("tmux send-keys -t 's_0001' Enter");
     expect(runner.events.map((event) => event.type)).toEqual([
       "run",
@@ -287,7 +289,7 @@ describe("builtin mux: zellij", () => {
       zellij_session_name: "s_0001",
     });
     expect(commandsOf(runner)).toEqual([
-      "mkdir -p \"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" && ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij attach 's_0001'",
+      'mkdir -p "${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" && ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij attach \'s_0001\'',
     ]);
   });
 

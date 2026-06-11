@@ -40,7 +40,7 @@ describe("renderAttachCommand: builtin mux templates", () => {
       argv: [
         "sh",
         "-c",
-        "mkdir -p \"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" && ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" exec zellij attach 'as-s_0001'",
+        'mkdir -p "${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" && ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" exec zellij attach \'as-s_0001\'',
       ],
     });
   });
@@ -87,7 +87,7 @@ describe("renderAttachHint: builtin mux templates", () => {
       zellij_session_name: "s_0001",
     });
     expect(hint).toBe(
-      "mkdir -p \"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" && ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij attach 's_0001'",
+      'mkdir -p "${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" && ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij attach \'s_0001\'',
     );
   });
 

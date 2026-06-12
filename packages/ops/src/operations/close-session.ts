@@ -31,7 +31,6 @@ import {
   closeSessionInputSchema,
   err,
   type Logger,
-  type MuxRef,
   type OperationResult,
   ok,
   operationError,
@@ -51,6 +50,7 @@ import {
 } from "@asem/runtime";
 import { authenticateCurrentSession, resolveContext } from "../context.ts";
 import type { OpContext } from "../deps.ts";
+import { muxRefVars } from "../mux-vars.ts";
 import { resolveMuxTemplate } from "../templates.ts";
 
 type CloseSessionDeps = {
@@ -202,13 +202,4 @@ function redactorFor(
     return deps.redactor ?? noopRedactor;
   }
   return createRedactor([token]);
-}
-
-/** Flatten mux-ref coordinates into string interpolation variables. */
-function muxRefVars(muxRef: MuxRef): Record<string, string> {
-  const vars: Record<string, string> = {};
-  for (const [key, value] of Object.entries(muxRef)) {
-    vars[key] = typeof value === "string" ? value : JSON.stringify(value);
-  }
-  return vars;
 }

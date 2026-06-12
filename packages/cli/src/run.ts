@@ -7,7 +7,7 @@
  * structured error. No use-case logic (scope, auth, persistence) is duplicated
  * here — every command delegates to the operation that owns it.
  */
-import { operationError } from "@asem/core";
+import { type AttachCommand, operationError } from "@asem/core";
 import type { OperationError, OperationResult, OpsDeps } from "@asem/ops";
 import {
   closeSession,
@@ -49,11 +49,15 @@ import {
 import { usageFor } from "./usage.ts";
 
 /** Inputs for one CLI invocation. `deps` is the injected operation bundle. */
+export type AttachRunner = (command: AttachCommand) => Promise<number>;
+
 export interface RunCliOptions {
   argv: readonly string[];
   cwd: string;
   deps: OpsDeps;
   io: CliIo;
+  /** Host-local attach executor; omitted in pure tests to render guidance only. */
+  attachRunner?: AttachRunner;
   /** Test seam for interactive init; defaults to process stdin TTY state. */
   isTty?: boolean;
   /** Test seam for interactive init prompts; defaults to Inquirer prompts. */
@@ -103,6 +107,7 @@ export async function runCli(opts: RunCliOptions): Promise<number> {
     deps,
     io,
     isTty: opts.isTty ?? Boolean(process.stdin.isTTY),
+    attachRunner: opts.attachRunner,
     prompts: opts.prompts,
   });
 }
@@ -112,6 +117,7 @@ type DispatchEnv = {
   deps: OpsDeps;
   io: CliIo;
   isTty: boolean;
+  attachRunner?: AttachRunner;
   prompts?: InitWizardPrompts;
 };
 
@@ -329,19 +335,24 @@ async function runSessionGet(
 
 async function runSessionAttach(
   command: Extract<CliCommand, { type: "session-attach" }>,
-  { cwd, deps, io }: DispatchEnv,
+  { cwd, deps, io, attachRunner }: DispatchEnv,
 ): Promise<number> {
-  // Attach is a thin read: it reuses get_session for the scoped domain lookup
-  // and renders the attach hint it surfaces. The CLI does no domain lookup or
-  // attach-command computation itself, and adds no MCP attach semantics.
+  // Attach is a thin host-local read/execute: it reuses get_session for the
+  // scoped domain lookup and either executes or renders the attach hint it
+  // surfaces. The CLI does no domain lookup or attach-command computation
+  // itself, and adds no MCP attach semantics.
   const result = await getSession(deps, { id: command.id }, { cwd });
   return render(io, result, (value) => {
     if (command.json) {
       emitJson(io, {
         session: value.session,
         attachHint: value.attachHint ?? null,
+        attachCommand: value.attachCommand ?? null,
       });
       return;
+    }
+    if (value.attachCommand !== undefined && attachRunner !== undefined) {
+      return attachRunner(value.attachCommand);
     }
     emit(io, renderAttach(value.session, value.attachHint));
   });

@@ -6,9 +6,11 @@
  * `import.meta.main`), so importing the package for its API — and every default
  * test — stays free of SQLite, shell, and filesystem (testability rules).
  */
+import { spawn } from "node:child_process";
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import type { AttachCommand } from "@asem/core";
 import { runMcpStdio } from "@asem/mcp";
 import type { OpsDeps } from "@asem/ops";
 import { createTemplateRegistryFactory } from "@asem/runtime";
@@ -57,6 +59,18 @@ export async function createRuntimeDeps(): Promise<OpsDeps> {
   };
 }
 
+function runAttachCommand(command: AttachCommand): Promise<number> {
+  const [program, ...args] = command.argv;
+  if (program === undefined) {
+    return Promise.resolve(1);
+  }
+  return new Promise((resolve) => {
+    const child = spawn(program, args, { stdio: "inherit" });
+    child.on("error", () => resolve(1));
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+}
+
 /** Entry point for the installed binary. Returns the process exit code. */
 export async function main(argv: string[]): Promise<number> {
   const deps = await createRuntimeDeps();
@@ -74,5 +88,11 @@ export async function main(argv: string[]): Promise<number> {
       io: processIo,
     });
   }
-  return runCli({ argv, cwd: process.cwd(), deps, io: processIo });
+  return runCli({
+    argv,
+    cwd: process.cwd(),
+    deps,
+    io: processIo,
+    attachRunner: runAttachCommand,
+  });
 }

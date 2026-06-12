@@ -41,7 +41,11 @@ export {
   withRedaction,
 } from "./redact/redact.ts";
 export { renderAgentCommand } from "./template/agent-command.ts";
-export { renderAttachHint } from "./template/attach-hint.ts";
+export {
+  renderAttachCommand,
+  type RenderedAttachCommand,
+  renderAttachHint,
+} from "./template/attach-hint.ts";
 export {
   builtinAgentTemplates,
   builtinMuxTemplates,
@@ -65,6 +69,8 @@ export {
 export {
   type AgentTemplate,
   agentTemplateSchema,
+  type AttachCommandTemplate,
+  attachCommandTemplateSchema,
   type CaptureSource,
   type CaptureSpec,
   type CommandSequence,

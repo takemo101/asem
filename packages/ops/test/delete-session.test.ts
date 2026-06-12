@@ -60,12 +60,30 @@ describe("deleteSession — confirmation/force", () => {
     expectErr(await deleteSession(d, { id: "s_del" }, CTX), "invalid_input");
     expect(await d.store.getSessionById(scopeA, "s_del")).not.toBeNull();
   });
+
+  test("refuses to delete a live Session even with force", async () => {
+    const store = new FakeStore();
+    store.sessions.push(
+      makeSession({ id: "s_live", name: "victim", status: "running" }),
+    );
+    const d = deps({ store });
+
+    expectErr(
+      await deleteSession(d, { id: "s_live", force: true }, CTX),
+      "invalid_input",
+    );
+    expect(await d.store.getSessionById(scopeA, "s_live")).not.toBeNull();
+  });
 });
 
 describe("deleteSession — destructive removal + related cleanup", () => {
   test("deletes the Session and only its related Messages, returning the count", async () => {
     const store = new FakeStore();
-    const session = makeSession({ id: "s_del", name: "victim" });
+    const session = makeSession({
+      id: "s_del",
+      name: "victim",
+      status: "closed",
+    });
     store.sessions.push(session);
     // Related: the Session is sender or recipient.
     store.messages.push(
@@ -88,7 +106,9 @@ describe("deleteSession — destructive removal + related cleanup", () => {
 
   test("deletes a Session with no related Messages", async () => {
     const store = new FakeStore();
-    store.sessions.push(makeSession({ id: "s_del", name: "victim" }));
+    store.sessions.push(
+      makeSession({ id: "s_del", name: "victim", status: "closed" }),
+    );
     const d = deps({ store });
 
     const result = expectOk(
@@ -131,14 +151,19 @@ describe("deleteSession — transactional rollback", () => {
 
   test("rolls back the related-message deletion when the Session delete fails", async () => {
     const store = new ThrowingDeleteStore();
-    store.sessions.push(makeSession({ id: "s_del", name: "victim" }));
+    store.sessions.push(
+      makeSession({ id: "s_del", name: "victim", status: "closed" }),
+    );
     store.messages.push(makeMessage({ id: "m_to", toSessionId: "s_del" }));
     const d = deps({ store });
 
     // The thrown defect propagates (it is not a recoverable operation error).
-    await expect(
-      deleteSession(d, { id: "s_del", force: true }, CTX),
-    ).rejects.toThrow(/mid-transaction/);
+    try {
+      await deleteSession(d, { id: "s_del", force: true }, CTX);
+      throw new Error("expected deleteSession to throw");
+    } catch (error) {
+      expect(String(error)).toContain("mid-transaction");
+    }
 
     // All-or-nothing: the Session and its Message are both intact.
     expect(await store.getSessionById(scopeA, "s_del")).not.toBeNull();
@@ -149,7 +174,9 @@ describe("deleteSession — transactional rollback", () => {
 describe("deleteSession — scope isolation of related cleanup", () => {
   test("related-message cleanup stays within the operating scope", async () => {
     const store = new FakeStore();
-    store.sessions.push(makeSession({ id: "s_del", name: "victim" }));
+    store.sessions.push(
+      makeSession({ id: "s_del", name: "victim", status: "closed" }),
+    );
     // A same-id Session in another worktree would relate to its own messages;
     // here we plant a related message in scopeB and confirm it is left alone.
     store.messages.push(

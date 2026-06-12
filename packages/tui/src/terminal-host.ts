@@ -228,9 +228,19 @@ export class AnsiCockpitHost implements CockpitHost {
     // resolved attach command we surface guidance and return immediately.
     this.input.setRawMode?.(false);
     this.output.write(SHOW_CURSOR + CLEAR);
-    if (request.attachHint !== null && request.attachHint.length > 0) {
-      this.output.write(`attaching to ${request.session.name}...\n`);
-      spawnSync(request.attachHint, { shell: true, stdio: "inherit" });
+    if (
+      request.attachCommand !== null &&
+      request.attachCommand.argv.length > 0
+    ) {
+      const [program, ...args] = request.attachCommand.argv;
+      if (program !== undefined) {
+        this.output.write(`attaching to ${request.session.name}...\n`);
+        spawnSync(program, args, { stdio: "inherit" });
+      }
+    } else if (request.attachHint !== null && request.attachHint.length > 0) {
+      this.output.write(
+        `attach command for ${request.session.name}:\n${request.attachHint}\n`,
+      );
     } else {
       this.output.write(
         `no attach command available for ${request.session.name}\n`,

@@ -102,13 +102,26 @@ export type CommandSequence = z.infer<typeof commandSequenceSchema>;
  * Mux template: the five command sequences a multiplexer integration exposes.
  * Each defaults to an empty sequence so partial templates parse cleanly.
  */
+export const attachCommandTemplateSchema = z.array(nonEmptyString).default([]);
+export type AttachCommandTemplate = z.infer<typeof attachCommandTemplateSchema>;
+
 export const muxTemplateSchema = z
   .object({
     create: commandSequenceSchema.default([]),
     run_in_pane: commandSequenceSchema.default([]),
     send: commandSequenceSchema.default([]),
     attach: commandSequenceSchema.default([]),
+    attach_command: attachCommandTemplateSchema,
     close: commandSequenceSchema.default([]),
+    /**
+     * Declared mux refs: each value is an interpolation template evaluated
+     * against the `create_session` base variables and merged into the
+     * Session's mux ref. A `create` capture with the same name wins — the
+     * capture carries the live coordinate, the ref only a derivable one. This
+     * removes the need for capture-only `printf` steps when a ref (e.g. a
+     * session name derived from the Session id) is already known up front.
+     */
+    refs: z.record(z.string(), z.string()).default({}),
   })
   .strict();
 export type MuxTemplate = z.infer<typeof muxTemplateSchema>;

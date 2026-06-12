@@ -58,6 +58,21 @@ describe("createTemplateRegistry", () => {
     expect(custom?.send[0]?.type).toBe("run");
     // Unspecified sequences default to empty arrays.
     expect(custom?.create).toEqual([]);
+    // An unspecified refs map defaults to empty.
+    expect(custom?.refs).toEqual({});
+  });
+
+  test("a mux template may declare a refs map of interpolation templates", () => {
+    const registry = createTemplateRegistry({
+      muxTemplates: {
+        custom: {
+          refs: { mux_session_name: "asem-{{session_id}}" },
+        },
+      },
+    });
+    expect(registry.getMuxTemplate("custom")?.refs).toEqual({
+      mux_session_name: "asem-{{session_id}}",
+    });
   });
 
   test("project-local templates override builtins of the same name", () => {

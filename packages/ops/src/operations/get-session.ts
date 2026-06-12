@@ -16,6 +16,7 @@
  * hint is surfaced and the surface falls back to safe manual guidance.
  */
 import {
+  type AttachCommand,
   type Clock,
   type Config,
   type ConfigLoader,
@@ -25,7 +26,6 @@ import {
   type GetSessionOutput,
   getSessionInputSchema,
   type LivenessProbe,
-  type MuxRef,
   type OperationResult,
   ok,
   operationError,
@@ -34,9 +34,10 @@ import {
   type Store,
   type TemplateRegistryFactory,
 } from "@asem/core";
-import { renderAttachHint } from "@asem/runtime";
+import { renderAttachCommand, renderAttachHint } from "@asem/runtime";
 import { authenticateAgentOrigin, resolveContext } from "../context.ts";
 import type { OpContext } from "../deps.ts";
+import { muxRefVars } from "../mux-vars.ts";
 import { resolveMuxTemplate } from "../templates.ts";
 import { refreshLiveness } from "./liveness.ts";
 
@@ -88,13 +89,17 @@ export async function getSession(
     ? await refreshLiveness(deps, scope, stored)
     : stored;
 
-  const attachHintResult = resolveAttachHint(deps, config, session);
-  if (!attachHintResult.ok) {
-    return err(attachHintResult.error);
+  const attachResult = resolveAttach(deps, config, session);
+  if (!attachResult.ok) {
+    return err(attachResult.error);
   }
-  const attachHint = attachHintResult.value;
+  const { attachHint, attachCommand } = attachResult.value;
 
-  return ok({ session, ...(attachHint !== undefined ? { attachHint } : {}) });
+  return ok({
+    session,
+    ...(attachHint !== undefined ? { attachHint } : {}),
+    ...(attachCommand !== undefined ? { attachCommand } : {}),
+  });
 }
 
 /**
@@ -108,11 +113,14 @@ export async function getSession(
  * is built from the resolved config so project-local mux templates resolve
  * through the same path as builtins.
  */
-function resolveAttachHint(
+function resolveAttach(
   deps: Pick<GetSessionDeps, "templateRegistryFactory">,
   config: Config,
   session: Session,
-): OperationResult<string | undefined> {
+): OperationResult<{
+  attachHint?: string;
+  attachCommand?: AttachCommand;
+}> {
   const muxResult = resolveMuxTemplate(
     deps.templateRegistryFactory.forConfig(config),
     session.mux,
@@ -121,9 +129,18 @@ function resolveAttachHint(
     return err(muxResult.error);
   }
   if (muxResult.value === undefined) {
-    return ok(undefined);
+    return ok({});
   }
-  return ok(renderAttachHint(muxResult.value.attach, attachVars(session)));
+  const vars = attachVars(session);
+  const attachHint = renderAttachHint(muxResult.value.attach, vars);
+  const attachCommand = renderAttachCommand(
+    muxResult.value.attach_command,
+    vars,
+  );
+  return ok({
+    ...(attachHint !== undefined ? { attachHint } : {}),
+    ...(attachCommand !== undefined ? { attachCommand } : {}),
+  });
 }
 
 /**
@@ -142,19 +159,6 @@ function attachVars(session: Session): Record<string, string> {
     agent: session.agent,
     mux: session.mux,
     session_dir: session.sessionDir,
-    ...stringifyMuxRef(session.muxRef),
+    ...muxRefVars(session.muxRef),
   };
-}
-
-/** Coerce a stored {@link MuxRef} (`Record<string, unknown>`) to string values. */
-function stringifyMuxRef(muxRef: MuxRef): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(muxRef)) {
-    if (typeof value === "string") {
-      out[key] = value;
-    } else if (typeof value === "number" || typeof value === "boolean") {
-      out[key] = String(value);
-    }
-  }
-  return out;
 }

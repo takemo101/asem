@@ -86,15 +86,21 @@ import { EXIT_OK, runCli } from "../src/run.ts";
 const CWD = "/repo/a";
 const SCOPE: EffectiveScope = { workspaceId: "ws_1", worktreeRoot: CWD };
 const CTX = { cwd: CWD };
-// A herdr-shaped mux ref: the builtin herdr `send`/`close` sequences address the
-// pane via `{{pane_id}}`, so a deliverable Session must register one (design:
-// "init-session requires an explicit mux reference if the Session should be
-// deliverable").
-const MUX_REF: MuxRef = { pane_id: "pane-9", tab_id: "tab-9" };
+// A herdr-shaped mux ref captured from the owning herdr workspace.
+const MUX_REF: MuxRef = {
+  pane_id: "pane-1",
+  tab_id: "tab-1",
+  herdr_workspace_id: "herdr-workspace-1",
+  herdr_session: "asem",
+};
 
-/** Minimal `herdr tab create` JSON the builtin herdr template captures refs from. */
+/** Minimal `herdr workspace create` JSON the builtin herdr template captures refs from. */
 const HERDR_CREATE_JSON = JSON.stringify({
-  result: { root_pane: { pane_id: "pane-1" }, tab: { tab_id: "tab-1" } },
+  result: {
+    workspace: { workspace_id: "herdr-workspace-1" },
+    root_pane: { pane_id: "pane-1" },
+    tab: { tab_id: "tab-1" },
+  },
 });
 
 function expectOk<T>(result: OperationResult<T>): T {
@@ -172,7 +178,7 @@ function withCreateRunner(base: OpsDeps): OpsDeps {
   return {
     ...base,
     templateRunner: new FakeTemplateRunner({
-      commands: [{ stdout: HERDR_CREATE_JSON }],
+      commands: [{ stdout: "asem" }, { stdout: HERDR_CREATE_JSON }],
     }),
   };
 }
@@ -343,12 +349,17 @@ describe("MVP fake-runtime smoke flow", () => {
     );
     expect(undelivered.messages).toHaveLength(0);
 
-    // close + delete under operator local trust (no current Session).
+    // close + delete under operator local trust (no current Session). Delete is
+    // destructive store cleanup only after the live Session has been closed.
     w.currentSession.ref = null;
-    const closed = expectOk(
+    const helperClosed = expectOk(
       await closeSession(w.base, { id: w.ids.helper }, CTX),
     );
-    expect(closed.session.status).toBe("closed");
+    expect(helperClosed.session.status).toBe("closed");
+    const reviewerClosed = expectOk(
+      await closeSession(w.base, { id: w.ids.reviewer }, CTX),
+    );
+    expect(reviewerClosed.session.status).toBe("closed");
 
     const del = expectOk(
       await deleteSession(w.base, { id: w.ids.reviewer, force: true }, CTX),

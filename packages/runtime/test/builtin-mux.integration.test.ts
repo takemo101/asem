@@ -52,7 +52,11 @@ describe.skipIf(!INTEGRATION)("builtin mux integration (opt-in)", () => {
       const template = createTemplateRegistry().getMuxTemplate(
         "herdr",
       ) as MuxTemplate;
-      expect(firstWords(template).every((w) => w === "herdr")).toBe(true);
+      // create starts with a `printf` echo of $HERDR_SESSION; everything else
+      // is a herdr command.
+      expect(
+        firstWords(template).every((w) => w === "herdr" || w === "printf"),
+      ).toBe(true);
     });
   });
 
@@ -74,10 +78,18 @@ describe.skipIf(!INTEGRATION)("builtin mux integration (opt-in)", () => {
       const template = createTemplateRegistry().getMuxTemplate(
         "zellij",
       ) as MuxTemplate;
-      // zellij commands are `zellij action …` plus a bare `printf` echo used to
-      // record the tab name as the mux ref.
+      // zellij commands start with the socket-dir `mkdir -p` guard or a
+      // `ZELLIJ_SOCKET_DIR=…` env prefix before the zellij binary; the session
+      // name is a declared ref, so there is no capture-only echo step.
       const verbs = firstWords(template);
-      expect(verbs.every((w) => w === "zellij" || w === "printf")).toBe(true);
+      expect(
+        verbs.every(
+          (w) =>
+            w === "zellij" ||
+            w === "mkdir" ||
+            w.startsWith("ZELLIJ_SOCKET_DIR="),
+        ),
+      ).toBe(true);
     });
   });
 });

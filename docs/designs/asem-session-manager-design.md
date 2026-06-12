@@ -288,7 +288,8 @@ Message guarantees:
 
 Deletion rule:
 
-- `delete_session --force` deletes the Session and all related messages where `from_session_id = id OR to_session_id = id`.
+- `delete_session --force` deletes only non-live Sessions. A `starting` or `running` Session must be closed first so pane/process cleanup is not bypassed by store deletion.
+- Once a Session is non-live, `delete_session --force` deletes the Session and all related messages where `from_session_id = id OR to_session_id = id`.
 - Related-message deletion semantics live in `@asem/ops`, not in FK cascade.
 - `@asem/store` exposes scoped transactional primitives such as `deleteSessionScoped`, `deleteRelatedMessagesScoped`, and `withTransaction`; it does not decide when a delete operation should remove related messages.
 
@@ -328,25 +329,31 @@ Template variables should expose raw and shell-escaped values:
 {{cwd_shell}}
 ```
 
-Command strings should use `_shell` variants.
+Command strings should use `_shell` variants. Template-generated non-shell files may expose explicit format-specific variables only where needed; for example the builtin zellij layout uses `{{cwd_kdl}}` and `{{launch_script_kdl}}` for quoted KDL string literals.
 
 ### Mux template shape
 
-Mux templates expose five sequences:
+Mux templates expose five command sequences plus an optional structured attach argv template:
 
 ```yaml
-create: []       # create mux session/window/tab/pane and capture pane refs
-run_in_pane: []  # execute launch script/command in target pane
-send: []         # inject text into pane
-attach: []       # attach command for humans/CLI/TUI
-close: []        # close pane/session process
+create: []          # create mux session/window/tab/pane and capture refs
+run_in_pane: []     # execute launch script/command in target pane
+send: []            # inject text into pane
+attach: []          # legacy shell attach hint for humans
+attach_command: []  # argv form preferred by CLI/TUI attach runners
+close: []           # close pane/session process
+refs: {}            # derivable mux refs interpolated from create base vars
 ```
+
+`refs` records coordinates that are known before the mux `create` sequence runs, such as a native tmux/zellij session name derived from the asem Session id. Runtime merges `refs` with `create` captures into `mux_ref_json`; if both define the same key, the `create` capture wins because it carries the live mux coordinate.
 
 Initial builtin mux templates:
 
 - `herdr`
 - `tmux`
 - `zellij`
+
+Builtin mux lifecycle follows the cuekit-proven model where possible: tmux and zellij create one native multiplexer session per asem Session, then attach and close by that native session name. Herdr creates one workspace per asem Session under an explicit `herdr_session`; `send` targets the captured root pane, `attach` focuses the captured workspace/tab, and `close` closes the workspace. CLI/TUI attach prefer `attach_command` argv over shelling an `attach` string.
 
 ### Agent template shape
 
@@ -415,7 +422,7 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 | Register current Session | `asem init-session` | `init_session` | token generated | effective scope | inserts Session row, prints exports |
 | Create Session | `asem session create` | `create_session` | human or verified current Session | effective scope | creates pane, writes files, inserts Session row |
 | List Sessions | `asem session list` | `list_sessions` | human or verified current Session | effective scope | reads Session rows, may update liveness |
-| Get Session | `asem session get` | `get_session` | human or verified current Session | effective scope | reads one Session, may include `attach_hint` |
+| Get Session | `asem session get` | `get_session` | human or verified current Session | effective scope | reads one Session, may include `attach_hint` and `attach_command` |
 | Attach Session | `asem session attach` | — | human local trust | effective scope | attaches to external mux |
 | Close Session | `asem session close` | `close_session` | human or verified current Session | effective scope | closes pane/process, sets `closed` |
 | Delete Session | `asem session delete` | `delete_session` | human or verified current Session | effective scope | deletes Session and related messages |
@@ -425,7 +432,7 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 | Start MCP | `asem mcp` | — | local process | current config | starts stdio MCP server |
 | Start TUI | `asem tui` | — | human local trust | worktree/workspace | opens Session cockpit |
 
-MCP intentionally does not expose attach. `get_session` may return `attach_hint` for human/operator use.
+MCP intentionally does not expose attach. `get_session` may return legacy `attach_hint` plus structured `attach_command` for human/operator surfaces; CLI/TUI execute the structured argv form when present.
 
 ### Current Session registration
 

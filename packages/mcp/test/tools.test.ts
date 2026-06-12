@@ -227,7 +227,7 @@ describe("MCP tool calls", () => {
   test("delete_session preserves ops force semantics", async () => {
     const store = new FakeStore();
     const current = makeSession({ id: "current" });
-    store.sessions.push(makeSession({ id: "s_delete" }));
+    store.sessions.push(makeSession({ id: "s_delete", status: "closed" }));
     store.messages.push(
       makeMessage({ id: "m_delete", toSessionId: "s_delete" }),
     );

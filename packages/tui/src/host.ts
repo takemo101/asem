@@ -8,15 +8,17 @@
  * and lets the renderer be swapped (the built-in ANSI host now, OpenTUI later)
  * without changing any tested logic (implementation principle 13).
  */
-import type { Session } from "@asem/core";
+import type { AttachCommand, Session } from "@asem/core";
 import type { KeyEvent } from "./keymap.ts";
 import type { CockpitView } from "./view.ts";
 
 /** What the host needs to attach to a Session and hand the pane to the human. */
 export interface AttachRequest {
   session: Session;
-  /** Attach command/guidance from `get_session`, or null when unavailable. */
+  /** Legacy attach command/guidance from `get_session`, or null when unavailable. */
   attachHint: string | null;
+  /** Structured attach argv from `get_session`, or null when unavailable. */
+  attachCommand: AttachCommand | null;
 }
 
 /**

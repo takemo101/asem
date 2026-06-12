@@ -15,7 +15,10 @@
  *
  * - `create` — make a pane/tab and **capture enough mux ref data** that the
  *   later sequences (and a future `send_message` / `close_session` op loading
- *   the ref from the Store) can address the same pane;
+ *   the ref from the Store) can address the same pane; a ref already derivable
+ *   from the create base vars (e.g. a session name set from the Session id) is
+ *   declared in the template's `refs` map instead of being re-captured from a
+ *   fake echo step — captures win over a `refs` entry of the same name;
  * - `run_in_pane` — run the Session launch script in that pane;
  * - `send` — inject a Message into the pane (text, then Enter);
  * - `attach` — a human/operator attach command (never an MCP operation);
@@ -33,155 +36,188 @@
 export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
   /**
    * herdr — the asem-native multiplexer. Its CLI speaks JSON over the session
-   * socket, so `create` captures the new pane/tab ids via JSONPath. A pane id
-   * (`w…-N`) addresses `pane run`/`send-text`/`send-keys`/`close`; the tab id
-   * is captured too as durable ref data. `attach` is the operator command
-   * `herdr agent attach`, which brings a human to the pane — not an MCP op.
+   * socket. herdr's display pane/tab ids can compact when panes close, so they
+   * are captured as initial refs only; later send/attach/close commands resolve
+   * the current pane by the stable Session-id tab label in the same workspace.
+   * `attach` focuses that pane and then opens the current herdr session UI — not
+   * an MCP op.
    */
   herdr: {
-    // `tab create` returns the new tab plus its root pane as JSON. A new tab
-    // (not a split) keeps each Session isolated; `--no-focus` avoids stealing
-    // the operator's focus when a Session is created in the background.
     create: [
       {
         type: "run",
+        command: "printf '%s' \"${HERDR_SESSION:-default}\"",
+        capture: [{ name: "herdr_session", regex: "^(.+)$", group: 1 }],
+      },
+      {
+        type: "run",
         command:
-          "herdr tab create --cwd {{cwd_shell}} --no-focus --label {{name_shell}}",
+          "herdr --session {{herdr_session_shell}} workspace create --cwd {{cwd_shell}} --label {{session_id_shell}}",
         capture: [
           { name: "pane_id", jsonpath: "$.result.root_pane.pane_id" },
           { name: "tab_id", jsonpath: "$.result.tab.tab_id" },
+          {
+            name: "herdr_workspace_id",
+            jsonpath: "$.result.workspace.workspace_id",
+          },
         ],
       },
     ],
-    // `pane run` writes the command text and presses Enter, so the launch
-    // script starts in one step.
-    run_in_pane: [
-      {
-        type: "run",
-        command: "herdr pane run {{pane_id_shell}} {{launch_cmd_shell}}",
-      },
-    ],
-    // `send-text` writes literal text only; Enter is a separate key press, so
-    // a delivered Message lands as input and is submitted.
-    send: [
-      {
-        type: "run",
-        command: "herdr pane send-text {{pane_id_shell}} {{message_shell}}",
-      },
-      {
-        type: "run",
-        command: "herdr pane send-keys {{pane_id_shell}} Enter",
-      },
-    ],
-    attach: [{ type: "run", command: "herdr agent attach {{pane_id_shell}}" }],
-    close: [{ type: "run", command: "herdr pane close {{pane_id_shell}}" }],
-  },
-
-  /**
-   * tmux — `new-window -P -F` prints a `|`-delimited line so `create` captures
-   * the session name, window id, and pane id. The pane id (`%N`) addresses
-   * `send-keys`/`kill-pane`/`select-pane`; the session name + window id let
-   * `attach` bring an operator to exactly that pane.
-   */
-  tmux: {
-    create: [
-      {
-        type: "run",
-        command:
-          "tmux new-window -P -F '#{session_name}|#{window_id}|#{pane_id}' -c {{cwd_shell}} -n {{name_shell}}",
-        capture: [
-          { name: "session_name", regex: "^([^|]*)\\|", group: 1 },
-          { name: "window_id", regex: "^[^|]*\\|([^|]*)\\|", group: 1 },
-          // Trailing `\s*$` drops the newline `tmux -P` prints after the line.
-          { name: "pane_id", regex: "\\|([^|\\s]+)\\s*$", group: 1 },
-        ],
-      },
-    ],
-    // `send-keys … Enter` sends the literal text then the Enter key.
     run_in_pane: [
       {
         type: "run",
         command:
-          "tmux send-keys -t {{pane_id_shell}} {{launch_cmd_shell}} Enter",
+          "herdr --session {{herdr_session_shell}} pane run {{pane_id_shell}} {{launch_cmd_shell}}",
       },
     ],
     send: [
       {
         type: "run",
-        command: "tmux send-keys -t {{pane_id_shell}} {{message_shell}} Enter",
-      },
-    ],
-    // Operator attach: select the captured window + pane, then attach to the
-    // session so the human lands on exactly that pane.
-    attach: [
-      { type: "run", command: "tmux select-window -t {{window_id_shell}}" },
-      { type: "run", command: "tmux select-pane -t {{pane_id_shell}}" },
-      {
-        type: "run",
-        command: "tmux attach-session -t {{session_name_shell}}",
-      },
-    ],
-    close: [{ type: "run", command: "tmux kill-pane -t {{pane_id_shell}}" }],
-  },
-
-  /**
-   * zellij — its CLI addresses tabs by **name**, not by a stable id, so each
-   * Session gets a named tab (named by `session_id`). `new-tab` prints only a
-   * numeric id, so `create` records the stable name we assigned as the mux ref
-   * (`tab_name`); every later sequence focuses that tab via `go-to-tab-name`
-   * before acting. Enter is the CR byte (`write 13`).
-   */
-  zellij: {
-    create: [
-      {
-        type: "run",
         command:
-          "zellij action new-tab --name {{session_id_shell}} --cwd {{cwd_shell}}",
-      },
-      // Record the stable tab name as the addressable mux ref. zellij gives no
-      // stable id back, so we echo the name we set and capture it.
-      {
-        type: "run",
-        command: "printf '%s' {{session_id_shell}}",
-        capture: [{ name: "tab_name", regex: "^(.+)$", group: 1 }],
+          "herdr --session {{herdr_session_shell}} pane run {{pane_id_shell}} {{message_shell}}",
       },
     ],
-    run_in_pane: [
-      {
-        type: "run",
-        command: "zellij action go-to-tab-name {{tab_name_shell}}",
-      },
-      {
-        type: "run",
-        command: "zellij action write-chars {{launch_cmd_shell}}",
-      },
-      { type: "run", command: "zellij action write 13" },
-    ],
-    send: [
-      {
-        type: "run",
-        command: "zellij action go-to-tab-name {{tab_name_shell}}",
-      },
-      {
-        type: "run",
-        command: "zellij action write-chars {{message_shell}}",
-      },
-      { type: "run", command: "zellij action write 13" },
-    ],
-    // Operator attach: focus the Session's tab.
     attach: [
       {
         type: "run",
-        command: "zellij action go-to-tab-name {{tab_name_shell}}",
+        command:
+          "herdr --session {{herdr_session_shell}} workspace focus {{herdr_workspace_id_shell}} >/dev/null && herdr --session {{herdr_session_shell}} tab focus {{tab_id_shell}} >/dev/null && if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach {{herdr_session_shell}}; fi",
       },
     ],
-    // Focus the tab, then close the focused tab.
+    attach_command: [
+      "sh",
+      "-c",
+      "herdr --session {{herdr_session_shell}} workspace focus {{herdr_workspace_id_shell}} >/dev/null && herdr --session {{herdr_session_shell}} tab focus {{tab_id_shell}} >/dev/null && if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach {{herdr_session_shell}}; fi",
+    ],
     close: [
       {
         type: "run",
-        command: "zellij action go-to-tab-name {{tab_name_shell}}",
+        command:
+          "herdr --session {{herdr_session_shell}} workspace close {{herdr_workspace_id_shell}}",
       },
-      { type: "run", command: "zellij action close-tab" },
+    ],
+  },
+
+  /**
+   * tmux — the session name is the Session id (`-s {{session_id}}`), so it is
+   * declared as a ref rather than re-captured from output; `create` only
+   * captures the pane id (`%N`) that `new-session -P -F` prints, which
+   * addresses `send-keys`/`kill-pane`/`select-pane`.
+   */
+  tmux: {
+    refs: { tmux_session_name: "{{session_id}}" },
+    create: [
+      {
+        type: "run",
+        command:
+          "tmux new-session -d -s {{session_id_shell}} -c {{cwd_shell}} -P -F '#{pane_id}'",
+        capture: [{ name: "pane_id", regex: "^(\\S+)\\s*$", group: 1 }],
+      },
+    ],
+    run_in_pane: [
+      {
+        type: "run",
+        command:
+          "tmux send-keys -t {{tmux_session_name_shell}} -l {{launch_cmd_shell}}",
+      },
+      { type: "wait_ms", ms: 200 },
+      {
+        type: "run",
+        command: "tmux send-keys -t {{tmux_session_name_shell}} Enter",
+      },
+    ],
+    send: [
+      {
+        type: "run",
+        command:
+          "tmux send-keys -t {{tmux_session_name_shell}} -l {{message_shell}}",
+      },
+      { type: "wait_ms", ms: 200 },
+      {
+        type: "run",
+        command: "tmux send-keys -t {{tmux_session_name_shell}} Enter",
+      },
+    ],
+    attach: [
+      {
+        type: "run",
+        command: "tmux attach-session -t {{tmux_session_name_shell}}",
+      },
+    ],
+    attach_command: ["tmux", "attach-session", "-t", "{{tmux_session_name}}"],
+    close: [
+      {
+        type: "run",
+        command: "tmux kill-session -t {{tmux_session_name_shell}}",
+      },
+    ],
+  },
+
+  /**
+   * zellij — follows cuekit's proven detached-session model. zellij cannot
+   * reliably apply `action write-chars` to a freshly-created background session
+   * with no attached clients, so create starts the launch script as the initial
+   * layout pane via `--default-layout`; `run_in_pane` is intentionally a no-op.
+   * Later steering targets the known initial pane (`terminal_0`). macOS temp
+   * paths can exceed zellij's socket length limit, so builtin commands default
+   * `ZELLIJ_SOCKET_DIR` to `/tmp/zellij` while respecting an existing override.
+   */
+  zellij: {
+    // The zellij session name is the Session id, declared as a ref — no
+    // capture-only echo step is needed to record it.
+    refs: { zellij_session_name: "{{session_id}}" },
+    create: [
+      {
+        type: "write_file",
+        path: "{{session_dir}}/zellij-layout.kdl",
+        contents:
+          'layout {\n  pane command="bash" cwd="{{cwd_kdl}}" close_on_exit=false {\n    args "{{launch_script_kdl}}"\n  }\n}\n',
+      },
+      {
+        type: "run",
+        command:
+          'mkdir -p "${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" && ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij attach --create-background {{session_id_shell}} options --default-cwd {{cwd_shell}} --default-layout {{session_dir_shell}}/zellij-layout.kdl',
+      },
+    ],
+    run_in_pane: [],
+    send: [
+      {
+        type: "run",
+        command:
+          'ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij --session {{zellij_session_name_shell}} action write-chars --pane-id terminal_0 {{message_shell}}',
+      },
+      { type: "wait_ms", ms: 200 },
+      {
+        type: "run",
+        command:
+          'ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij --session {{zellij_session_name_shell}} action write --pane-id terminal_0 13',
+      },
+    ],
+    attach: [
+      {
+        type: "run",
+        command:
+          'mkdir -p "${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" && ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij attach {{zellij_session_name_shell}}',
+      },
+    ],
+    attach_command: [
+      "sh",
+      "-c",
+      'mkdir -p "${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" && ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" exec zellij attach {{zellij_session_name_shell}}',
+    ],
+    close: [
+      {
+        type: "run",
+        command:
+          'ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij kill-session {{zellij_session_name_shell}}',
+        on_error: "ignore",
+      },
+      {
+        type: "run",
+        command:
+          'ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij delete-session {{zellij_session_name_shell}}',
+        on_error: "ignore",
+      },
     ],
   },
 };

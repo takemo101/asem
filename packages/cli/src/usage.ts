@@ -21,7 +21,7 @@ const ROOT_USAGE = [
   "                                   list Sessions in the current scope",
   "  session get <id> [--refresh] [--json]",
   "                                   show one Session",
-  "  session attach <id>             print attach guidance for a Session (human only)",
+  "  session attach <id>             attach to a Session pane (human only)",
   "  session close <id> [--json]     close a Session's pane/process and mark it closed",
   "  session delete <id> --force [--json]",
   "                                   delete a Session and its related Messages (destructive)",

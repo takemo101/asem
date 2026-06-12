@@ -61,8 +61,9 @@ function suffix(): string {
 /** Build a Session with deterministic defaults; override any field per test. */
 export function makeSession(overrides: Partial<Session> = {}): Session {
   const s = suffix();
+  const id = overrides.id ?? `s_${s}`;
   return {
-    id: `s_${s}`,
+    id,
     workspaceId: WORKSPACE,
     worktreeRoot: WORKTREE_A,
     name: `session-${s}`,
@@ -71,7 +72,12 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
     mux: "herdr",
     parentSessionId: null,
     status: "running",
-    muxRef: { pane_id: "pane-1", tab_id: "tab-1" },
+    muxRef: {
+      pane_id: "pane-1",
+      tab_id: "tab-1",
+      herdr_workspace_id: WORKSPACE,
+      herdr_session: "asem",
+    },
     sessionDir: `${WORKTREE_A}/.asem/sessions/s_${s}`,
     tokenHash: "sha256:deadbeef",
     createdAt: "2026-06-05T12:00:00.000Z",

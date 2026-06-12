@@ -10,7 +10,9 @@
  *      caller passes `force`. Surfaces map their own confirmation/`--force`
  *      affordance onto this flag; the requirement itself is enforced here so no
  *      surface can delete by accident.
- *   2. **Operation-owned related-message cleanup.** A Session's history is the
+ *   2. **No live pane bypass.** A `starting`/`running` Session must be closed
+ *      before delete, otherwise store cleanup could leave a real mux pane alive.
+ *   3. **Operation-owned related-message cleanup.** A Session's history is the
  *      Messages where it is the sender or the recipient
  *      (`from_session_id = id OR to_session_id = id`). The Store does not decide
  *      that those rows go with the Session; this operation does, removing them
@@ -33,6 +35,7 @@ import {
   ok,
   operationError,
   type ScopeResolver,
+  type SessionStatus,
   type Store,
 } from "@asem/core";
 import { authenticateCurrentSession, resolveContext } from "../context.ts";
@@ -45,6 +48,11 @@ type DeleteSessionDeps = {
   currentSessionResolver: CurrentSessionResolver;
   logger?: Logger;
 };
+
+const PANE_LIVE_STATUSES: ReadonlySet<SessionStatus> = new Set<SessionStatus>([
+  "starting",
+  "running",
+]);
 
 export async function deleteSession(
   deps: DeleteSessionDeps,
@@ -97,6 +105,16 @@ export async function deleteSession(
       operationError("session_not_found", "Session not found in this scope", {
         id: input.id,
       }),
+    );
+  }
+
+  if (PANE_LIVE_STATUSES.has(session.status)) {
+    return err(
+      operationError(
+        "invalid_input",
+        "delete_session refuses to remove a live Session; close it first",
+        { id: session.id, status: session.status },
+      ),
     );
   }
 

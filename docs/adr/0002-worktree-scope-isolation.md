@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted for MVP design.
+Accepted for MVP design. TUI default-scope behavior is refined by
+[ADR 0004](./0004-tui-defaults-to-workspace-live-cockpit.md); normal CLI/MCP
+operations remain worktree-isolated by default.
 
 ## Context
 

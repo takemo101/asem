@@ -88,7 +88,7 @@ Use cuekit's simple auto-refresh model:
 
 - refresh every 3 seconds while the cockpit is idle;
 - manual refresh remains on `r`;
-- pause auto-refresh while send/confirm/help modals are open;
+- pause auto-refresh while send/confirm/help/error modals are open;
 - refresh immediately after send/close/delete/attach returns;
 - do not add a background daemon or scheduler.
 
@@ -144,7 +144,7 @@ Follow cuekit's cockpit conventions, adapted to asem vocabulary:
 - right panel with `Messages`, `Detail`, and `Context` tabs;
 - activity strip as a compact sub-section in the right panel;
 - bottom footer with available keys, current status/error, and `auto 3s` state;
-- centered modal components for send/confirm/help.
+- centered modal components for send/confirm/help/error.
 
 Use a small theme module like cuekit's `theme.ts`:
 
@@ -184,28 +184,34 @@ TUI sends continue to pass `origin: "operator"`, so a human send in workspace
 scope cannot impersonate a sibling worktree's current Session. This remains the
 rule from [ADR 0003](../adr/0003-tui-operator-message-attribution.md).
 
+Operator-initiated mutation failures (`send`, `close`, `delete`) should open a
+dismissible error modal. These are direct responses to a human action and should
+not be hidden in a footer-only status line. Refresh and auto-refresh failures
+remain status-line errors because they may repeat on every interval and should
+not trap the operator in a reopening modal.
+
 ## Suggested package shape
 
 Keep `@asem/tui` as the package. Add OpenTUI/React dependencies there only:
 
 ```text
 packages/tui/src/
-  app.ts                  # existing pure app/effect orchestration
-  view-model.ts           # existing reducer/selectors
-  view.ts                 # existing renderer-agnostic projection
+  app.ts                  # pure app/effect orchestration and auto-refresh loop
+  view-model.ts           # reducer/selectors and modal state
+  view.ts                 # renderer-agnostic CockpitView projection
   activity.ts             # snapshot diff → in-memory ActivityItem[]
-  opentui-host.tsx        # OpenTUI entrypoint / adapter
-  components/
-    header.tsx
-    session-list.tsx
-    detail-pane.tsx
-    activity-strip.tsx
-    footer.tsx
-    modal-frame.tsx
-    send-dialog.tsx
-    confirm-dialog.tsx
-    help-dialog.tsx
-    theme.ts
+  opentui/
+    host.tsx              # OpenTUI entrypoint / adapter
+    app.tsx               # OpenTUI component tree
+    keys.ts               # OpenTUI key translation
+    theme.ts              # OpenTUI theme tokens
+    components/
+      header.tsx
+      session-list.tsx
+      detail-pane.tsx
+      activity-strip.tsx
+      footer.tsx
+      modal.tsx           # send/confirm/help/error modal frame/content
 ```
 
 If implementation reveals that `CockpitApp.run()` needs a timer-capable host,
@@ -258,7 +264,9 @@ Required tests:
 - added Session produces an activity row and a row marker;
 - status change produces an activity row;
 - new Message produces activity and an ephemeral badge;
-- opening a modal pauses auto-refresh;
+- opening a send/confirm/help/error modal pauses auto-refresh;
+- operator send/close/delete failures open an error modal;
+- refresh and auto-refresh failures stay in the footer status line;
 - TUI cross-worktree send remains `from_session_id = null`;
 - OpenTUI components import without pulling into MCP paths;
 - resize/layout smoke: header/footer fixed, main panes do not overlap footer.

@@ -48,6 +48,7 @@ export {
   AnsiCockpitHost,
   type AnsiHostOptions,
   decodeKeys,
+  type RenderFrameOptions,
   renderFrame,
   type TtyInput,
   type TtyOutput,

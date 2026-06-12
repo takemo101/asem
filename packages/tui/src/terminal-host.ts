@@ -33,6 +33,16 @@ export interface TtyInput {
 
 export interface TtyOutput {
   write(text: string): void;
+  rows?: number;
+  columns?: number;
+  on?(event: "resize", listener: () => void): void;
+  off?(event: "resize", listener: () => void): void;
+}
+
+/** Viewport constraints for terminal rendering. */
+export interface RenderFrameOptions {
+  rows?: number;
+  columns?: number;
 }
 
 /**
@@ -47,7 +57,10 @@ export function decodeKeys(chunk: string): KeyEvent[] {
   const events: KeyEvent[] = [];
   let i = 0;
   while (i < chunk.length) {
-    const ch = chunk[i]!;
+    const ch = chunk[i];
+    if (ch === undefined) {
+      break;
+    }
     // CSI arrow keys: ESC [ A/B/C/D.
     if (ch === ESC && chunk[i + 1] === "[") {
       const code = chunk[i + 2];
@@ -122,8 +135,45 @@ function pad(text: string, width: number): string {
   return text.length >= width ? text.slice(0, width) : text.padEnd(width);
 }
 
+function clip(text: string, width: number | undefined): string {
+  if (width === undefined || width <= 0 || text.length <= width) {
+    return text;
+  }
+  return text.slice(0, width);
+}
+
+function renderPaneLine(
+  left: string | undefined,
+  right: string | undefined,
+  columns: number | undefined,
+): string {
+  return clip(`${pad(left ?? "", LEFT_WIDTH)}│ ${right ?? ""}`, columns);
+}
+
+function footerLines(view: CockpitView): string[] {
+  const lines = [
+    "",
+    view.keybar.map((k) => `[${k.key}] ${k.label}`).join("  "),
+  ];
+  if (view.statusLine !== null) {
+    lines.push(view.statusLine);
+  }
+  if (view.modal !== null) {
+    lines.push("");
+    lines.push(`── ${view.modal.title} ──`);
+    for (const line of view.modal.lines) {
+      lines.push(line);
+    }
+    lines.push(view.modal.hint);
+  }
+  return lines;
+}
+
 /** Render a {@link CockpitView} to a single frame string. */
-export function renderFrame(view: CockpitView): string {
+export function renderFrame(
+  view: CockpitView,
+  options: RenderFrameOptions = {},
+): string {
   const left: string[] = [
     view.left.title,
     view.left.scopeLabel,
@@ -135,25 +185,25 @@ export function renderFrame(view: CockpitView): string {
     .map((t) => (t.active ? `[${t.title}]` : ` ${t.title} `))
     .join(" ");
   const right: string[] = [tabBar, "", ...view.right];
+  const footer = footerLines(view);
 
-  const height = Math.max(left.length, right.length);
+  const unconstrainedPaneHeight = Math.max(left.length, right.length);
+  const paneHeight =
+    options.rows === undefined
+      ? unconstrainedPaneHeight
+      : Math.max(0, options.rows - Math.min(footer.length, options.rows));
+
   const lines: string[] = [];
-  for (let i = 0; i < height; i += 1) {
-    lines.push(`${pad(left[i] ?? "", LEFT_WIDTH)}│ ${right[i] ?? ""}`);
+  for (let i = 0; i < paneHeight; i += 1) {
+    lines.push(renderPaneLine(left[i], right[i], options.columns));
   }
 
-  lines.push("");
-  lines.push(view.keybar.map((k) => `[${k.key}] ${k.label}`).join("  "));
-  if (view.statusLine !== null) {
-    lines.push(view.statusLine);
-  }
-  if (view.modal !== null) {
-    lines.push("");
-    lines.push(`── ${view.modal.title} ──`);
-    for (const line of view.modal.lines) {
-      lines.push(line);
-    }
-    lines.push(view.modal.hint);
+  const remainingRows =
+    options.rows === undefined
+      ? footer.length
+      : Math.max(0, options.rows - lines.length);
+  for (const line of footer.slice(0, remainingRows)) {
+    lines.push(clip(line, options.columns));
   }
   return lines.join("\n");
 }
@@ -183,6 +233,14 @@ export class AnsiCockpitHost implements CockpitHost {
   };
 
   private started = false;
+  private lastView: CockpitView | null = null;
+  private readonly onResize = (): void => {
+    if (this.started && this.lastView !== null) {
+      this.output.write(
+        `${CLEAR}${renderFrame(this.lastView, this.viewport())}\n`,
+      );
+    }
+  };
 
   constructor(options: AnsiHostOptions = {}) {
     this.input = options.input ?? (process.stdin as unknown as TtyInput);
@@ -203,12 +261,21 @@ export class AnsiCockpitHost implements CockpitHost {
     this.input.setRawMode?.(true);
     this.input.resume();
     this.input.on("data", this.onData);
+    this.output.on?.("resize", this.onResize);
     this.output.write(HIDE_CURSOR);
+  }
+
+  private viewport(): RenderFrameOptions {
+    return {
+      rows: this.output.rows,
+      columns: this.output.columns,
+    };
   }
 
   draw(view: CockpitView): void {
     this.ensureStarted();
-    this.output.write(`${CLEAR}${renderFrame(view)}\n`);
+    this.lastView = view;
+    this.output.write(`${CLEAR}${renderFrame(view, this.viewport())}\n`);
   }
 
   nextKey(): Promise<KeyEvent | null> {
@@ -257,6 +324,8 @@ export class AnsiCockpitHost implements CockpitHost {
     }
     this.started = false;
     this.input.off("data", this.onData);
+    this.output.off?.("resize", this.onResize);
+    this.lastView = null;
     this.input.setRawMode?.(false);
     this.input.pause();
     this.output.write(SHOW_CURSOR + CLEAR);

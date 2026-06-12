@@ -264,6 +264,7 @@ describe("paste flow: after_start triggers a mux send after the agent starts", (
     // The paste is submitted through the mux send sequence after the agent started.
     const muxCommands = commandsOf(runner);
     expect(muxCommands).toEqual([
+      "herdr --session 'asem' wait agent-status 'w-3' --status idle --timeout 30000",
       "herdr --session 'asem' pane run 'w-3' 'do the work'",
     ]);
   });

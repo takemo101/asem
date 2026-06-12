@@ -89,12 +89,15 @@ describe("sendMessage — same-worktree delivery", () => {
     expect(message.fromSessionId).toBeNull();
     expect(message.kind).toBe("message");
 
-    // Delivered through the herdr `send` sequence into the captured pane.
-    expect(d.runner.commands).toHaveLength(1);
+    // Delivered through the herdr `send` sequence: wait for idle, then inject.
+    expect(d.runner.commands).toHaveLength(2);
     expect(d.runner.commands[0]!.command).toContain(
+      "herdr --session 'asem' wait agent-status 'pane-1' --status idle",
+    );
+    expect(d.runner.commands[1]!.command).toContain(
       "herdr --session 'asem' pane run 'pane-1'",
     );
-    expect(d.runner.commands[0]!.command).toContain("ping");
+    expect(d.runner.commands[1]!.command).toContain("ping");
 
     // Success sets delivered_at and leaves no delivery_error (no fabricated ack).
     expect(message.deliveredAt).not.toBeNull();
@@ -235,8 +238,8 @@ describe("sendMessage — formatted body & delivery failure", () => {
     expect(message.formattedBody).toBe(
       `[asem message from helper-1 (cur_1)]\nstatus ok`,
     );
-    // The exact formatted body is what the mux `send` sequence delivered.
-    expect(d.runner.commands[0]!.command).toContain("status ok");
+    // The exact formatted body is what the mux `send` sequence injected.
+    expect(d.runner.commands[1]!.command).toContain("status ok");
     expect(d.store.messages[0]!.formattedBody).toBe(message.formattedBody);
   });
 
@@ -245,7 +248,7 @@ describe("sendMessage — formatted body & delivery failure", () => {
     const target = makeTarget();
     store.sessions.push(target);
     const runner = new FakeTemplateRunner({
-      commands: [{ exitCode: 1, stderr: "pane gone" }],
+      commands: [{}, { exitCode: 1, stderr: "pane gone" }],
     });
     const d = deps({ store, runner });
 
@@ -315,7 +318,7 @@ describe("sendMessage — token redaction", () => {
     const me = seedCurrent(store);
     store.sessions.push(target);
     const runner = new FakeTemplateRunner({
-      commands: [{ exitCode: 1, stderr: `boom ${CURRENT_TOKEN} boom` }],
+      commands: [{}, { exitCode: 1, stderr: `boom ${CURRENT_TOKEN} boom` }],
     });
     const d = deps({
       store,

@@ -394,6 +394,48 @@ describe("parseArgs message", () => {
   });
 });
 
+describe("parseArgs message wait", () => {
+  test("maps filters, timeout, poll interval, and json flag", () => {
+    expect(
+      command([
+        "message",
+        "wait",
+        "--to",
+        "s_parent",
+        "--from",
+        "s_child",
+        "--kind",
+        "report",
+        "--timeout-ms",
+        "600000",
+        "--poll-ms",
+        "250",
+        "--json",
+      ]),
+    ).toEqual({
+      type: "message-wait",
+      toSessionId: "s_parent",
+      fromSessionId: "s_child",
+      kind: "report",
+      timeoutMs: 600000,
+      pollMs: 250,
+      json: true,
+    });
+  });
+
+  test("requires a target Session", () => {
+    expect(errorCode(["message", "wait", "--from", "s_child"])).toBe(
+      "invalid_input",
+    );
+  });
+
+  test("rejects invalid numeric flags", () => {
+    expect(
+      errorCode(["message", "wait", "--to", "s_parent", "--timeout-ms", "0"]),
+    ).toBe("invalid_input");
+  });
+});
+
 describe("parseArgs message send", () => {
   test("maps a positional target id and --body", () => {
     expect(command(["message", "send", "s_1", "--body", "ping"])).toEqual({

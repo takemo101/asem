@@ -127,7 +127,7 @@ describe("builtin mux: herdr", () => {
     );
   });
 
-  test("send submits the message through the captured pane", async () => {
+  test("send waits for the target agent to be idle before injecting input", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner();
     await runWithRefsOnly(template.send, runner, {
@@ -135,6 +135,7 @@ describe("builtin mux: herdr", () => {
       herdr_session: "asem",
     });
     expect(commandsOf(runner)).toEqual([
+      "herdr --session 'asem' wait agent-status 'w-3' --status idle --timeout 30000",
       "herdr --session 'asem' pane run 'w-3' 'hi; there'",
     ]);
   });

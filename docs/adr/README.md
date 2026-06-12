@@ -9,6 +9,7 @@ Use ADRs for durable decisions. Use `docs/designs/` for feature/subsystem design
 - [`0001-sqlite-and-session-files-are-source-of-truth.md`](./0001-sqlite-and-session-files-are-source-of-truth.md) — Session / Message state lives in global SQLite; sensitive runtime files live under worktree-local Session directories.
 - [`0002-worktree-scope-isolation.md`](./0002-worktree-scope-isolation.md) — normal visibility and messaging are scoped by `workspace_id + worktree_root`.
 - [`0003-tui-operator-message-attribution.md`](./0003-tui-operator-message-attribution.md) — TUI sends are operator-originated and never attributed to the target worktree's current Session.
+- [`0004-tui-defaults-to-workspace-live-cockpit.md`](./0004-tui-defaults-to-workspace-live-cockpit.md) — `asem tui` defaults to a workspace-wide live cockpit while normal CLI/MCP scope remains worktree-isolated.
 
 ## ADR rules
 

@@ -119,16 +119,17 @@ Effective scope is resolved before all normal operations that read or mutate Ses
    3. if Git lookup fails, realpath cwd.
 3. Use `(workspace_id, worktree_root)` as the default boundary.
 
-TUI has an explicit workspace-wide mode:
+TUI has a workspace-wide cockpit mode by default, with a worktree-only focus still available:
 
 ```sh
-asem tui --scope worktree   # default
+asem tui                  # default workspace cockpit
+asem tui --scope worktree # current worktree only
 asem tui --scope workspace
 ```
 
-- `worktree` shows only current `workspace_id + worktree_root`.
 - `workspace` shows all Sessions with the same `workspace_id`, grouped by `worktree_root`.
-- In `workspace` scope, TUI operations on other worktrees are allowed because the human explicitly chose a workspace-wide view.
+- `worktree` shows only current `workspace_id + worktree_root`.
+- In `workspace` scope, TUI operations on other worktrees are allowed because the TUI is the explicit human operator cockpit; see [ADR 0004](../adr/0004-tui-defaults-to-workspace-live-cockpit.md).
 - There is no `--scope all` in MVP.
 
 The workspace-wide read is the single sanctioned scope broadening (implementation
@@ -614,8 +615,9 @@ asem tui
 ```
 
 Implementation choice: a renderer-agnostic cockpit core behind a `CockpitHost`
-seam, with a built-in ANSI terminal host shipping first and OpenTUI as a planned
-swap behind the same seam.
+seam, with OpenTUI/React as the primary human renderer and the minimal ANSI host
+kept as a fallback/test host where useful. The workspace-live refresh refinement
+is captured in [`asem-tui-workspace-live-cockpit-design.md`](./asem-tui-workspace-live-cockpit-design.md).
 
 The cockpit is split so the renderer stays replaceable and the behavior stays
 testable without a TTY (implementation principle 13):
@@ -650,7 +652,8 @@ Initial TUI supports:
 - attach to selected Session;
 - close Session;
 - delete Session;
-- refresh/filter.
+- refresh/filter;
+- workspace-wide live refresh with in-memory activity rows.
 
 Initial TUI excludes:
 

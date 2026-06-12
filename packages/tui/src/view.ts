@@ -9,6 +9,8 @@
  * without fragile terminal snapshots (issue test guidance).
  */
 import type { SessionStatus } from "@asem/core";
+import { type ActivityItem, newSessionIds } from "./activity.ts";
+import { timeLabel } from "./messages.ts";
 import type {
   CockpitState,
   CockpitTab,
@@ -54,6 +56,8 @@ export type LeftRow =
       selected: boolean;
       /** Ephemeral new-incoming-message count (0 when none). */
       badge: number;
+      /** True while the Session's `session_added` activity row is still live. */
+      isNew: boolean;
     };
 
 /** Left pane: header labels plus the flattened tree rows. */
@@ -81,14 +85,45 @@ export interface KeybarItem {
 export type ModalView =
   | { kind: "send"; title: string; lines: string[]; hint: string }
   | { kind: "confirm"; title: string; lines: string[]; hint: string }
-  | { kind: "help"; title: string; lines: string[]; hint: string };
+  | { kind: "help"; title: string; lines: string[]; hint: string }
+  | { kind: "error"; title: string; lines: string[]; hint: string };
+
+/** Max body lines of the error dialog; longer messages are elided with `…`. */
+export const ERROR_MODAL_MAX_LINES = 10;
+
+/**
+ * One activity-strip row: a time label, a formatted line, and a tone for
+ * themed renderers (`add` for appearances, `warn` for status/delivery changes,
+ * `remove` for removals, `info` otherwise).
+ */
+export interface ActivityRowView {
+  timeLabel: string;
+  text: string;
+  tone: "add" | "remove" | "warn" | "info";
+}
+
+/**
+ * One-line header content (design "Visual structure"): product, scope,
+ * workspace id, and the auto-refresh state. Pure data — the renderer decides
+ * styling.
+ */
+export interface HeaderView {
+  product: string;
+  scopeMode: CockpitState["env"]["scopeMode"];
+  workspaceId: string;
+  /** Refresh-state label, e.g. `auto 3s`. */
+  autoLabel: string;
+}
 
 /** The full renderer-agnostic screen description. */
 export interface CockpitView {
+  header: HeaderView;
   left: LeftPaneView;
   tabs: TabHeader[];
   /** Rendered lines for the active tab. */
   right: string[];
+  /** Recent in-memory activity rows, oldest first (empty when quiet). */
+  activity: ActivityRowView[];
   keybar: KeybarItem[];
   modal: ModalView | null;
   /** Transient status / error line, or null. */
@@ -127,6 +162,7 @@ function leftRows(state: CockpitState): LeftRow[] {
   const tree = sessionTree(state);
   const rows: LeftRow[] = [];
   const showGroups = tree.scopeMode === "workspace";
+  const fresh = newSessionIds(state.activity);
 
   const walk = (nodes: SessionTreeNode[]): void => {
     for (const node of nodes) {
@@ -139,6 +175,7 @@ function leftRows(state: CockpitState): LeftRow[] {
         symbol: STATUS_SYMBOLS[node.session.status],
         selected: node.session.id === state.selectedSessionId,
         badge: badgeFor(state, node.session.id),
+        isNew: fresh.has(node.session.id),
       });
       walk(node.children);
     }
@@ -204,6 +241,49 @@ function rightLines(state: CockpitState, attachHint: string | null): string[] {
   }
 }
 
+/** Format one activity item into a themed activity-strip row. */
+export function activityRow(item: ActivityItem): ActivityRowView {
+  switch (item.kind) {
+    case "session_added":
+      return {
+        timeLabel: timeLabel(item.at),
+        text: `+ ${item.worktreeRoot} new Session ${item.sessionName}`,
+        tone: "add",
+      };
+    case "session_removed":
+      return {
+        timeLabel: timeLabel(item.at),
+        text: `- ${item.worktreeRoot} removed Session ${item.sessionName}`,
+        tone: "remove",
+      };
+    case "status_changed":
+      return {
+        timeLabel: timeLabel(item.at),
+        text: `! ${item.worktreeRoot} ${item.sessionName} ${item.from} → ${item.to}`,
+        tone: "warn",
+      };
+    case "message_added":
+      return {
+        timeLabel: timeLabel(item.at),
+        text: `+ ${item.fromLabel} → ${item.toLabel} [${item.messageKind}]`,
+        tone: "add",
+      };
+    case "delivery_changed":
+      return {
+        timeLabel: timeLabel(item.at),
+        text:
+          item.result === "error"
+            ? `! delivery to ${item.toLabel} failed: ${item.deliveryError ?? "unknown"}`
+            : `· delivery to ${item.toLabel} ${item.result}`,
+        tone: item.result === "error" ? "warn" : "info",
+      };
+    default: {
+      const _never: never = item;
+      return _never;
+    }
+  }
+}
+
 function modalView(state: CockpitState): ModalView | null {
   switch (state.modal.kind) {
     case "none":
@@ -243,6 +323,22 @@ function modalView(state: CockpitState): ModalView | null {
         lines: [...HELP_LINES],
         hint: "? or Esc to close",
       };
+    case "error": {
+      const lines = [
+        `code: ${state.modal.code}`,
+        ...state.modal.message.split("\n"),
+      ];
+      const capped =
+        lines.length > ERROR_MODAL_MAX_LINES
+          ? [...lines.slice(0, ERROR_MODAL_MAX_LINES - 1), "…"]
+          : lines;
+      return {
+        kind: "error",
+        title: "Operation failed",
+        lines: capped,
+        hint: "Esc to dismiss",
+      };
+    }
     default: {
       const _never: never = state.modal;
       return _never;
@@ -255,13 +351,27 @@ function modalView(state: CockpitState): ModalView | null {
  *
  * `attachHint` (from `get_session`) is woven into the Detail tab when known;
  * `statusLine` carries a transient host message (e.g. the last operation error)
- * for the host to surface. Both default to absent.
+ * for the host to surface; `autoRefreshMs` feeds the header's refresh-state
+ * label. All default to absent.
  */
 export function renderCockpitView(
   state: CockpitState,
-  options: { attachHint?: string | null; statusLine?: string | null } = {},
+  options: {
+    attachHint?: string | null;
+    statusLine?: string | null;
+    autoRefreshMs?: number;
+  } = {},
 ): CockpitView {
   return {
+    header: {
+      product: "asem",
+      scopeMode: state.env.scopeMode,
+      workspaceId: state.env.workspaceId,
+      autoLabel:
+        options.autoRefreshMs === undefined
+          ? "auto off"
+          : `auto ${options.autoRefreshMs / 1000}s`,
+    },
     left: {
       title: "Sessions",
       scopeLabel: `scope: ${state.env.scopeMode}`,
@@ -274,6 +384,7 @@ export function renderCockpitView(
       active: tab === state.activeTab,
     })),
     right: rightLines(state, options.attachHint ?? null),
+    activity: state.activity.map(activityRow),
     keybar: [...KEYBAR],
     modal: modalView(state),
     statusLine: options.statusLine ?? null,

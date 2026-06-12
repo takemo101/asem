@@ -105,6 +105,42 @@ describe("confirm-modal keys", () => {
   });
 });
 
+describe("error-modal keys", () => {
+  function errorState() {
+    return dispatchCockpit(baseState(), {
+      type: "showError",
+      code: "session_not_found",
+      message: "boom",
+    }).state;
+  }
+
+  test("Esc / Enter / q all dismiss the error modal", () => {
+    expect(keyToAction(errorState(), { key: "escape" })?.type).toBe(
+      "cancelModal",
+    );
+    expect(keyToAction(errorState(), { key: "return" })?.type).toBe(
+      "cancelModal",
+    );
+    expect(keyToAction(errorState(), { key: "enter" })?.type).toBe(
+      "cancelModal",
+    );
+    expect(keyToAction(errorState(), { key: "q" })?.type).toBe("cancelModal");
+  });
+
+  test("q dismisses the error modal instead of quitting", () => {
+    expect(keyToAction(errorState(), { key: "q" })).toEqual({
+      type: "cancelModal",
+    });
+  });
+
+  test("other keys are inert while the error modal is open", () => {
+    expect(keyToAction(errorState(), { key: "x" })).toBeNull();
+    expect(keyToAction(errorState(), { key: "down" })).toBeNull();
+    expect(keyToAction(errorState(), { key: "?" })).toBeNull();
+    expect(keyToAction(errorState(), { key: "s" })).toBeNull();
+  });
+});
+
 describe("help-modal keys", () => {
   test("? and Esc close the help overlay", () => {
     const state = dispatchCockpit(baseState(), { type: "toggleHelp" }).state;

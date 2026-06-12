@@ -127,8 +127,9 @@ function leftRowText(row: LeftRow): string {
   }
   const indent = "  ".repeat(row.depth + 1);
   const badge = row.badge > 0 ? ` +${row.badge}` : "";
+  const marker = row.isNew ? " *new" : "";
   const cursor = row.selected ? "> " : "  ";
-  return `${cursor}${indent}${row.symbol} ${row.name}${badge}`;
+  return `${cursor}${indent}${row.symbol} ${row.name}${badge}${marker}`;
 }
 
 function pad(text: string, width: number): string {
@@ -286,6 +287,24 @@ export class AnsiCockpitHost implements CockpitHost {
     }
     return new Promise<KeyEvent | null>((resolve) => {
       this.waiter = resolve;
+    });
+  }
+
+  nextKeyOrTick(timeoutMs: number): Promise<KeyEvent | "tick" | null> {
+    this.ensureStarted();
+    const queued = this.queue.shift();
+    if (queued !== undefined) {
+      return Promise.resolve(queued);
+    }
+    return new Promise<KeyEvent | "tick" | null>((resolve) => {
+      const timer = setTimeout(() => {
+        this.waiter = null;
+        resolve("tick");
+      }, timeoutMs);
+      this.waiter = (event) => {
+        clearTimeout(timer);
+        resolve(event);
+      };
     });
   }
 

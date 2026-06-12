@@ -208,6 +208,62 @@ describe("close / delete confirmation", () => {
   });
 });
 
+describe("error modal", () => {
+  test("showError opens the error modal and cancelModal dismisses it", () => {
+    const state = createCockpitState(makeEnv(), snapshot([makeSession()]));
+    const result = dispatchCockpit(state, {
+      type: "showError",
+      code: "session_not_found",
+      message: "no such Session",
+    });
+    expect(result.effect).toBeUndefined();
+    expect(result.state.modal).toEqual({
+      kind: "error",
+      code: "session_not_found",
+      message: "no such Session",
+    });
+    const closed = dispatchCockpit(result.state, { type: "cancelModal" }).state;
+    expect(closed.modal.kind).toBe("none");
+  });
+
+  test("showError never clobbers an open send draft", () => {
+    let state = createCockpitState(
+      makeEnv(),
+      snapshot([makeSession({ id: "s1" })]),
+    );
+    state = dispatchCockpit(state, { type: "openSend" }).state;
+    state = dispatchCockpit(state, {
+      type: "updateDraft",
+      draft: "keep me",
+    }).state;
+    const result = dispatchCockpit(state, {
+      type: "showError",
+      code: "timeout",
+      message: "boom",
+    });
+    expect(result.effect).toBeUndefined();
+    expect(result.state.modal).toEqual({ kind: "send", draft: "keep me" });
+  });
+
+  test("showError never clobbers a pending confirmation", () => {
+    let state = createCockpitState(
+      makeEnv(),
+      snapshot([makeSession({ id: "s1" })]),
+    );
+    state = dispatchCockpit(state, { type: "requestDelete" }).state;
+    const after = dispatchCockpit(state, {
+      type: "showError",
+      code: "timeout",
+      message: "boom",
+    }).state;
+    expect(after.modal).toEqual({
+      kind: "confirm",
+      action: "delete",
+      sessionId: "s1",
+    });
+  });
+});
+
 describe("attach / refresh / quit / help effects", () => {
   test("attach emits an attach effect for the selected Session", () => {
     const session = makeSession({ id: "s1" });

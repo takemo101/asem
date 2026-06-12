@@ -16,13 +16,29 @@ import type { Session } from "@asem/core";
 
 export const PACKAGE_NAME = "@asem/tui";
 
+// In-memory activity projection (snapshot diff → ephemeral activity rows)
+export {
+  ACTIVITY_CAP,
+  type ActivityItem,
+  appendActivity,
+  type DeliveryResult,
+  deliveryResult,
+  diffSnapshots,
+  newSessionIds,
+} from "./activity.ts";
 // App orchestration: controller + interactive loop
-export { CockpitApp, runCockpit, type StepResult } from "./app.ts";
+export {
+  AUTO_REFRESH_MS,
+  CockpitApp,
+  type CockpitAppOptions,
+  runCockpit,
+  type StepResult,
+} from "./app.ts";
 // Ops edge: snapshot loading, env resolution, and effect execution
 export {
+  type AttachDeps,
   type CockpitEffectOutcome,
   type EffectDeps,
-  type AttachDeps,
   type EnvDeps,
   executeCockpitEffect,
   loadAttach,
@@ -42,6 +58,7 @@ export {
   observeSession,
   relatedMessages,
   seedBaseline,
+  timeLabel,
 } from "./messages.ts";
 export { contextView, detailView } from "./tabs.ts";
 export {
@@ -63,7 +80,11 @@ export {
 export * from "./types.ts";
 // Render projection (the component layer)
 export {
+  type ActivityRowView,
+  activityRow,
   type CockpitView,
+  ERROR_MODAL_MAX_LINES,
+  type HeaderView,
   KEYBAR,
   type KeybarItem,
   type LeftPaneView,

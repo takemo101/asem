@@ -147,3 +147,50 @@ describe("renderFrame", () => {
     expect(output.resizeListener).toBeNull();
   });
 });
+
+describe("AnsiCockpitHost nextKeyOrTick", () => {
+  test("resolves tick when no key arrives within the timeout", async () => {
+    const input = new FakeInput();
+    const output = new FakeOutput();
+    const host = new AnsiCockpitHost({ input, output });
+
+    const result = await host.nextKeyOrTick(5);
+    expect(result).toBe("tick");
+    host.close();
+  });
+
+  test("resolves the key and cancels the timer when input arrives first", async () => {
+    const input = new FakeInput();
+    const output = new FakeOutput();
+    const host = new AnsiCockpitHost({ input, output });
+
+    const pending = host.nextKeyOrTick(1_000);
+    input.listener?.("j");
+    expect(await pending).toEqual({ key: "j" });
+    host.close();
+  });
+
+  test("drains queued keys before waiting for the timer", async () => {
+    const input = new FakeInput();
+    const output = new FakeOutput();
+    const host = new AnsiCockpitHost({ input, output });
+
+    // One chunk carries two keys: the first resolves the pending read, the
+    // second is queued and drained without waiting on the timer.
+    const pending = host.nextKeyOrTick(1_000);
+    input.listener?.("jk");
+    expect(await pending).toEqual({ key: "j" });
+    expect(await host.nextKeyOrTick(1_000)).toEqual({ key: "k" });
+    host.close();
+  });
+
+  test("close resolves a pending tick-capable read with null", async () => {
+    const input = new FakeInput();
+    const output = new FakeOutput();
+    const host = new AnsiCockpitHost({ input, output });
+
+    const pending = host.nextKeyOrTick(60_000);
+    host.close();
+    expect(await pending).toBeNull();
+  });
+});

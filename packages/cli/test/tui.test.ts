@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { parseTuiScope } from "../src/tui.ts";
 
 describe("parseTuiScope", () => {
-  test("defaults to worktree scope with no flags", () => {
+  test("defaults to workspace scope with no flags (ADR 0004)", () => {
     const result = parseTuiScope([]);
-    expect(result).toEqual({ ok: true, value: "worktree" });
+    expect(result).toEqual({ ok: true, value: "workspace" });
   });
 
   test("accepts --scope worktree and --scope workspace", () => {

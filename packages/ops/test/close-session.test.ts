@@ -84,6 +84,27 @@ describe("closeSession — pane control + status update", () => {
     expect(stored?.status).toBe("closed");
     expect(stored?.closedAt).toBe(closed.closedAt);
   });
+
+  test("closes a borrowed current-pane Session without running mux close", async () => {
+    const store = new FakeStore();
+    const session = makeRunning({
+      name: "registered-parent",
+      muxRef: { ...HERDR_REF, asem_mux_owned: "false" },
+    });
+    store.sessions.push(session);
+    const d = deps({ store });
+
+    const { session: closed } = expectOk(
+      await closeSession(d, { id: session.id }, CTX),
+    );
+
+    expect(d.runner.commands).toHaveLength(0);
+    expect(closed.status).toBe("closed");
+    expect(closed.closedAt).not.toBeNull();
+    const stored = await d.store.getSessionById(scopeA, session.id);
+    expect(stored?.status).toBe("closed");
+    expect(stored?.closedAt).toBe(closed.closedAt);
+  });
 });
 
 describe("closeSession — scoped lookup", () => {

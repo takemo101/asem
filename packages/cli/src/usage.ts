@@ -34,7 +34,7 @@ const ROOT_USAGE = [
   "  report parent --body <text> [--json]",
   "                                   report to the current Session's parent Session",
   "  mcp                              start the stdio MCP server (AI-facing tools)",
-  "  tui [--scope worktree|workspace] open the human Session cockpit (default worktree)",
+  "  tui [--scope worktree|workspace] open the human Session cockpit (default workspace)",
   "",
   "global:",
   "  -h, --help                      show this help",

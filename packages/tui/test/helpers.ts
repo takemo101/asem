@@ -87,18 +87,28 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
   };
 }
 
+/** One scripted input: a key press, an auto-refresh tick, or EOF. */
+export type ScriptedInput = KeyEvent | "tick" | null;
+
 /**
- * A scripted {@link CockpitHost} for app tests: it replays a queue of keys,
- * records every drawn frame, and logs attach requests. No real terminal, no real
- * multiplexer (testability rules).
+ * A scripted {@link CockpitHost} for app tests: it replays a queue of keys (and
+ * optional `"tick"` auto-refresh timeouts), records every drawn frame and input
+ * read, and logs attach requests. No real terminal, no real multiplexer, no real
+ * timer (testability rules). A `"tick"` entry reached through `nextKey` throws —
+ * the app must only consume ticks through `nextKeyOrTick`, so a script with a
+ * tick behind an open modal proves the auto-refresh pause.
  */
 export class FakeHost implements CockpitHost {
   readonly frames: CockpitView[] = [];
   readonly attaches: AttachRequest[] = [];
+  /** Every input read the app performed, in order. */
+  readonly reads: Array<
+    { method: "nextKey" } | { method: "nextKeyOrTick"; timeoutMs: number }
+  > = [];
   closed = false;
-  private readonly keys: (KeyEvent | null)[];
+  private readonly keys: ScriptedInput[];
 
-  constructor(keys: (KeyEvent | null)[] = []) {
+  constructor(keys: ScriptedInput[] = []) {
     this.keys = [...keys];
   }
 
@@ -106,9 +116,25 @@ export class FakeHost implements CockpitHost {
     this.frames.push(view);
   }
 
-  nextKey(): Promise<KeyEvent | null> {
+  private shift(): ScriptedInput {
     // Exhausted scripts end input (treated as quit by the app loop).
-    return Promise.resolve(this.keys.length === 0 ? null : this.keys.shift()!);
+    return this.keys.length === 0 ? null : (this.keys.shift() as ScriptedInput);
+  }
+
+  nextKey(): Promise<KeyEvent | null> {
+    this.reads.push({ method: "nextKey" });
+    const next = this.shift();
+    if (next === "tick") {
+      throw new Error(
+        "FakeHost: a tick was read through nextKey — auto-refresh should be paused here",
+      );
+    }
+    return Promise.resolve(next);
+  }
+
+  nextKeyOrTick(timeoutMs: number): Promise<KeyEvent | "tick" | null> {
+    this.reads.push({ method: "nextKeyOrTick", timeoutMs });
+    return Promise.resolve(this.shift());
   }
 
   async attach(request: AttachRequest): Promise<void> {

@@ -127,9 +127,15 @@ export async function closeSession(
       ? withRedaction(deps.logger, redactor)
       : undefined;
 
-  // Mux `close` runs only when a live pane could exist. An `exited`/`missing`
-  // Session has no live pane, so we record the close without running `close`.
-  if (PANE_LIVE_STATUSES.has(session.status)) {
+  // Mux `close` runs only when a live pane could exist and asem owns the mux
+  // resource. Sessions registered through `init-session` borrow an existing
+  // pane/workspace (notably the operator's current herdr workspace), so their
+  // mux ref carries `asem_mux_owned: "false"`; closing those Sessions records
+  // the process-state transition without closing the borrowed multiplexer.
+  if (
+    PANE_LIVE_STATUSES.has(session.status) &&
+    session.muxRef.asem_mux_owned !== "false"
+  ) {
     // Resolve the mux template through this cwd's config so a project-local
     // `close` sequence overrides the builtin for the Session's mux.
     const templateRegistry = deps.templateRegistryFactory.forConfig(config);

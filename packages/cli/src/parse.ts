@@ -55,6 +55,15 @@ export type CliCommand =
   | { type: "session-delete"; id: string; force: boolean; json: boolean }
   | { type: "message-list"; filter?: MessageListFilter; json: boolean }
   | {
+      type: "message-wait";
+      toSessionId: string;
+      fromSessionId?: string;
+      kind?: "message" | "report";
+      timeoutMs: number;
+      pollMs: number;
+      json: boolean;
+    }
+  | {
       type: "message-send";
       toSessionId: string;
       body: string;
@@ -498,6 +507,67 @@ function parseMessageList(args: string[]): ParseResult {
   };
 }
 
+function parsePositiveInt(
+  raw: string | undefined,
+  name: string,
+): Parsed<number> {
+  if (raw === undefined) return { ok: true, value: 0 };
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value <= 0) {
+    return fail(`option --${name} must be a positive integer`);
+  }
+  return { ok: true, value };
+}
+
+function parseMessageWait(args: string[]): ParseResult {
+  const flags = parseFlags(args, {
+    booleans: ["json"],
+    values: ["to", "from", "kind", "timeout-ms", "poll-ms"],
+  });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { values, booleans, positionals } = flags.value;
+
+  const to = values.get("to") ?? positionals[0];
+  if (to === undefined || to.length === 0) {
+    return invalid(
+      "target session id is required (use `asem message wait --to <session-id>`)",
+    );
+  }
+  if (positionals.length > 1) {
+    return invalid("unexpected extra arguments", {
+      extra: positionals.slice(1),
+    });
+  }
+
+  const timeout = parsePositiveInt(values.get("timeout-ms"), "timeout-ms");
+  if (!timeout.ok) return { kind: "error", error: timeout.error };
+  const poll = parsePositiveInt(values.get("poll-ms"), "poll-ms");
+  if (!poll.ok) return { kind: "error", error: poll.error };
+
+  const kindValue = values.get("kind");
+  if (
+    kindValue !== undefined &&
+    kindValue !== "message" &&
+    kindValue !== "report"
+  ) {
+    return invalid("option --kind must be message or report");
+  }
+
+  const fromSessionId = values.get("from");
+  return {
+    kind: "command",
+    command: {
+      type: "message-wait",
+      toSessionId: to,
+      timeoutMs: timeout.value === 0 ? 600_000 : timeout.value,
+      pollMs: poll.value === 0 ? 1_000 : poll.value,
+      json: booleans.has("json"),
+      ...(fromSessionId !== undefined ? { fromSessionId } : {}),
+      ...(kindValue !== undefined ? { kind: kindValue } : {}),
+    },
+  };
+}
+
 function parseMessageSend(args: string[]): ParseResult {
   const flags = parseFlags(args, {
     booleans: ["json"],
@@ -537,14 +607,16 @@ function parseMessage(args: string[]): ParseResult {
   const [sub, ...rest] = args;
   switch (sub) {
     case undefined:
-      return invalid("missing message subcommand (list | send)");
+      return invalid("missing message subcommand (list | wait | send)");
     case "list":
       return parseMessageList(rest);
+    case "wait":
+      return parseMessageWait(rest);
     case "send":
       return parseMessageSend(rest);
     default:
       return invalid(`unknown message subcommand: ${sub}`, {
-        expected: ["list", "send"],
+        expected: ["list", "wait", "send"],
       });
   }
 }

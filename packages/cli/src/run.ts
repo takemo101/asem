@@ -7,7 +7,7 @@
  * structured error. No use-case logic (scope, auth, persistence) is duplicated
  * here — every command delegates to the operation that owns it.
  */
-import { type AttachCommand, operationError } from "@asem/core";
+import { type AttachCommand, type Message, operationError } from "@asem/core";
 import type { OperationError, OperationResult, OpsDeps } from "@asem/ops";
 import {
   closeSession,
@@ -62,6 +62,8 @@ export interface RunCliOptions {
   isTty?: boolean;
   /** Test seam for interactive init prompts; defaults to Inquirer prompts. */
   prompts?: InitWizardPrompts;
+  /** Test seam for polling commands; defaults to setTimeout. */
+  sleepMs?: (ms: number) => Promise<void>;
 }
 
 /** Process-style exit codes the CLI returns (0 ok, 2 usage, 1 operation error). */
@@ -109,6 +111,9 @@ export async function runCli(opts: RunCliOptions): Promise<number> {
     isTty: opts.isTty ?? Boolean(process.stdin.isTTY),
     attachRunner: opts.attachRunner,
     prompts: opts.prompts,
+    sleepMs:
+      opts.sleepMs ??
+      ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
   });
 }
 
@@ -119,6 +124,7 @@ type DispatchEnv = {
   isTty: boolean;
   attachRunner?: AttachRunner;
   prompts?: InitWizardPrompts;
+  sleepMs: (ms: number) => Promise<void>;
 };
 
 async function dispatch(
@@ -144,6 +150,8 @@ async function dispatch(
       return runSessionDelete(command, env);
     case "message-list":
       return runMessageList(command, env);
+    case "message-wait":
+      return runMessageWait(command, env);
     case "message-send":
       return runMessageSend(command, env);
     case "report-parent":
@@ -399,6 +407,57 @@ async function runMessageList(
     if (command.json) emitJson(io, value.messages);
     else emit(io, renderMessageList(value.messages));
   });
+}
+
+function matchesWait(
+  command: Extract<CliCommand, { type: "message-wait" }>,
+  message: Message,
+): boolean {
+  return (
+    message.toSessionId === command.toSessionId &&
+    (command.fromSessionId === undefined ||
+      message.fromSessionId === command.fromSessionId) &&
+    (command.kind === undefined || message.kind === command.kind)
+  );
+}
+
+async function runMessageWait(
+  command: Extract<CliCommand, { type: "message-wait" }>,
+  { cwd, deps, io, sleepMs }: DispatchEnv,
+): Promise<number> {
+  const started = Date.now();
+  while (true) {
+    const result = await listMessages(
+      deps,
+      { filter: { toSessionId: command.toSessionId } },
+      { cwd },
+    );
+    if (!result.ok) return fail(io, result.error);
+
+    const match = result.value.messages.find((message) =>
+      matchesWait(command, message),
+    );
+    if (match !== undefined) {
+      if (command.json) emitJson(io, match);
+      else emit(io, renderSentMessage(match));
+      return EXIT_OK;
+    }
+
+    if (Date.now() - started >= command.timeoutMs) {
+      return fail(
+        io,
+        operationError("timeout", "timed out waiting for Message", {
+          toSessionId: command.toSessionId,
+          ...(command.fromSessionId !== undefined
+            ? { fromSessionId: command.fromSessionId }
+            : {}),
+          ...(command.kind !== undefined ? { kind: command.kind } : {}),
+          timeoutMs: command.timeoutMs,
+        }),
+      );
+    }
+    await sleepMs(Math.min(command.pollMs, command.timeoutMs));
+  }
 }
 
 async function runMessageSend(

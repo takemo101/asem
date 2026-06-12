@@ -696,6 +696,74 @@ describe("runCli message list", () => {
   });
 });
 
+describe("runCli message wait", () => {
+  test("returns the first matching Message from the store", async () => {
+    const store = new FakeStore();
+    store.messages.push(
+      makeMessage({
+        id: "m_other",
+        fromSessionId: "s_other",
+        toSessionId: "s_parent",
+        kind: "report",
+        body: "wrong",
+      }),
+      makeMessage({
+        id: "m_match",
+        fromSessionId: "s_child",
+        toSessionId: "s_parent",
+        kind: "report",
+        body: "done",
+      }),
+    );
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(
+      [
+        "message",
+        "wait",
+        "--to",
+        "s_parent",
+        "--from",
+        "s_child",
+        "--kind",
+        "report",
+        "--json",
+      ],
+      deps,
+    );
+
+    expect(code).toBe(EXIT_OK);
+    expect(JSON.parse(io.outText()).id).toBe("m_match");
+  });
+
+  test("times out when no matching Message arrives", async () => {
+    const store = new FakeStore();
+    store.messages.push(
+      makeMessage({ toSessionId: "s_parent", fromSessionId: "s_other" }),
+    );
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(
+      [
+        "message",
+        "wait",
+        "--to",
+        "s_parent",
+        "--from",
+        "s_child",
+        "--timeout-ms",
+        "1",
+        "--poll-ms",
+        "1",
+      ],
+      deps,
+    );
+
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("timeout");
+  });
+});
+
 describe("runCli message send", () => {
   test("delegates to send_message and renders the delivered result", async () => {
     const store = new FakeStore();

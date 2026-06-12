@@ -80,7 +80,7 @@ Do not use Session status to represent task outcome.
 
 ### Message
 
-A Message is a durable SQLite record plus a best-effort delivery attempt into the target Session's multiplexer pane.
+A Message is a durable SQLite record plus a best-effort delivery attempt into the target Session's multiplexer pane. `asem message wait` polls the durable Message store; it does not depend on pane delivery or agent CLI state.
 
 ```ts
 type MessageKind = "message" | "report";
@@ -283,6 +283,7 @@ Message guarantees:
 
 - Persist the Message before or with the delivery result.
 - Delivery is best-effort.
+- Herdr delivery waits for the target agent pane to report `idle` before injecting input; that wait is best-effort and ignored on timeout/failure so the durable Message row remains the source of truth.
 - If target pane exists and delivery command succeeds, set `delivered_at`.
 - If delivery fails, set `delivery_error`.
 - No ack, read receipt, or durable unread state.
@@ -429,6 +430,7 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 | Delete Session | `asem session delete` | `delete_session` | human or verified current Session | effective scope | deletes Session and related messages |
 | Send Message | `asem message send` | `send_message` | human or verified current Session | effective scope | inserts Message, best-effort delivery |
 | List Messages | `asem message list`, `asem message list --inbox`, `asem message list --undelivered` | `list_messages` | human or verified current Session | effective scope | reads Message rows |
+| Wait Message | `asem message wait --to <id> [--from <id>] [--kind message|report]` | — | human local trust | effective scope | polls Message rows until a match or timeout |
 | Report Parent | `asem report parent` | `report_parent` | verified current Session | effective scope | inserts report Message to parent |
 | Start MCP | `asem mcp` | — | local process | current config | starts stdio MCP server |
 | Start TUI | `asem tui` | — | human local trust | worktree/workspace | opens Session cockpit |

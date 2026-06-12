@@ -27,6 +27,8 @@ const ROOT_USAGE = [
   "                                   delete a Session and its related Messages (destructive)",
   "  message list [--to <id>] [--inbox] [--undelivered] [--json]",
   "                                   list Message history in the current scope",
+  "  message wait --to <id> [--from <id>] [--kind message|report] [--timeout-ms <n>] [--poll-ms <n>] [--json]",
+  "                                   wait for a Message in the current scope",
   "  message send <id> --body <text> [--json]",
   "                                   send a Message to a Session in the current scope",
   "  report parent --body <text> [--json]",

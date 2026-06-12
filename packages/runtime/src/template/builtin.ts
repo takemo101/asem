@@ -74,6 +74,12 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
       {
         type: "run",
         command:
+          "herdr --session {{herdr_session_shell}} wait agent-status {{pane_id_shell}} --status idle --timeout 30000",
+        on_error: "ignore",
+      },
+      {
+        type: "run",
+        command:
           "herdr --session {{herdr_session_shell}} pane run {{pane_id_shell}} {{message_shell}}",
       },
     ],

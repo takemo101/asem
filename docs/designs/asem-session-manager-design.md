@@ -743,14 +743,16 @@ Context:
 
 ### TUI behavior
 
-- Auto refresh every 3-5 seconds.
+- Auto refresh every 3 seconds while the cockpit is idle.
 - Manual refresh with `r`.
+- Auto refresh pauses while a send, confirm, help, or error modal is open.
 - Liveness checks may update `running` Sessions to `exited` or `missing`.
 - New-message badges are ephemeral, based on TUI start / last observed baseline.
 - `a` runs the attach command and leaves TUI temporarily; on return, TUI refreshes.
 - `s` opens a centered multi-line textarea modal.
 - Enter inserts newline, Ctrl+Enter sends, Esc cancels.
 - Close and delete require confirmation dialogs.
+- Operator-initiated send/close/delete failures open a dismissible error modal. Refresh and auto-refresh failures stay in the footer status line so a transient or repeated refresh error does not reopen a modal every interval.
 
 ## Testing strategy
 

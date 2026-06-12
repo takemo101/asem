@@ -34,6 +34,14 @@ export interface CockpitHost {
    */
   nextKey(): Promise<KeyEvent | null>;
   /**
+   * Like {@link nextKey}, but resolve `"tick"` when no key arrives within
+   * `timeoutMs`. This is the deliberate timer seam for the cockpit's 3s
+   * auto-refresh (design "Refresh model"): the app only asks for ticks while no
+   * modal is open, so implementing hosts never need modal awareness. Optional —
+   * a host without it (e.g. a scripted test host) simply gets no auto-refresh.
+   */
+  nextKeyOrTick?(timeoutMs: number): Promise<KeyEvent | "tick" | null>;
+  /**
    * Temporarily leave the TUI, run the attach command for a Session, and return
    * control to the cockpit. The app refreshes the snapshot on return (design:
    * "`a` runs the attach command and leaves TUI temporarily; on return, TUI

@@ -288,9 +288,11 @@ Message guarantees:
 - If delivery fails, set `delivery_error`.
 - No ack, read receipt, or durable unread state.
 
-Deletion rule:
+Close/delete rule:
 
-- `delete_session --force` deletes only non-live Sessions. A `starting` or `running` Session must be closed first so pane/process cleanup is not bypassed by store deletion.
+- `close_session` normally runs the mux template `close` sequence for a live Session, then records status `closed`.
+- Sessions registered with `init-session` borrow an already-existing pane/workspace rather than owning a mux resource. Their `mux_ref_json` carries `asem_mux_owned = "false"`; `close_session` skips mux `close` for those Sessions and records only the status transition. This prevents deleting a parent/current Session from closing the operator's existing herdr workspace.
+- `delete_session --force` deletes only non-live Sessions. A `starting` or `running` Session must be closed first so pane/process cleanup is not bypassed by store deletion. For borrowed `init-session` Sessions, that close is safe because it does not close the borrowed mux resource.
 - Once a Session is non-live, `delete_session --force` deletes the Session and all related messages where `from_session_id = id OR to_session_id = id`.
 - Related-message deletion semantics live in `@asem/ops`, not in FK cascade.
 - `@asem/store` exposes scoped transactional primitives such as `deleteSessionScoped`, `deleteRelatedMessagesScoped`, and `withTransaction`; it does not decide when a delete operation should remove related messages.
@@ -455,7 +457,7 @@ Parent resolution truth table:
 | no parent flag + current Session exists | Use current Session as parent. |
 | no parent flag + no current Session | Return structured `current_session_not_found` with hint to use `--root` or run `asem init-session`. |
 
-`init-session` requires an explicit mux reference if the Session should be deliverable. It should not rely only on auto-detection.
+`init-session` requires an explicit mux reference if the Session should be deliverable. It should not rely only on auto-detection. Because `init-session` registers an existing pane/workspace instead of creating one, the stored mux ref is marked as borrowed with `asem_mux_owned = "false"`; close/delete flows use that marker to avoid closing the operator's current multiplexer resource before deleting the Session row.
 
 After `init-session`, print exports:
 

@@ -120,7 +120,7 @@ describe("CockpitApp effects", () => {
     expect(host.attaches[0]!.attachCommand).toBeNull();
   });
 
-  test("a failing operation surfaces the structured error in the status line", async () => {
+  test("a failing close opens the error modal instead of the status line", async () => {
     const store = new FakeStore();
     store.sessions.push(makeSession({ id: "s1" }));
     const { app } = makeApp({ store });
@@ -129,7 +129,99 @@ describe("CockpitApp effects", () => {
     store.sessions.length = 0;
     const result = await app.dispatch({ type: "confirm" });
     expect(result.error?.code).toBe("session_not_found");
-    expect(app.view().statusLine).toContain("session_not_found");
+    const view = app.view();
+    expect(view.modal?.kind).toBe("error");
+    expect(view.modal?.title).toBe("Operation failed");
+    expect(view.modal?.lines.join("\n")).toContain("session_not_found");
+    expect(view.statusLine).toBeNull();
+  });
+
+  test("a failing delete opens the error modal", async () => {
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "s1" }));
+    const { app } = makeApp({ store });
+    await app.dispatch({ type: "requestDelete" });
+    store.sessions.length = 0;
+    const result = await app.dispatch({ type: "confirm" });
+    expect(result.error?.code).toBe("session_not_found");
+    expect(app.state.modal.kind).toBe("error");
+    expect(app.view().statusLine).toBeNull();
+  });
+
+  test("a failing send opens the error modal", async () => {
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "s1" }));
+    const { app } = makeApp({ store });
+    await app.dispatch({ type: "openSend" });
+    await app.dispatch({ type: "updateDraft", draft: "ping" });
+    store.sessions.length = 0;
+    const result = await app.dispatch({ type: "submitSend" });
+    expect(result.error?.code).toBe("session_not_found");
+    expect(app.state.modal.kind).toBe("error");
+    expect(app.view().statusLine).toBeNull();
+  });
+
+  test("dismissing the error modal returns to the normal cockpit", async () => {
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "s1" }));
+    const { app } = makeApp({ store });
+    await app.dispatch({ type: "requestClose" });
+    store.sessions.length = 0;
+    await app.dispatch({ type: "confirm" });
+    expect(app.state.modal.kind).toBe("error");
+    // q dismisses the modal instead of quitting.
+    await app.handleKey({ key: "q" });
+    expect(app.state.modal.kind).toBe("none");
+    expect(app.quit).toBe(false);
+  });
+
+  test("an operation error while a modal is open falls back to the status line", async () => {
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "s1" }));
+    const { app } = makeApp({ store });
+    await app.dispatch({ type: "openSend" });
+    await app.dispatch({ type: "updateDraft", draft: "keep" });
+    app.reportOperationError({ code: "timeout", message: "boom" });
+    // The draft survives; the error degrades to the status line.
+    expect(app.state.modal).toEqual({ kind: "send", draft: "keep" });
+    expect(app.view().statusLine).toBe("error: timeout: boom");
+  });
+
+  test("a manual refresh error stays in the status line without a modal", async () => {
+    const { FakeConfigLoader } = await import("../../ops/src/testing/fakes.ts");
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "s1" }));
+    const env = makeEnv();
+    const state = createCockpitState(env, snapshot([...store.sessions]));
+    const deps = makeOpsDeps({
+      store,
+      configLoader: new FakeConfigLoader({ kind: "not_found" }),
+    });
+    const app = new CockpitApp(deps, env, state, new FakeHost());
+    const result = await app.dispatch({ type: "refresh" });
+    expect(result.error?.code).toBe("config_not_found");
+    expect(app.state.modal.kind).toBe("none");
+    expect(app.view().modal).toBeNull();
+    expect(app.view().statusLine).toContain("config_not_found");
+  });
+
+  test("an auto-refresh tick error stays in the status line without a modal", async () => {
+    const { FakeConfigLoader } = await import("../../ops/src/testing/fakes.ts");
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "s1" }));
+    const env = makeEnv();
+    const state = createCockpitState(env, snapshot([...store.sessions]));
+    const deps = makeOpsDeps({
+      store,
+      configLoader: new FakeConfigLoader({ kind: "not_found" }),
+    });
+    const host = new FakeHost(["tick", null]);
+    const app = new CockpitApp(deps, env, state, host);
+    await app.run();
+    // The tick error never opens a modal — it would reopen every interval.
+    const last = host.lastFrame();
+    expect(last?.modal).toBeNull();
+    expect(last?.statusLine).toContain("config_not_found");
   });
 });
 

@@ -10,6 +10,7 @@
  * state, so badges never become durable read/unread state.
  */
 import type { Session } from "@asem/core";
+import { appendActivity, diffSnapshots } from "./activity.ts";
 import {
   badgeCount as badgeCountFor,
   messageRows,
@@ -77,6 +78,7 @@ export function createCockpitState(
     activeTab,
     baseline,
     modal: { kind: "none" },
+    activity: [],
   };
 
   const first = visibleSessionRows(draft)[0];
@@ -90,12 +92,21 @@ export function createCockpitState(
  * baseline is preserved so Messages that arrived since the last observation
  * still surface as new — except for the Session currently open on the Messages
  * tab, which is re-observed so the row you are reading never accrues a badge.
+ * The previous/next snapshots are also diffed into capped in-memory activity
+ * rows (design "In-memory activity strip").
  */
 export function applySnapshot(
   state: CockpitState,
   snapshot: CockpitSnapshot,
 ): CockpitState {
-  const next: CockpitState = { ...state, snapshot };
+  const next: CockpitState = {
+    ...state,
+    snapshot,
+    activity: appendActivity(
+      state.activity,
+      diffSnapshots(state.snapshot, snapshot),
+    ),
+  };
   const rows = visibleSessionRows(next);
   const stillVisible =
     next.selectedSessionId !== null &&
@@ -307,6 +318,19 @@ export function dispatchCockpit(
       return state.modal.kind === "none"
         ? unchanged(state)
         : { state: { ...state, modal: { kind: "none" } } };
+    case "showError": {
+      // Never clobber an open modal (e.g. a send draft) with an error dialog;
+      // the host falls back to the status line in that case.
+      if (state.modal.kind !== "none") {
+        return unchanged(state);
+      }
+      return {
+        state: {
+          ...state,
+          modal: { kind: "error", code: action.code, message: action.message },
+        },
+      };
+    }
     case "requestClose": {
       if (state.selectedSessionId === null) {
         return unchanged(state);

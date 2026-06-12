@@ -106,7 +106,12 @@ export async function initSession(
     mux: input.mux ?? config.mux.default,
     parentSessionId,
     status: "running",
-    muxRef: input.muxRef,
+    // `init-session` registers an already-existing pane/workspace. asem did
+    // not create that mux resource, so `close_session` must not run the mux
+    // close sequence for it (for herdr that could close the operator's whole
+    // workspace). Store the ownership marker in the mux ref so all surfaces use
+    // the same operation semantics without adding schema/storage columns.
+    muxRef: { ...input.muxRef, asem_mux_owned: "false" },
     sessionDir: sessionDirFor(scope.worktreeRoot, id),
     tokenHash: hashToken(token),
     createdAt: now,

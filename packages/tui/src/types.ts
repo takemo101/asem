@@ -10,12 +10,13 @@
  * read/unread state is ever persisted (CONTEXT.md "Inbox"; design "TUI behavior").
  */
 import type { Message, MessageKind, Session, SessionStatus } from "@asem/core";
+import type { ActivityItem } from "./activity.ts";
 
 /**
- * Cockpit scope. `worktree` (default) shows only the current
- * `workspace_id + worktree_root`; `workspace` shows every Session sharing the
- * `workspace_id`, grouped by `worktree_root` before the tree is drawn (design
- * "Scope resolution").
+ * Cockpit scope. `workspace` (the `asem tui` default — ADR 0004) shows every
+ * Session sharing the `workspace_id`, grouped by `worktree_root` before the
+ * tree is drawn; `worktree` shows only the current
+ * `workspace_id + worktree_root` (design "Scope resolution").
  */
 export type CockpitScopeMode = "worktree" | "workspace";
 
@@ -158,13 +159,15 @@ export interface ContextView {
 /**
  * The active overlay. `send` carries the textarea draft; `confirm` carries the
  * destructive action awaiting confirmation (design: close/delete need a
- * confirmation dialog).
+ * confirmation dialog); `error` carries a failed operator operation so it is
+ * surfaced as a dismissible dialog instead of a easy-to-miss footer line.
  */
 export type CockpitModal =
   | { kind: "none" }
   | { kind: "help" }
   | { kind: "send"; draft: string }
-  | { kind: "confirm"; action: "close" | "delete"; sessionId: string };
+  | { kind: "confirm"; action: "close" | "delete"; sessionId: string }
+  | { kind: "error"; code: string; message: string };
 
 // --- Actions & effects ----------------------------------------------------
 
@@ -187,6 +190,7 @@ export type CockpitAction =
   | { type: "updateDraft"; draft: string }
   | { type: "submitSend" }
   | { type: "cancelModal" }
+  | { type: "showError"; code: string; message: string }
   | { type: "requestClose" }
   | { type: "requestDelete" }
   | { type: "confirm" }
@@ -229,4 +233,10 @@ export interface CockpitState {
   activeTab: CockpitTab;
   baseline: ReadonlySet<string>;
   modal: CockpitModal;
+  /**
+   * Recent in-memory activity rows derived by diffing snapshots on refresh
+   * (design "In-memory activity strip"). Capped, never persisted, and never
+   * Messages/Events/unread state.
+   */
+  activity: readonly ActivityItem[];
 }

@@ -37,6 +37,9 @@ import {
   dispatchCockpit,
 } from "./view-model.ts";
 
+/** Auto-refresh cadence while the cockpit is idle (cuekit's refresh model). */
+export const AUTO_REFRESH_MS = 3000;
+
 /** Result of applying one action: useful for tests and the run loop. */
 export interface StepResult {
   /** True once a `quit` effect has been carried out. */
@@ -47,23 +50,37 @@ export interface StepResult {
   error?: OperationError;
 }
 
+/** Optional knobs for {@link CockpitApp}. */
+export interface CockpitAppOptions {
+  /** Auto-refresh interval; defaults to {@link AUTO_REFRESH_MS}. */
+  autoRefreshMs?: number;
+}
+
 export class CockpitApp {
   state: CockpitState;
   private statusLine: string | null = null;
   private stopped = false;
+  private readonly autoRefreshMs: number;
 
   constructor(
     private readonly deps: EffectDeps,
     private readonly env: CockpitEnv,
     initialState: CockpitState,
     private readonly host: CockpitHost,
+    options: CockpitAppOptions = {},
   ) {
     this.state = initialState;
+    this.autoRefreshMs = options.autoRefreshMs ?? AUTO_REFRESH_MS;
   }
 
   /** The current renderable view (state + transient status line). */
   view(): CockpitView {
-    return renderCockpitView(this.state, { statusLine: this.statusLine });
+    return renderCockpitView(this.state, {
+      statusLine: this.statusLine,
+      ...(this.host.nextKeyOrTick !== undefined
+        ? { autoRefreshMs: this.autoRefreshMs }
+        : {}),
+    });
   }
 
   /** True once the app has been asked to quit. */
@@ -163,7 +180,10 @@ export class CockpitApp {
       this.env.scopeMode,
     );
     if (!result.ok) {
-      this.statusLine = `error: ${result.error.code}: ${result.error.message}`;
+      // An operator-initiated mutation failed: surface it as a dismissible
+      // dialog, not just a footer line (refresh/tick errors stay in the
+      // status line — a modal would reopen on every interval).
+      this.reportOperationError(result.error);
       return { quit: false, effect, error: result.error };
     }
     // Reflect the mutation by refreshing the snapshot.
@@ -185,17 +205,52 @@ export class CockpitApp {
   }
 
   /**
+   * Surface a failed operator operation as the error modal. If another modal
+   * is already open (e.g. a send draft) the reducer refuses to clobber it, and
+   * the error degrades to the status line instead.
+   */
+  reportOperationError(error: OperationError): void {
+    const { state } = dispatchCockpit(this.state, {
+      type: "showError",
+      code: error.code,
+      message: error.message,
+    });
+    this.state = state;
+    this.statusLine =
+      state.modal.kind === "error"
+        ? null
+        : `error: ${error.code}: ${error.message}`;
+  }
+
+  /**
    * Run the interactive loop: draw, read a key, dispatch, until quit or EOF.
-   * Always restores the terminal via `host.close()` on exit.
+   * While no modal is open and the host supports it, key reads time out every
+   * {@link AUTO_REFRESH_MS} and the snapshot is refreshed (design "Refresh
+   * model"); an open send/confirm/help modal pauses the timer by falling back
+   * to a plain blocking key read. Always restores the terminal via
+   * `host.close()` on exit.
    */
   async run(): Promise<void> {
     try {
       while (!this.stopped) {
         this.host.draw(this.view());
-        const event = await this.host.nextKey();
+        const idle = this.state.modal.kind === "none";
+        const event =
+          idle && this.host.nextKeyOrTick !== undefined
+            ? await this.host.nextKeyOrTick(this.autoRefreshMs)
+            : await this.host.nextKey();
         if (event === null) {
           this.stopped = true;
           break;
+        }
+        if (event === "tick") {
+          // A quiet auto-refresh: fold in the new snapshot (and any activity),
+          // surface errors, but do not overwrite the last status with noise.
+          const error = await this.refresh();
+          if (error !== undefined) {
+            this.statusLine = `error: ${error.code}: ${error.message}`;
+          }
+          continue;
         }
         await this.handleKey(event);
       }
@@ -236,7 +291,10 @@ function outcomeStatus(outcome: CockpitEffectOutcome): string {
 export async function runCockpit(
   deps: EffectDeps,
   host: CockpitHost,
-  options: { cwd: string; scopeMode: CockpitEnv["scopeMode"] },
+  options: {
+    cwd: string;
+    scopeMode: CockpitEnv["scopeMode"];
+  } & CockpitAppOptions,
 ): Promise<{ ok: true } | { ok: false; error: OperationError }> {
   const envResult = await resolveCockpitEnv(
     deps,
@@ -255,7 +313,15 @@ export async function runCockpit(
     return { ok: false, error: snapshot.error };
   }
   const state = createCockpitState(envResult.value, snapshot.value);
-  const app = new CockpitApp(deps, envResult.value, state, host);
+  const app = new CockpitApp(
+    deps,
+    envResult.value,
+    state,
+    host,
+    options.autoRefreshMs !== undefined
+      ? { autoRefreshMs: options.autoRefreshMs }
+      : {},
+  );
   await app.run();
   return { ok: true };
 }

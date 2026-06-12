@@ -212,6 +212,37 @@ describe("keybar and modals", () => {
     expect(modal?.lines.join("\n")).toContain("attach");
   });
 
+  test("error modal projects the failure with a dismiss hint", () => {
+    let state = createCockpitState(makeEnv(), snapshot([makeSession()]));
+    state = dispatchCockpit(state, {
+      type: "showError",
+      code: "session_not_found",
+      message: "line one\nline two",
+    }).state;
+    const modal = renderCockpitView(state).modal;
+    expect(modal?.kind).toBe("error");
+    expect(modal?.title).toBe("Operation failed");
+    expect(modal?.lines.join("\n")).toContain("session_not_found");
+    expect(modal?.lines).toContain("line one");
+    expect(modal?.lines).toContain("line two");
+    expect(modal?.hint).toContain("Esc");
+  });
+
+  test("error modal caps a long message to a small overlay", () => {
+    const message = Array.from({ length: 30 }, (_, i) => `line ${i}`).join(
+      "\n",
+    );
+    let state = createCockpitState(makeEnv(), snapshot([makeSession()]));
+    state = dispatchCockpit(state, {
+      type: "showError",
+      code: "timeout",
+      message,
+    }).state;
+    const modal = renderCockpitView(state).modal;
+    expect(modal?.lines.length).toBeLessThanOrEqual(10);
+    expect(modal?.lines.at(-1)).toBe("…");
+  });
+
   test("statusLine is passed through", () => {
     const state = createCockpitState(makeEnv(), snapshot([makeSession()]));
     expect(renderCockpitView(state, { statusLine: "done" }).statusLine).toBe(

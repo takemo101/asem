@@ -40,7 +40,7 @@ function byCreatedThenId(a: Message, b: Message): number {
 }
 
 /** `HH:MM` from a stored ISO timestamp, read positionally to avoid tz math. */
-function timeLabel(createdAt: string): string {
+export function timeLabel(createdAt: string): string {
   const time = createdAt.slice(11, 16);
   return /^\d{2}:\d{2}$/.test(time) ? time : createdAt;
 }

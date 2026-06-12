@@ -13,17 +13,30 @@ import {
   operationError,
 } from "@asem/core";
 import type { OpsDeps } from "@asem/ops";
-import { AnsiCockpitHost, type CockpitScopeMode, runCockpit } from "@asem/tui";
+import {
+  AnsiCockpitHost,
+  type CockpitHost,
+  type CockpitScopeMode,
+  runCockpit,
+} from "@asem/tui";
 import type { CliIo } from "./io.ts";
 import { renderError } from "./render.ts";
 
-/** Parse `asem tui` flags into a scope mode (defaults to `worktree`). */
+/**
+ * Parse `asem tui` flags into a scope mode. The cockpit defaults to the
+ * workspace-wide view (ADR 0004); `--scope worktree` keeps the current-worktree
+ * focus. Only the human TUI broadens scope — normal CLI/MCP operations remain
+ * worktree-isolated.
+ */
 export function parseTuiScope(
   args: readonly string[],
 ): OperationResult<CockpitScopeMode> {
-  let scope: CockpitScopeMode = "worktree";
+  let scope: CockpitScopeMode = "workspace";
   for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i]!;
+    const arg = args[i];
+    if (arg === undefined) {
+      break;
+    }
     const eq = arg.indexOf("=");
     const name = eq >= 0 ? arg.slice(2, eq) : arg.slice(2);
     if (!arg.startsWith("--") || name !== "scope") {
@@ -57,9 +70,30 @@ export function parseTuiScope(
 }
 
 /**
- * Run `asem tui`: parse the scope, open the cockpit against an ANSI terminal
- * host, and render any structured error to stderr. Returns a process exit code
- * (0 ok, 2 bad flags, 1 operation error).
+ * Build the cockpit's terminal host. The OpenTUI/React renderer is the normal
+ * `asem tui` host (design "Renderer"); the built-in ANSI host remains the
+ * fallback for non-TTY stdout, `ASEM_TUI_RENDERER=ansi`, or an OpenTUI load
+ * failure. The OpenTUI module is loaded lazily through the `@asem/tui/opentui`
+ * subpath so non-TUI surfaces (MCP, plain CLI) never pull it in.
+ */
+async function buildHost(): Promise<CockpitHost> {
+  const wantOpenTui =
+    process.stdout.isTTY === true && process.env.ASEM_TUI_RENDERER !== "ansi";
+  if (!wantOpenTui) {
+    return new AnsiCockpitHost();
+  }
+  try {
+    const opentui = await import("@asem/tui/opentui");
+    return new opentui.OpenTuiCockpitHost();
+  } catch {
+    return new AnsiCockpitHost();
+  }
+}
+
+/**
+ * Run `asem tui`: parse the scope, open the cockpit against a terminal host
+ * (OpenTUI when available, ANSI fallback), and render any structured error to
+ * stderr. Returns a process exit code (0 ok, 2 bad flags, 1 operation error).
  */
 export async function runTuiCommand(opts: {
   args: readonly string[];
@@ -71,7 +105,7 @@ export async function runTuiCommand(opts: {
   if (!scope.ok) {
     return fail(opts.io, scope.error, 2);
   }
-  const host = new AnsiCockpitHost();
+  const host = await buildHost();
   const result = await runCockpit(opts.deps, host, {
     cwd: opts.cwd,
     scopeMode: scope.value,

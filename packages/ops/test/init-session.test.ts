@@ -13,6 +13,7 @@ import { expectErr, expectOk, makeSession, scopeA } from "./helpers.ts";
 
 const CTX = { cwd: scopeA.worktreeRoot };
 const MUX_REF = { workspace: "w1", tab: "t1", pane: "p1" };
+const BORROWED_MUX_REF = { ...MUX_REF, asem_mux_owned: "false" };
 
 /** Build a deps bundle keeping typed references to the inspectable fakes. */
 function deps(overrides = {}) {
@@ -41,18 +42,29 @@ describe("initSession", () => {
     expect(session.workspaceId).toBe(scopeA.workspaceId);
     expect(session.worktreeRoot).toBe(scopeA.worktreeRoot);
     expect(session.status).toBe("running");
-    expect(session.muxRef).toEqual(MUX_REF);
+    expect(session.muxRef).toEqual(BORROWED_MUX_REF);
 
     // The Session is persisted in scope.
     const store = d.store as FakeStore;
     expect(store.sessions).toHaveLength(1);
     expect(store.sessions[0]!.id).toBe(session.id);
+    expect(store.sessions[0]!.muxRef).toEqual(BORROWED_MUX_REF);
 
     // The raw token is returned, but only the hash is persisted (principle 8).
     expect(token.length).toBeGreaterThan(0);
     expect(session.tokenHash).not.toBe(token);
     expect(session.tokenHash).toBe(hashToken(token));
     expect(verifyToken(token, session.tokenHash)).toBe(true);
+  });
+
+  test("marks init-session mux refs as borrowed so close never owns the current pane", async () => {
+    const d = deps();
+    const { session } = expectOk(
+      await initSession(d, { name: "s1", muxRef: MUX_REF }, CTX),
+    );
+
+    expect(session.muxRef).toMatchObject(MUX_REF);
+    expect(session.muxRef.asem_mux_owned).toBe("false");
   });
 
   test("uses config defaults for agent and mux when not provided", async () => {

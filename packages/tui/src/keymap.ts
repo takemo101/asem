@@ -78,6 +78,23 @@ function confirmModalAction(event: KeyEvent): CockpitAction | null {
   return null;
 }
 
+/**
+ * Map a key press to an action while the error dialog is open. Only dismissal
+ * is meaningful: Esc, Enter, and `q` close it (so a reflexive `q` never quits
+ * the cockpit out from under an unread error); everything else is inert.
+ */
+function errorModalAction(event: KeyEvent): CockpitAction | null {
+  if (
+    event.key === "escape" ||
+    event.key === "return" ||
+    event.key === "enter" ||
+    event.key === "q"
+  ) {
+    return { type: "cancelModal" };
+  }
+  return null;
+}
+
 /** Map a key press to an action while the help overlay is open. */
 function helpModalAction(event: KeyEvent): CockpitAction | null {
   if (event.key === "escape" || event.key === "?" || event.key === "q") {
@@ -138,6 +155,8 @@ export function keyToAction(
       return confirmModalAction(event);
     case "help":
       return helpModalAction(event);
+    case "error":
+      return errorModalAction(event);
     case "none":
       return normalAction(event);
     default: {

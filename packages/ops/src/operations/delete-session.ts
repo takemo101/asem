@@ -77,12 +77,16 @@ export async function deleteSession(
 
   // Auth: MCP/agent-origin calls must verify the current Session. Human
   // local-trust calls keep the previous behavior: if a pointer is present,
-  // verify it; if none is present, delete under local trust.
-  const ref = await deps.currentSessionResolver.resolve(scope);
-  if (ctx.origin === "agent" || ref !== null) {
-    const auth = await authenticateCurrentSession(deps, scope);
-    if (!auth.ok) {
-      return auth;
+  // verify it; if none is present, delete under local trust. An explicit
+  // operator surface (TUI) forces local trust and must not be blocked by a
+  // stale current-session pointer in the target scope.
+  if (ctx.origin !== "operator") {
+    const ref = await deps.currentSessionResolver.resolve(scope);
+    if (ctx.origin === "agent" || ref !== null) {
+      const auth = await authenticateCurrentSession(deps, scope);
+      if (!auth.ok) {
+        return auth;
+      }
     }
   }
 

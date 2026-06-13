@@ -214,7 +214,10 @@ export async function executeCockpitEffect(
         : result;
     }
     case "close": {
-      const result = await closeSession(deps, { id: effect.sessionId }, ctx);
+      const result = await closeSession(deps, { id: effect.sessionId }, {
+        ...ctx,
+        origin: "operator",
+      });
       return result.ok
         ? { ok: true, value: { kind: "closed", session: result.value.session } }
         : result;
@@ -223,7 +226,7 @@ export async function executeCockpitEffect(
       const result = await deleteSession(
         deps,
         { id: effect.sessionId, force: true },
-        ctx,
+        { ...ctx, origin: "operator" },
       );
       return result.ok
         ? {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type CheckboxChoice,
   type CheckboxPrompt,
   type ConfirmPrompt,
   type InitWizardPrompts,
@@ -8,6 +9,21 @@ import {
   type SelectPrompt,
   type TextPrompt,
 } from "../src/init-wizard.ts";
+
+function requiredAt<T>(items: readonly T[], index: number, label: string): T {
+  const item = items[index];
+  if (item === undefined) throw new Error(`missing ${label} at ${index}`);
+  return item;
+}
+
+function requiredChoice<T extends string>(
+  choices: readonly CheckboxChoice<T>[],
+  value: T,
+): CheckboxChoice<T> {
+  const choice = choices.find((candidate) => candidate.value === value);
+  if (choice === undefined) throw new Error(`missing choice ${value}`);
+  return choice;
+}
 
 class FakePrompts implements InitWizardPrompts {
   readonly inputs: TextPrompt[] = [];
@@ -40,9 +56,10 @@ class FakePrompts implements InitWizardPrompts {
   async select<T extends string>(prompt: SelectPrompt<T>): Promise<T> {
     this.selects.push(prompt as SelectPrompt<string>);
     if (this.cancelOn === "select") throw new PromptCancelledError();
+    const first = requiredAt(prompt.choices, 0, "select choice");
     return (this.selectAnswers.shift() ??
       prompt.defaultValue ??
-      prompt.choices[0]!.value) as T;
+      first.value) as T;
   }
 
   async confirm(prompt: ConfirmPrompt): Promise<boolean> {
@@ -73,17 +90,18 @@ describe("runInitWizard", () => {
       selectedMuxes: ["herdr"],
     });
 
-    const [agentCheckbox, muxCheckbox] = prompts.checkboxes;
-    expect(agentCheckbox!.message).toContain("Agent Templates");
-    expect(agentCheckbox!.required).toBe(true);
-    const checkedAgents = agentCheckbox!.choices
+    const agentCheckbox = requiredAt(prompts.checkboxes, 0, "checkbox prompt");
+    const muxCheckbox = requiredAt(prompts.checkboxes, 1, "checkbox prompt");
+    expect(agentCheckbox.message).toContain("Agent Templates");
+    expect(agentCheckbox.required).toBe(true);
+    const checkedAgents = agentCheckbox.choices
       .filter((c) => c.checked)
       .map((c) => c.value);
     expect(checkedAgents).toEqual(["claude"]);
 
-    expect(muxCheckbox!.message).toContain("Multiplexer Templates");
-    expect(muxCheckbox!.required).toBe(true);
-    const checkedMuxes = muxCheckbox!.choices
+    expect(muxCheckbox.message).toContain("Multiplexer Templates");
+    expect(muxCheckbox.required).toBe(true);
+    const checkedMuxes = muxCheckbox.choices
       .filter((c) => c.checked)
       .map((c) => c.value);
     expect(checkedMuxes).toEqual(["herdr"]);
@@ -128,13 +146,14 @@ describe("runInitWizard", () => {
       selectedMuxes: ["herdr", "tmux"],
     });
 
-    const [agentSelect, muxSelect] = prompts.selects;
+    const agentSelect = requiredAt(prompts.selects, 0, "select prompt");
+    const muxSelect = requiredAt(prompts.selects, 1, "select prompt");
     // default select chooses only from the selected set, in ascending order
-    expect(agentSelect!.choices.map((c) => c.value)).toEqual(["claude", "pi"]);
+    expect(agentSelect.choices.map((c) => c.value)).toEqual(["claude", "pi"]);
     // existing default (claude) present -> highlighted initially
-    expect(agentSelect!.defaultValue).toBe("claude");
-    expect(muxSelect!.choices.map((c) => c.value)).toEqual(["herdr", "tmux"]);
-    expect(muxSelect!.defaultValue).toBe("herdr");
+    expect(agentSelect.defaultValue).toBe("claude");
+    expect(muxSelect.choices.map((c) => c.value)).toEqual(["herdr", "tmux"]);
+    expect(muxSelect.defaultValue).toBe("herdr");
   });
 
   test("highlights the first ascending template when no existing default selected", async () => {
@@ -148,11 +167,12 @@ describe("runInitWizard", () => {
 
     await runInitWizard({ ...BASE, prompts });
 
-    const [agentSelect, muxSelect] = prompts.selects;
+    const agentSelect = requiredAt(prompts.selects, 0, "select prompt");
+    const muxSelect = requiredAt(prompts.selects, 1, "select prompt");
     // claude not selected -> highlight first ascending (codex)
-    expect(agentSelect!.defaultValue).toBe("codex");
+    expect(agentSelect.defaultValue).toBe("codex");
     // herdr not selected -> highlight first ascending (tmux)
-    expect(muxSelect!.defaultValue).toBe("tmux");
+    expect(muxSelect.defaultValue).toBe("tmux");
   });
 
   test("fixed --agent default is checked+locked and skips the agent default select", async () => {
@@ -170,8 +190,8 @@ describe("runInitWizard", () => {
       defaultMux: "herdr",
     });
 
-    const agentCheckbox = prompts.checkboxes[0]!;
-    const piChoice = agentCheckbox.choices.find((c) => c.value === "pi")!;
+    const agentCheckbox = requiredAt(prompts.checkboxes, 0, "checkbox prompt");
+    const piChoice = requiredChoice(agentCheckbox.choices, "pi");
     expect(piChoice.checked).toBe(true);
     expect(piChoice.disabled).toBe(true);
     expect(piChoice.name).toBe("pi (default)");
@@ -197,8 +217,8 @@ describe("runInitWizard", () => {
       selectedMuxes: ["herdr", "tmux"],
     });
 
-    const muxCheckbox = prompts.checkboxes[1]!;
-    const tmuxChoice = muxCheckbox.choices.find((c) => c.value === "tmux")!;
+    const muxCheckbox = requiredAt(prompts.checkboxes, 1, "checkbox prompt");
+    const tmuxChoice = requiredChoice(muxCheckbox.choices, "tmux");
     expect(tmuxChoice.checked).toBe(true);
     expect(tmuxChoice.disabled).toBe(true);
     expect(tmuxChoice.name).toBe("tmux (default)");
@@ -245,7 +265,7 @@ describe("runInitWizard", () => {
 
     await runInitWizard({ ...BASE, prompts });
 
-    const message = prompts.confirms[0]!.message;
+    const message = requiredAt(prompts.confirms, 0, "confirm prompt").message;
     expect(message).toContain("Workspace: asem");
     expect(message).toContain("Default Agent Template: pi");
     expect(message).toContain("Agent Templates: claude, pi");

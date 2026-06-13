@@ -29,6 +29,12 @@ async function run(argv: string[], deps = makeCliFixture().deps) {
   return { io, code };
 }
 
+function requiredAt<T>(items: readonly T[], index: number, label: string): T {
+  const item = items[index];
+  if (item === undefined) throw new Error(`missing ${label} at ${index}`);
+  return item;
+}
+
 const HERDR_REF = {
   pane_id: "pane-1",
   tab_id: "tab-1",
@@ -437,8 +443,9 @@ describe("runCli session create", () => {
     expect(io.outText()).toContain("running");
     // The operation — not the CLI — persisted the Session.
     expect(store.sessions).toHaveLength(1);
-    expect(store.sessions[0]!.name).toBe("reviewer-1");
-    expect(store.sessions[0]!.parentSessionId).toBeNull();
+    const session = requiredAt(store.sessions, 0, "session");
+    expect(session.name).toBe("reviewer-1");
+    expect(session.parentSessionId).toBeNull();
   });
 
   test("--parent <id> launches under an explicit in-scope parent", async () => {
@@ -627,7 +634,8 @@ describe("runCli session attach", () => {
     expect(commands[0]).toEqual([
       "sh",
       "-c",
-      "herdr --session 'asem' workspace focus 'herdr-workspace-1' >/dev/null && herdr --session 'asem' tab focus 'tab-1' >/dev/null && if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach 'asem'; fi",
+      "herdr --session 'asem' workspace focus 'herdr-workspace-1' >/dev/null && herdr --session 'asem' tab focus 'tab-1' >/dev/null && if [ \"$" +
+        "{HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach 'asem'; fi",
     ]);
   });
 
@@ -654,8 +662,9 @@ describe("runCli session close", () => {
     expect(io.outText()).toContain(s.id);
     expect(io.outText()).toContain("closed");
     // The operation — not the CLI — updated the stored status.
-    expect(store.sessions[0]!.status).toBe("closed");
-    expect(store.sessions[0]!.closedAt).not.toBeNull();
+    const session = requiredAt(store.sessions, 0, "session");
+    expect(session.status).toBe("closed");
+    expect(session.closedAt).not.toBeNull();
   });
 
   test("close of an unknown id surfaces session_not_found (exit 1)", async () => {
@@ -841,7 +850,7 @@ describe("runCli message send", () => {
     expect(io.outText()).toContain("delivered at");
     // The operation — not the CLI — recorded the Message.
     expect(store.messages).toHaveLength(1);
-    expect(store.messages[0]!.body).toBe("ping");
+    expect(requiredAt(store.messages, 0, "message").body).toBe("ping");
   });
 
   test("an unknown target surfaces session_not_found (exit 1)", async () => {
@@ -870,8 +879,9 @@ describe("runCli report parent", () => {
     expect(io.outText()).toContain("report");
     expect(io.outText()).toContain(parent.id);
     expect(store.messages).toHaveLength(1);
-    expect(store.messages[0]!.kind).toBe("report");
-    expect(store.messages[0]!.formattedBody).toContain("[asem report from");
+    const message = requiredAt(store.messages, 0, "message");
+    expect(message.kind).toBe("report");
+    expect(message.formattedBody).toContain("[asem report from");
   });
 
   test("no current Session surfaces current_session_not_found (exit 1)", async () => {

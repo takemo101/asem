@@ -106,7 +106,7 @@ describe("initProject", () => {
     expect(config).toContain(
       'command: "tmux send-keys -t {{pane_id_shell}} {{message_shell}} Enter"',
     );
-    expect(config).toContain("command: \"pi {{prompt_shell}}\"");
+    expect(config).toContain('command: "pi {{prompt_shell}}"');
   });
 
   test("adds all runtime ignore rules to a fresh .gitignore", async () => {

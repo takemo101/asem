@@ -34,8 +34,8 @@ The Init Wizard improves first-time setup without changing asem's domain model. 
 ## Goals
 
 - Add an explicit interactive setup path via `asem init --interactive`.
-- Let a human choose the default Agent and Multiplexer from builtin Templates.
-- Materialize only the selected builtin Agent and Multiplexer Templates into `.asem.yaml` using the existing template schema.
+- Let a human choose the default Agent Template and default Multiplexer Template from builtin Templates.
+- Let a human choose one or more builtin Agent Templates and one or more builtin Multiplexer Templates to materialize into `.asem.yaml` using the existing template schemas.
 - Keep non-interactive `asem init --workspace <id>` working.
 - Allow non-interactive template selection via `--agent <name>` and `--mux <name>`.
 - Keep interactive prompting confined to the CLI surface.
@@ -83,7 +83,12 @@ Rules:
 - Without `--interactive`, init stays non-interactive.
 - In interactive mode, provided flags are treated as already answered and skipped.
 - If `--workspace` is omitted in interactive mode, the wizard proposes the worktree root directory name as the default workspace id.
-- If `--agent` or `--mux` is omitted in interactive mode, the wizard asks the operator to choose from builtin names.
+- Interactive mode asks the operator to choose one or more builtin Agent Templates and one or more builtin Multiplexer Templates to materialize.
+- Interactive mode then asks for the default Agent Template / Multiplexer Template from the selected Template sets, unless a set contains only one Template or the default was preselected by flag.
+- If `--agent` or `--mux` is provided in interactive mode, that value is treated as the fixed default Template for its category. It is shown checked and locked in the corresponding Template checkbox prompt as `<name> (default)`, and additional Templates can still be selected.
+- If `--agent` or `--mux` is omitted in interactive mode, the checkbox initially selects the existing default (`claude` for Agent Templates, `herdr` for Multiplexer Templates). If that default remains selected, the default select initially highlights it; otherwise it highlights the selected Template with the first builtin name in ascending order.
+- Agent Template and Multiplexer Template checkbox prompts require at least one selected Template.
+- If only one Template is selected in a category, that Template becomes the default and the default select prompt is skipped.
 - `--agent` and `--mux` must name known builtin Templates when init needs to materialize them.
 - `--interactive` requires a TTY. In a non-TTY environment, the CLI returns a structured error with guidance to use non-interactive flags.
 
@@ -104,9 +109,11 @@ Before writing a new `.asem.yaml`, the Init Wizard shows a summary:
 
 ```text
 Workspace: my-workspace
-Agent:     pi (template will be materialized)
-Mux:       tmux (template will be materialized)
-Config:    /path/to/worktree/.asem.yaml
+Default Agent Template: pi
+Agent Templates: claude, pi
+Default Multiplexer Template: tmux
+Multiplexer Templates: herdr, tmux
+Config: /path/to/worktree/.asem.yaml
 ```
 
 The operator confirms with yes/no.
@@ -119,7 +126,7 @@ If the operator answers no, presses Ctrl+C, or the prompt is otherwise cancelled
 
 ## Generated configuration
 
-When Agent `pi` and Multiplexer `tmux` are selected, the generated config has this shape. The command values below are examples from the current builtin `tmux` Template; implementation should render whatever the runtime builtin contains at the time.
+When Agent Templates `claude` and `pi` and Multiplexer Templates `herdr` and `tmux` are selected, with `pi` and `tmux` as defaults, the generated config has this shape. The command values below are examples from the current builtin Templates; implementation should render whatever the runtime builtins contain at the time. Materialized Template maps are emitted in builtin-name ascending order, not prompt selection order.
 
 ```yaml
 workspace:
@@ -162,6 +169,8 @@ mux:
 agent:
   default: pi
   templates:
+    claude:
+      command: "claude {{prompt_shell}}"
     pi:
       command: "pi {{prompt_shell}}"
 ```
@@ -171,13 +180,16 @@ The command strings come from `@asem/runtime` builtin Templates. The wizard does
 Materialization rules:
 
 - Use `builtinAgentTemplates` and `builtinMuxTemplates` from `@asem/runtime` as the source of truth.
-- Materialize only the selected Agent and selected Multiplexer.
+- Materialize every selected Agent Template and every selected Multiplexer Template.
+- Always include the default Agent Template and default Multiplexer Template in the materialized maps.
+- Dedupe selected Template names before materialization.
+- Emit materialized Agent and Multiplexer Templates in builtin-name ascending order for deterministic output.
 - Materialized Agent Templates use the current Agent Template schema; prompt-aware commands may include placeholders such as `{{prompt_shell}}` and `{{prompt_path_shell}}`.
 - Parse the selected Agent Template with `agentTemplateSchema` before writing.
 - Parse the selected Multiplexer Template with `muxTemplateSchema` before writing.
 - Write the parsed values using the existing `.asem.yaml` config shape.
-- Keep `agent.default` and `mux.default` equal to the selected template names.
-- Keep project-local template names equal to the selected builtin names.
+- Keep `agent.default` and `mux.default` equal to the selected default Template names.
+- Keep project-local template names equal to the selected builtin Template names.
 
 The renderer should be deterministic so tests can assert exact output. A small YAML renderer for the known config/template shapes is acceptable; no new YAML stringification dependency is required.
 
@@ -215,7 +227,7 @@ Remains non-interactive. It continues to own the init operation's filesystem sem
 - ensure runtime `.gitignore` rules;
 - avoid overwriting existing config.
 
-The init operation input may grow to include selected Agent/Mux template materialization data, but it must not import or call Inquirer.
+The init operation input may grow to include selected Agent Template / Multiplexer Template materialization data, but it must not import or call Inquirer.
 
 ### `@asem/runtime`
 
@@ -223,7 +235,7 @@ Continues to own builtin Template definitions and template schemas. The wizard u
 
 ### `@asem/core`
 
-Continues to own config schemas and operation contracts. If init inputs are extended for selected Agent/Mux/template materialization, their schemas live here.
+Continues to own config schemas and operation contracts. If init inputs are extended for selected Agent Template / Multiplexer Template materialization, their schemas live here.
 
 ## Error handling
 
@@ -244,13 +256,19 @@ Add or update tests:
   - parses `asem init --workspace ws --agent pi --mux tmux`;
   - rejects malformed/unknown init flags.
 - `packages/cli/test/init-wizard.test.ts`
-  - fake prompt port skips values already provided by flags;
+  - fake prompt port supports checkbox prompts with checked and disabled choices;
   - workspace default is derived from the worktree root basename;
-  - selected builtin Agent/Mux are materialized into deterministic YAML;
+  - Agent Template and Multiplexer Template checkbox prompts require at least one selected Template;
+  - no-flag interactive init starts with `claude` and `herdr` checked;
+  - preselected `--agent` / `--mux` values are fixed defaults, shown checked+locked as `<name> (default)`, while still allowing additional Templates;
+  - a single selected Template skips the corresponding default select;
+  - multiple selected Templates prompt for the default from the selected set;
   - final confirm `false` writes no files and exits successfully;
   - prompt cancellation writes no files and exits successfully.
 - `packages/cli/test/run.test.ts`
-  - non-interactive init can materialize selected templates;
+  - non-interactive init keeps current single Agent Template / single Multiplexer Template materialization behavior;
+  - interactive init materializes every selected Template and writes deterministic YAML without duplicates;
+  - existing-config interactive init does not prompt or rewrite `.asem.yaml`;
   - `--interactive` in non-TTY mode returns guidance rather than hanging.
 - Existing smoke tests
   - `init → init-session → create-session → list/get → send-message → report-parent → message-list → close → delete` still passes.

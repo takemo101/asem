@@ -143,7 +143,11 @@ Follow cuekit's cockpit conventions, adapted to asem vocabulary:
   ephemeral incoming-message badge;
 - right panel with `Messages`, `Detail`, and `Context` tabs;
 - activity strip as a compact sub-section in the right panel;
-- bottom footer with available keys, current status/error, and `auto 3s` state;
+- bottom footer with available keys and `auto 3s` state;
+- renderer-neutral `CockpitNotice` feedback for transient status/error
+  messages;
+- OpenTUI toast notifications for `CockpitNotice` feedback, positioned above
+  the footer;
 - centered modal components for send/confirm/help/error.
 
 Use a small theme module like cuekit's `theme.ts`:
@@ -186,11 +190,52 @@ rule from [ADR 0003](../adr/0003-tui-operator-message-attribution.md).
 
 Operator-initiated mutation failures (`send`, `close`, `delete`) should open a
 dismissible error modal. These are direct responses to a human action and should
-not be hidden in a footer-only status line. Refresh and auto-refresh failures
-remain status-line errors because they may repeat on every interval and should
-not trap the operator in a reopening modal. While the renderer owns the terminal,
-operation logs should not write JSON/prose lines directly to stdout/stderr; the
-cockpit should surface human-relevant status and errors in-band.
+not be hidden in transient notice feedback. Refresh and auto-refresh failures
+remain non-modal `CockpitNotice` errors because they may repeat on every interval
+and should not trap the operator in a reopening modal. While the renderer owns
+the terminal, operation logs should not write JSON/prose lines directly to
+stdout/stderr; the cockpit should surface human-relevant status and errors
+in-band.
+
+### Transient cockpit notices
+
+`CockpitNotice` is renderer-neutral, transient cockpit feedback. It is not a
+Message, Report, Activity item, durable event, or unread/read state. It replaces
+the old string-only `statusLine` projection with a typed view value:
+
+```ts
+type CockpitNotice =
+  | { level: "success"; message: string }
+  | { level: "info"; message: string }
+  | { level: "error"; message: string; code: string };
+```
+
+`CockpitApp` owns the current notice as effect-level transient state and projects
+it through `CockpitView.notice`. Pure reducer state remains focused on Session
+selection, filters, tabs, modals, drafts, and in-memory Activity.
+
+OpenTUI renders notices as toasts through `@opentui-ui/toast`:
+
+- use the package only inside the OpenTUI renderer path;
+- add the toaster above the compact footer, positioned `bottom-right` with a
+  footer-sized bottom offset;
+- use `stackingMode: "single"` so a new notice replaces the previous one;
+- suppress a new toast when it has the same `level`, `message`, and `code` as
+  the immediately previous notice;
+- show `success` and `info` notices for about four seconds;
+- show `error` notices for eight to ten seconds;
+- render error toast title as the human message and description as
+  `code: <code>`;
+- style the toaster with existing OpenTUI theme tokens rather than a distinct
+  external look.
+
+The OpenTUI footer becomes a compact keybar/auto-state footer with no status
+row. The ANSI/string renderer remains a fallback and should render
+`CockpitView.notice` as a footer line, preserving textual feedback without
+pulling in OpenTUI or the toast dependency.
+
+Auto-refresh errors set an error notice. A later successful auto-refresh clears
+that notice rather than leaving stale fallback text or emitting a recovery toast.
 
 ## Suggested package shape
 
@@ -268,7 +313,7 @@ Required tests:
 - new Message produces activity and an ephemeral badge;
 - opening a send/confirm/help/error modal pauses auto-refresh;
 - operator send/close/delete failures open an error modal;
-- refresh and auto-refresh failures stay in the footer status line;
+- refresh and auto-refresh failures stay as non-modal `CockpitNotice` feedback;
 - TUI cross-worktree send remains `from_session_id = null`;
 - OpenTUI components import without pulling into MCP paths;
 - resize/layout smoke: header/footer fixed, main panes do not overlap footer.

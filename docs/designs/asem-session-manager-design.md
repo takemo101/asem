@@ -772,7 +772,8 @@ Context:
 - `s` opens a centered multi-line textarea modal.
 - Enter inserts newline, Ctrl+Enter sends, Esc cancels.
 - Close and delete require confirmation dialogs.
-- Operator-initiated send/close/delete failures open a dismissible error modal. Refresh and auto-refresh failures stay in the footer status line so a transient or repeated refresh error does not reopen a modal every interval.
+- Operator-initiated send/close/delete failures open a dismissible error modal. Refresh and auto-refresh failures stay as non-modal `CockpitNotice` feedback so a transient or repeated refresh error does not reopen a modal every interval.
+- OpenTUI renders `CockpitNotice` feedback as a single toast positioned above the compact footer; ANSI/string fallback rendering may show the same notice as a footer line.
 - Operation logs must not write JSON/prose lines directly into the terminal while the TUI renderer owns the screen; operator-facing errors and status are rendered in-band through the cockpit view.
 
 ## Testing strategy

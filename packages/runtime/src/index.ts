@@ -42,8 +42,8 @@ export {
 } from "./redact/redact.ts";
 export { renderAgentCommand } from "./template/agent-command.ts";
 export {
-  renderAttachCommand,
   type RenderedAttachCommand,
+  renderAttachCommand,
   renderAttachHint,
 } from "./template/attach-hint.ts";
 export {
@@ -67,9 +67,11 @@ export {
 } from "./template/registry.ts";
 // Template schemas & types
 export {
+  AGENT_PROMPT_PLACEHOLDERS,
   type AgentTemplate,
-  agentTemplateSchema,
   type AttachCommandTemplate,
+  agentCommandPlaceholders,
+  agentTemplateSchema,
   attachCommandTemplateSchema,
   type CaptureSource,
   type CaptureSpec,
@@ -81,8 +83,6 @@ export {
   muxTemplateSchema,
   type OnErrorPolicy,
   onErrorPolicySchema,
-  type PromptDelivery,
-  promptDeliverySchema,
   type RunStep,
   runStepSchema,
   type SequenceStep,

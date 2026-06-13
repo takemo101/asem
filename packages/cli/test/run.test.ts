@@ -99,7 +99,7 @@ describe("runCli init", () => {
     expect(config).toContain("default: pi");
     expect(config).toContain("tmux new-session");
     expect(config).toContain("attach_command");
-    expect(config).toContain("command: pi");
+    expect(config).toContain('command: "pi {{prompt_shell}}"');
   });
 
   test("interactive init in non-TTY exits with guidance", async () => {

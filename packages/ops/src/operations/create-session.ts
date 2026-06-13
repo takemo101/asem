@@ -103,11 +103,25 @@ function withLogPath(error: OperationError, logPath: string): OperationError {
  * raw token never leaks through command-line args, pane labels, or shell
  * history — it lives only in this mode-0600 file (design "Launch script
  * standard"). `AS_PROJECT_ROOT` is an optional alias for the worktree root.
+ *
+ * Agent Template `before_agent` / `after_agent` hooks (MIK-034) are literal
+ * shell command lines woven around the Agent process inside this script — never
+ * `{{…}}`-interpolated; they read the exported launch env instead:
+ *
+ * - `before_agent` runs under the script's `set -euo pipefail`, so the first
+ *   failing hook aborts before the Agent command starts (strict).
+ * - `after_agent` runs after the Agent command exits with `set -e` disabled, so
+ *   every after hook is attempted even if an earlier one fails (best-effort),
+ *   with the Agent's exit code captured into `AS_AGENT_EXIT_CODE` and preserved
+ *   as the script's final exit code. It is not guaranteed under a mux forced
+ *   kill/close that terminates the pane before the Agent returns control.
  */
 function buildLaunchScript(params: {
   env: Record<string, string>;
   cwd: string;
   agentCommand: string;
+  beforeAgent: string[];
+  afterAgent: string[];
 }): string {
   const lines = ["#!/usr/bin/env bash", "set -euo pipefail", ""];
   for (const [key, value] of Object.entries(params.env)) {
@@ -115,7 +129,33 @@ function buildLaunchScript(params: {
   }
   lines.push("");
   lines.push(`cd ${shellEscape(params.cwd)}`);
-  lines.push(params.agentCommand);
+  lines.push("");
+
+  // before_agent (strict): runs under set -e, so a failure aborts the script
+  // before the Agent command starts. Lines are inserted verbatim.
+  for (const line of params.beforeAgent) {
+    lines.push(line);
+  }
+  if (params.beforeAgent.length > 0) {
+    lines.push("");
+  }
+
+  if (params.afterAgent.length > 0) {
+    // Capture the Agent exit code and expose it to after hooks, run every after
+    // hook best-effort (set -e disabled), then exit with the preserved code.
+    lines.push("set +e");
+    lines.push(params.agentCommand);
+    lines.push("AS_AGENT_EXIT_CODE=$?");
+    lines.push("export AS_AGENT_EXIT_CODE");
+    for (const line of params.afterAgent) {
+      lines.push(line);
+    }
+    lines.push('exit "$AS_AGENT_EXIT_CODE"');
+  } else {
+    // No after hooks: the Agent command is last, so its exit code is naturally
+    // the script's exit code under set -e.
+    lines.push(params.agentCommand);
+  }
   lines.push("");
   return lines.join("\n");
 }
@@ -303,9 +343,16 @@ export async function createSession(
       AS_WORKTREE_ROOT: scope.worktreeRoot,
       AS_PROJECT_ROOT: scope.worktreeRoot,
       AS_SESSION_TOKEN: token,
+      AS_SESSION_DIR: sessionDir,
+      AS_PROMPT_PATH: promptPath,
+      AS_SESSION_NAME: input.name,
+      AS_AGENT: agent,
+      AS_MUX: mux,
     },
     cwd,
     agentCommand: renderAgentCommand(agentTemplate, promptPath),
+    beforeAgent: agentTemplate.before_agent,
+    afterAgent: agentTemplate.after_agent,
   });
   await deps.fs.writeFileAtomic(launchScriptPath, launchScript, {
     mode: TOKEN_FILE_MODE,

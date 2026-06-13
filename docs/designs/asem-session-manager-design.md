@@ -366,7 +366,9 @@ Agent templates contain:
 ```yaml
 command: "... {{prompt_shell}} ..."
 paste_prompt: false
-before_paste: [] # optional; only valid when paste_prompt is true
+before_paste: []  # optional; only valid when paste_prompt is true
+before_agent: []  # optional launch.sh hook lines run before the Agent command
+after_agent: []   # optional launch.sh hook lines run after the Agent command exits
 ```
 
 Prompt handling:
@@ -382,6 +384,16 @@ Prompt handling:
 - `paste_prompt: true` is mutually exclusive with prompt placeholders in `command`.
 - A command with no prompt placeholder and no `paste_prompt` is allowed. In that case the prompt is still saved to `prompt.md`, but asem does not pass it to the Agent unless the command/wrapper reads it itself.
 - The previous `prompt_delivery` field is removed; see [ADR 0005](../adr/0005-agent-prompt-delivery-uses-command-templates.md).
+
+Agent launch hooks (`before_agent` / `after_agent`):
+
+- They are arrays of literal shell command lines woven into the generated mode-`0600` `launch.sh` around the Agent process, not run by the outer `TemplateRunner`. They share the Agent's `cwd` and exported launch env.
+- No `{{...}}` interpolation happens inside hook lines; hooks read launch env vars (below) instead.
+- `before_agent` is strict: it runs under the script's `set -euo pipefail`, so the first failing hook aborts before the Agent command starts.
+- `after_agent` is best-effort: it runs after the Agent command exits with `set -e` disabled, so every after hook is attempted even if an earlier one fails. The Agent command's exit code is captured into `AS_AGENT_EXIT_CODE` and preserved as the script's final exit code. `after_agent` is not guaranteed under a mux forced kill/close that terminates the pane before the Agent returns control.
+- Hook stdout/stderr goes to the same pane as normal shell output.
+- These differ from `before_paste`: `before_paste` is a Command Sequence run by the operation outside `launch.sh` after the Agent starts and before a mux prompt paste, while `before_agent` / `after_agent` are literal shell lines inside `launch.sh` around the Agent process itself.
+- Empty hooks default to `[]`; generated/materialized `.asem.yaml` omits empty `before_agent` / `after_agent` fields.
 
 Initial builtin agent templates:
 
@@ -412,9 +424,14 @@ AS_WORKSPACE_ID=...
 AS_WORKTREE_ROOT=...
 AS_PROJECT_ROOT=...
 AS_SESSION_TOKEN=...
+AS_SESSION_DIR=...
+AS_PROMPT_PATH=...
+AS_SESSION_NAME=...
+AS_AGENT=...
+AS_MUX=...
 ```
 
-`AS_PROJECT_ROOT` is an optional alias for cwd or worktree root if useful. The DB stores only `token_hash`.
+`AS_PROJECT_ROOT` is an optional alias for cwd or worktree root if useful. `AS_SESSION_DIR`, `AS_PROMPT_PATH`, `AS_SESSION_NAME`, `AS_AGENT`, and `AS_MUX` are exported so Agent launch hooks (`before_agent` / `after_agent`) can read them. During `after_agent`, the launch script additionally exposes `AS_AGENT_EXIT_CODE`, the Agent command's exit code — this is hook-local process context, not a durable Session outcome. The DB stores only `token_hash`.
 
 ## Operation model
 

@@ -34,9 +34,11 @@ describe("createTemplateRegistry", () => {
     const registry = createTemplateRegistry();
     const claude = registry.getAgentTemplate("claude");
     expect(claude).toEqual({
-      command: "claude",
-      prompt_delivery: "arg",
-      after_start: [],
+      command: "claude {{prompt_shell}}",
+      paste_prompt: false,
+      before_paste: [],
+      before_agent: [],
+      after_agent: [],
     });
   });
 
@@ -78,10 +80,12 @@ describe("createTemplateRegistry", () => {
   test("project-local templates override builtins of the same name", () => {
     const registry = createTemplateRegistry({
       agentTemplates: {
-        claude: { command: "claude-custom", prompt_delivery: "stdin" },
+        claude: { command: "claude-custom < {{prompt_path_shell}}" },
       },
     });
-    expect(registry.getAgentTemplate("claude")?.command).toBe("claude-custom");
+    expect(registry.getAgentTemplate("claude")?.command).toBe(
+      "claude-custom < {{prompt_path_shell}}",
+    );
   });
 
   test("lists builtin plus project-local names", () => {
@@ -113,7 +117,7 @@ describe("createTemplateRegistryFactory", () => {
       configWith({
         mux: { custom: { send: [{ type: "run", command: "send-it" }] } },
         agent: {
-          claude: { command: "claude-custom", prompt_delivery: "stdin" },
+          claude: { command: "claude-custom {{prompt_shell}}" },
         },
       }),
     );
@@ -122,7 +126,7 @@ describe("createTemplateRegistryFactory", () => {
     // ...overrides a builtin of the same name (factory returns the `TemplateRegistry`
     // port, whose values are opaque to callers that re-parse them)...
     expect(agentCommand(registry.getAgentTemplate("claude"))).toBe(
-      "claude-custom",
+      "claude-custom {{prompt_shell}}",
     );
     // ...and builtins not overridden remain available.
     expect(registry.getMuxTemplate("herdr")).toBeDefined();
@@ -132,7 +136,9 @@ describe("createTemplateRegistryFactory", () => {
     const factory = createTemplateRegistryFactory();
     const registry = factory.forConfig(configWith());
     expect(registry.getMuxTemplate("herdr")).toBeDefined();
-    expect(agentCommand(registry.getAgentTemplate("claude"))).toBe("claude");
+    expect(agentCommand(registry.getAgentTemplate("claude"))).toBe(
+      "claude {{prompt_shell}}",
+    );
     expect(registry.getMuxTemplate("nope")).toBeUndefined();
   });
 });

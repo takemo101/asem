@@ -43,29 +43,29 @@ describe.skipIf(!INTEGRATION)("builtin agent integration (opt-in)", () => {
     builtin(name).command.split(/\s+/)[0] as string;
 
   describe.skipIf(!has("claude"))("claude", () => {
-    test("--help documents the positional prompt the arg builtin uses", () => {
-      expect(builtin("claude").prompt_delivery).toBe("arg");
+    test("--help documents the positional prompt the command seeds", () => {
+      expect(builtin("claude").command).toContain("{{prompt_shell}}");
       expect(help(binaryOf("claude")).toLowerCase()).toContain("prompt");
     });
   });
 
   describe.skipIf(!has("codex"))("codex", () => {
-    test("--help documents the positional PROMPT the arg builtin uses", () => {
-      expect(builtin("codex").prompt_delivery).toBe("arg");
+    test("--help documents the positional PROMPT the command seeds", () => {
+      expect(builtin("codex").command).toContain("{{prompt_shell}}");
       expect(help(binaryOf("codex")).toUpperCase()).toContain("PROMPT");
     });
   });
 
   describe.skipIf(!has("pi"))("pi", () => {
-    test("--help documents positional messages the arg builtin uses", () => {
-      expect(builtin("pi").prompt_delivery).toBe("arg");
+    test("--help documents positional messages the command seeds", () => {
+      expect(builtin("pi").command).toContain("{{prompt_shell}}");
       expect(help(binaryOf("pi")).toLowerCase()).toContain("messages");
     });
   });
 
   describe.skipIf(!has("gemini"))("gemini", () => {
-    test("--help documents the positional query the arg builtin uses", () => {
-      expect(builtin("gemini").prompt_delivery).toBe("arg");
+    test("--help documents the positional query the command seeds", () => {
+      expect(builtin("gemini").command).toContain("{{prompt_shell}}");
       expect(help(binaryOf("gemini")).toLowerCase()).toContain("interactive");
     });
   });
@@ -73,14 +73,14 @@ describe.skipIf(!INTEGRATION)("builtin agent integration (opt-in)", () => {
   describe.skipIf(!has("agy"))("agy", () => {
     test("--help documents the --prompt-interactive flag the command bakes in", () => {
       const template = builtin("agy");
-      expect(template.command).toBe("agy -i");
+      expect(template.command).toBe("agy -i {{prompt_shell}}");
       expect(help("agy")).toContain("prompt-interactive");
     });
   });
 
   describe.skipIf(!has("opencode"))("opencode", () => {
     test("the TUI default has no initial-prompt arg, so paste is used", () => {
-      expect(builtin("opencode").prompt_delivery).toBe("paste");
+      expect(builtin("opencode").paste_prompt).toBe(true);
       // `run` is the non-interactive message form we deliberately avoid; the
       // default `opencode` invocation starts the interactive TUI.
       expect(help("opencode").toLowerCase()).toContain("tui");

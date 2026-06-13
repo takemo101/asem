@@ -133,8 +133,124 @@ describe("createSession — happy path", () => {
     );
     expect(script).toContain(`export AS_PROJECT_ROOT='${scopeA.worktreeRoot}'`);
     expect(script).toContain(`export AS_SESSION_TOKEN='${FIRST_TOKEN}'`);
-    // Agent (claude, prompt_delivery=arg) reads the prompt file as its argument.
+    // MIK-034 launch env available to hooks.
+    expect(script).toContain(`export AS_SESSION_DIR='${SESSION_DIR}'`);
+    expect(script).toContain(`export AS_PROMPT_PATH='${PROMPT_PATH}'`);
+    expect(script).toContain("export AS_SESSION_NAME='reviewer-1'");
+    expect(script).toContain("export AS_AGENT='claude'");
+    expect(script).toContain("export AS_MUX='herdr'");
+    // Agent (claude) reads the prompt file via {{prompt_shell}}.
     expect(script).toContain(`claude "$(cat '${PROMPT_PATH}')"`);
+  });
+});
+
+describe("createSession — launch script hooks (MIK-034)", () => {
+  /** A FakeConfigLoader returning a `found` config carrying given templates. */
+  function configLoaderWith(config: ReturnType<typeof makeConfig>) {
+    return new FakeConfigLoader({
+      kind: "found",
+      config,
+      configPath: `${scopeA.worktreeRoot}/.asem.yaml`,
+    } satisfies ConfigDiscovery);
+  }
+
+  /** A config whose `claude` agent template carries the given hook fields. */
+  function agentConfigWithHooks(hooks: {
+    before_agent?: string[];
+    after_agent?: string[];
+  }) {
+    return makeConfig({
+      agent: {
+        default: "claude",
+        templates: {
+          claude: { command: "claude {{prompt_shell}}", ...hooks },
+        },
+      },
+    });
+  }
+
+  test("no hooks: the launch script runs the agent command with no hook machinery", async () => {
+    const d = deps();
+    expectOk(await createSession(d, ROOT_INPUT, CTX));
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+    expect(script).toContain(`claude "$(cat '${PROMPT_PATH}')"`);
+    // Without after hooks there is no exit-code capture machinery.
+    expect(script).not.toContain("AS_AGENT_EXIT_CODE");
+    expect(script).not.toContain("set +e");
+  });
+
+  test("before_agent lines are inserted before the agent command (strict order)", async () => {
+    const d = {
+      ...deps(),
+      configLoader: configLoaderWith(
+        agentConfigWithHooks({
+          before_agent: ["echo prep-1", "mkdir -p /tmp/work"],
+        }),
+      ),
+    };
+    expectOk(await createSession(d, ROOT_INPUT, CTX));
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+
+    expect(script).toContain("echo prep-1");
+    expect(script).toContain("mkdir -p /tmp/work");
+    // before_agent precedes the agent command; set -euo pipefail (still active)
+    // aborts on the first failure, so the agent never starts.
+    const idxBefore = script.indexOf("echo prep-1");
+    const idxAgent = script.indexOf(`claude "$(cat '${PROMPT_PATH}')"`);
+    expect(idxBefore).toBeGreaterThanOrEqual(0);
+    expect(idxBefore).toBeLessThan(idxAgent);
+    // Strict region runs under set -e, which is on by default — no set +e before
+    // the agent command starts.
+    expect(script.slice(0, idxAgent)).not.toContain("set +e");
+  });
+
+  test("after_agent lines run after the agent exits, best-effort, preserving the exit code", async () => {
+    const d = {
+      ...deps(),
+      configLoader: configLoaderWith(
+        agentConfigWithHooks({
+          after_agent: ["echo cleanup-1", "echo cleanup-2"],
+        }),
+      ),
+    };
+    expectOk(await createSession(d, ROOT_INPUT, CTX));
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+
+    const idxAgent = script.indexOf(`claude "$(cat '${PROMPT_PATH}')"`);
+    const idxCapture = script.indexOf("AS_AGENT_EXIT_CODE=$?");
+    const idxClean1 = script.indexOf("echo cleanup-1");
+    const idxClean2 = script.indexOf("echo cleanup-2");
+    const idxExit = script.indexOf('exit "$AS_AGENT_EXIT_CODE"');
+
+    // Order: agent command → capture exit code → after hooks → exit with it.
+    expect(idxAgent).toBeGreaterThanOrEqual(0);
+    expect(idxAgent).toBeLessThan(idxCapture);
+    expect(idxCapture).toBeLessThan(idxClean1);
+    expect(idxClean1).toBeLessThan(idxClean2);
+    expect(idxClean2).toBeLessThan(idxExit);
+
+    // Best-effort: after hooks run with set -e disabled so an earlier failure
+    // does not skip later after hooks.
+    expect(script).toContain("set +e");
+    // The exit code is exported so after hooks can read AS_AGENT_EXIT_CODE.
+    expect(script).toContain("export AS_AGENT_EXIT_CODE");
+  });
+
+  test("hook lines are literal: no {{...}} interpolation is applied to them", async () => {
+    const d = {
+      ...deps(),
+      configLoader: configLoaderWith(
+        agentConfigWithHooks({
+          before_agent: ['echo "$AS_SESSION_DIR"'],
+          after_agent: ['echo "exit=$AS_AGENT_EXIT_CODE"'],
+        }),
+      ),
+    };
+    expectOk(await createSession(d, ROOT_INPUT, CTX));
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+    // Env-var references survive verbatim (hooks use env, not placeholders).
+    expect(script).toContain('echo "$AS_SESSION_DIR"');
+    expect(script).toContain('echo "exit=$AS_AGENT_EXIT_CODE"');
   });
 });
 
@@ -442,7 +558,7 @@ describe("createSession — project-local templates from .asem.yaml", () => {
       agent: {
         default: "claude",
         templates: {
-          claude: { command: "claude-custom", prompt_delivery: "arg" },
+          claude: { command: "claude-custom {{prompt_shell}}" },
         },
       },
     });

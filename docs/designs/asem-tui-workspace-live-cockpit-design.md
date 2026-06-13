@@ -188,7 +188,9 @@ Operator-initiated mutation failures (`send`, `close`, `delete`) should open a
 dismissible error modal. These are direct responses to a human action and should
 not be hidden in a footer-only status line. Refresh and auto-refresh failures
 remain status-line errors because they may repeat on every interval and should
-not trap the operator in a reopening modal.
+not trap the operator in a reopening modal. While the renderer owns the terminal,
+operation logs should not write JSON/prose lines directly to stdout/stderr; the
+cockpit should surface human-relevant status and errors in-band.
 
 ## Suggested package shape
 

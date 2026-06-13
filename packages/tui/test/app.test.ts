@@ -4,6 +4,7 @@ import {
   FakeCurrentSessionResolver,
   FakeStore,
   makeOpsDeps,
+  MemoryLogger,
 } from "../../ops/src/testing/fakes.ts";
 import type { CockpitSnapshot } from "../src/index.ts";
 import { CockpitApp, createCockpitState, runCockpit } from "../src/index.ts";
@@ -86,6 +87,27 @@ describe("CockpitApp effects", () => {
     await app.dispatch({ type: "requestClose" });
     await app.dispatch({ type: "confirm" });
     expect(store.sessions[0]!.status).toBe("closed");
+  });
+
+  test("close does not emit operation logs into the TUI terminal", async () => {
+    const store = new FakeStore();
+    const logger = new MemoryLogger();
+    store.sessions.push(makeSession({ id: "s1", status: "running" }));
+    const env = makeEnv();
+    const state = createCockpitState(env, snapshot([...store.sessions]));
+    const app = new CockpitApp(
+      makeOpsDeps({ store, logger }),
+      env,
+      state,
+      new FakeHost(),
+    );
+
+    await app.dispatch({ type: "requestClose" });
+    const result = await app.dispatch({ type: "confirm" });
+
+    expect(result.error).toBeUndefined();
+    expect(store.sessions[0]!.status).toBe("closed");
+    expect(logger.entries).toEqual([]);
   });
 
   test("attach leaves to the host with the get_session hint and refreshes", async () => {

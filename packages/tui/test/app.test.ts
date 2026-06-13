@@ -46,6 +46,90 @@ function makeApp(opts: {
 }
 
 describe("CockpitApp effects", () => {
+  test("manual refresh sets an info notice", async () => {
+    const store = new FakeStore();
+    const { app } = makeApp({ store });
+
+    const result = await app.dispatch({ type: "refresh" });
+
+    expect(result.error).toBeUndefined();
+    expect(app.view().notice).toEqual({ level: "info", message: "refreshed" });
+  });
+
+  test("send success sets a success notice", async () => {
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "s1", name: "one" }));
+    const { app } = makeApp({ store });
+
+    await app.dispatch({ type: "openSend" });
+    await app.dispatch({ type: "updateDraft", draft: "ping" });
+    const result = await app.dispatch({ type: "submitSend" });
+
+    expect(result.error).toBeUndefined();
+    expect(app.view().notice).toEqual({
+      level: "success",
+      message: "sent message to s1",
+    });
+  });
+
+  test("a manual refresh success clears a lingering error notice", async () => {
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "s1" }));
+    const { app } = makeApp({ store });
+
+    // Seed an error notice through the non-modal refresh path: an operation
+    // error while a modal is open degrades to a notice rather than a modal.
+    await app.dispatch({ type: "openSend" });
+    await app.dispatch({ type: "updateDraft", draft: "keep" });
+    app.reportOperationError({ code: "temporary", message: "network hiccup" });
+    expect(app.view().notice).toEqual({
+      level: "error",
+      code: "temporary",
+      message: "network hiccup",
+    });
+
+    const result = await app.dispatch({ type: "refresh" });
+
+    expect(result.error).toBeUndefined();
+    expect(app.view().notice).toEqual({ level: "info", message: "refreshed" });
+  });
+
+  test("an auto-refresh error notice is cleared by a later successful tick", async () => {
+    const { FakeConfigLoader, makeConfig } = await import(
+      "../../ops/src/testing/fakes.ts"
+    );
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ id: "s1" }));
+    const env = makeEnv();
+    const state = createCockpitState(env, snapshot([...store.sessions]));
+    const configLoader = new FakeConfigLoader({ kind: "not_found" });
+    const deps = makeOpsDeps({ store, configLoader });
+
+    // First tick fails (config missing) → error notice; the second tick runs
+    // after config is restored, so the refresh succeeds and clears the error.
+    class TogglingHost extends FakeHost {
+      ticks = 0;
+      override nextKeyOrTick(timeoutMs: number) {
+        this.ticks += 1;
+        if (this.ticks === 2) {
+          configLoader.result = {
+            kind: "found",
+            config: makeConfig(),
+            configPath: "/repo/.asem.yaml",
+          };
+        }
+        return super.nextKeyOrTick(timeoutMs);
+      }
+    }
+    const host = new TogglingHost(["tick", "tick", null]);
+    const app = new CockpitApp(deps, env, state, host);
+
+    await app.run();
+
+    const last = host.lastFrame();
+    expect(last?.notice).toBeNull();
+  });
+
   test("send dispatches send_message and refreshes", async () => {
     const store = new FakeStore();
     store.sessions.push(makeSession({ id: "s1", name: "one" }));
@@ -176,7 +260,7 @@ describe("CockpitApp effects", () => {
     expect(view.modal?.kind).toBe("error");
     expect(view.modal?.title).toBe("Operation failed");
     expect(view.modal?.lines.join("\n")).toContain("session_not_found");
-    expect(view.statusLine).toBeNull();
+    expect(view.notice).toBeNull();
   });
 
   test("a failing delete opens the error modal", async () => {
@@ -188,7 +272,7 @@ describe("CockpitApp effects", () => {
     const result = await app.dispatch({ type: "confirm" });
     expect(result.error?.code).toBe("session_not_found");
     expect(app.state.modal.kind).toBe("error");
-    expect(app.view().statusLine).toBeNull();
+    expect(app.view().notice).toBeNull();
   });
 
   test("a failing send opens the error modal", async () => {
@@ -201,7 +285,7 @@ describe("CockpitApp effects", () => {
     const result = await app.dispatch({ type: "submitSend" });
     expect(result.error?.code).toBe("session_not_found");
     expect(app.state.modal.kind).toBe("error");
-    expect(app.view().statusLine).toBeNull();
+    expect(app.view().notice).toBeNull();
   });
 
   test("dismissing the error modal returns to the normal cockpit", async () => {
@@ -225,12 +309,16 @@ describe("CockpitApp effects", () => {
     await app.dispatch({ type: "openSend" });
     await app.dispatch({ type: "updateDraft", draft: "keep" });
     app.reportOperationError({ code: "timeout", message: "boom" });
-    // The draft survives; the error degrades to the status line.
+    // The draft survives; the error degrades to a notice.
     expect(app.state.modal).toEqual({ kind: "send", draft: "keep" });
-    expect(app.view().statusLine).toBe("error: timeout: boom");
+    expect(app.view().notice).toEqual({
+      level: "error",
+      code: "timeout",
+      message: "boom",
+    });
   });
 
-  test("a manual refresh error stays in the status line without a modal", async () => {
+  test("a manual refresh error stays in a notice without a modal", async () => {
     const { FakeConfigLoader } = await import("../../ops/src/testing/fakes.ts");
     const store = new FakeStore();
     store.sessions.push(makeSession({ id: "s1" }));
@@ -245,10 +333,14 @@ describe("CockpitApp effects", () => {
     expect(result.error?.code).toBe("config_not_found");
     expect(app.state.modal.kind).toBe("none");
     expect(app.view().modal).toBeNull();
-    expect(app.view().statusLine).toContain("config_not_found");
+    const notice = app.view().notice;
+    expect(notice?.level).toBe("error");
+    expect(notice?.level === "error" ? notice.code : null).toBe(
+      "config_not_found",
+    );
   });
 
-  test("an auto-refresh tick error stays in the status line without a modal", async () => {
+  test("an auto-refresh tick error stays in a notice without a modal", async () => {
     const { FakeConfigLoader } = await import("../../ops/src/testing/fakes.ts");
     const store = new FakeStore();
     store.sessions.push(makeSession({ id: "s1" }));
@@ -264,7 +356,10 @@ describe("CockpitApp effects", () => {
     // The tick error never opens a modal — it would reopen every interval.
     const last = host.lastFrame();
     expect(last?.modal).toBeNull();
-    expect(last?.statusLine).toContain("config_not_found");
+    expect(last?.notice?.level).toBe("error");
+    expect(last?.notice?.level === "error" ? last.notice.code : null).toBe(
+      "config_not_found",
+    );
   });
 });
 

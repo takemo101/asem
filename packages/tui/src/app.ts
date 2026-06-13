@@ -30,7 +30,11 @@ import type {
   CockpitEnv,
   CockpitState,
 } from "./types.ts";
-import { type CockpitView, renderCockpitView } from "./view.ts";
+import {
+  type CockpitNotice,
+  type CockpitView,
+  renderCockpitView,
+} from "./view.ts";
 import {
   applySnapshot,
   createCockpitState,
@@ -58,7 +62,7 @@ export interface CockpitAppOptions {
 
 export class CockpitApp {
   state: CockpitState;
-  private statusLine: string | null = null;
+  private notice: CockpitNotice | null = null;
   private stopped = false;
   private readonly autoRefreshMs: number;
 
@@ -73,10 +77,10 @@ export class CockpitApp {
     this.autoRefreshMs = options.autoRefreshMs ?? AUTO_REFRESH_MS;
   }
 
-  /** The current renderable view (state + transient status line). */
+  /** The current renderable view (state + transient cockpit notice). */
   view(): CockpitView {
     return renderCockpitView(this.state, {
-      statusLine: this.statusLine,
+      notice: this.notice,
       ...(this.host.nextKeyOrTick !== undefined
         ? { autoRefreshMs: this.autoRefreshMs }
         : {}),
@@ -133,7 +137,7 @@ export class CockpitApp {
     const { state, effect } = dispatchCockpit(this.state, action);
     this.state = state;
     if (effect === undefined) {
-      this.statusLine = null;
+      this.notice = null;
       return { quit: false };
     }
     return this.handleEffect(effect);
@@ -158,16 +162,18 @@ export class CockpitApp {
         await this.host.attach({ session, ...attach });
       }
       const error = await this.refresh();
-      this.setStatus(
+      this.setNotice(
         error,
-        session === null ? null : `attached to ${session.name}`,
+        session === null
+          ? null
+          : { level: "success", message: `attached to ${session.name}` },
       );
       return { quit: false, effect, ...(error ? { error } : {}) };
     }
 
     if (effect.kind === "refresh") {
       const error = await this.refresh();
-      this.setStatus(error, "refreshed");
+      this.setNotice(error, { level: "info", message: "refreshed" });
       return { quit: false, effect, ...(error ? { error } : {}) };
     }
 
@@ -188,7 +194,10 @@ export class CockpitApp {
     }
     // Reflect the mutation by refreshing the snapshot.
     const refreshError = await this.refresh();
-    this.setStatus(refreshError, outcomeStatus(result.value));
+    this.setNotice(refreshError, {
+      level: "success",
+      message: outcomeStatus(result.value),
+    });
     return {
       quit: false,
       effect,
@@ -196,12 +205,14 @@ export class CockpitApp {
     };
   }
 
-  private setStatus(
+  private setNotice(
     error: OperationError | undefined,
-    ok: string | null,
+    ok: { level: "success" | "info"; message: string } | null,
   ): void {
-    this.statusLine =
-      error === undefined ? ok : `error: ${error.code}: ${error.message}`;
+    this.notice =
+      error === undefined
+        ? ok
+        : { level: "error", code: error.code, message: error.message };
   }
 
   /**
@@ -216,10 +227,10 @@ export class CockpitApp {
       message: error.message,
     });
     this.state = state;
-    this.statusLine =
+    this.notice =
       state.modal.kind === "error"
         ? null
-        : `error: ${error.code}: ${error.message}`;
+        : { level: "error", code: error.code, message: error.message };
   }
 
   /**
@@ -245,10 +256,17 @@ export class CockpitApp {
         }
         if (event === "tick") {
           // A quiet auto-refresh: fold in the new snapshot (and any activity),
-          // surface errors, but do not overwrite the last status with noise.
+          // surface errors as a notice, and clear a stale error notice once a
+          // later tick succeeds — but never overwrite success/info with noise.
           const error = await this.refresh();
           if (error !== undefined) {
-            this.statusLine = `error: ${error.code}: ${error.message}`;
+            this.notice = {
+              level: "error",
+              code: error.code,
+              message: error.message,
+            };
+          } else if (this.notice?.level === "error") {
+            this.notice = null;
           }
           continue;
         }

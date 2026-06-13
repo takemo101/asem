@@ -243,10 +243,16 @@ describe("keybar and modals", () => {
     expect(modal?.lines.at(-1)).toBe("…");
   });
 
-  test("statusLine is passed through", () => {
-    const state = createCockpitState(makeEnv(), snapshot([makeSession()]));
-    expect(renderCockpitView(state, { statusLine: "done" }).statusLine).toBe(
-      "done",
-    );
+  test("notice is projected as typed transient feedback", () => {
+    const state = createCockpitState(makeEnv(), snapshot([]));
+    const view = renderCockpitView(state, {
+      notice: { level: "error", message: "boom", code: "timeout" },
+    });
+
+    expect(view.notice).toEqual({
+      level: "error",
+      message: "boom",
+      code: "timeout",
+    });
   });
 });

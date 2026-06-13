@@ -115,6 +115,17 @@ export interface HeaderView {
   autoLabel: string;
 }
 
+/**
+ * Transient, renderer-neutral cockpit feedback. Distinct from a Message,
+ * Report, Activity row, durable event, or unread state — it is the cockpit's
+ * own ephemeral "what just happened" signal, projected per-renderer (OpenTUI
+ * toast, ANSI footer text).
+ */
+export type CockpitNotice =
+  | { level: "success"; message: string }
+  | { level: "info"; message: string }
+  | { level: "error"; message: string; code: string };
+
 /** The full renderer-agnostic screen description. */
 export interface CockpitView {
   header: HeaderView;
@@ -126,8 +137,8 @@ export interface CockpitView {
   activity: ActivityRowView[];
   keybar: KeybarItem[];
   modal: ModalView | null;
-  /** Transient status / error line, or null. */
-  statusLine: string | null;
+  /** Transient renderer-neutral cockpit feedback, or null. */
+  notice: CockpitNotice | null;
 }
 
 /** The bottom keybar affordances (design layout). */
@@ -350,7 +361,7 @@ function modalView(state: CockpitState): ModalView | null {
  * Project the current cockpit state into a renderable {@link CockpitView}.
  *
  * `attachHint` (from `get_session`) is woven into the Detail tab when known;
- * `statusLine` carries a transient host message (e.g. the last operation error)
+ * `notice` carries transient cockpit feedback (e.g. the last operation outcome)
  * for the host to surface; `autoRefreshMs` feeds the header's refresh-state
  * label. All default to absent.
  */
@@ -358,7 +369,7 @@ export function renderCockpitView(
   state: CockpitState,
   options: {
     attachHint?: string | null;
-    statusLine?: string | null;
+    notice?: CockpitNotice | null;
     autoRefreshMs?: number;
   } = {},
 ): CockpitView {
@@ -387,6 +398,6 @@ export function renderCockpitView(
     activity: state.activity.map(activityRow),
     keybar: [...KEYBAR],
     modal: modalView(state),
-    statusLine: options.statusLine ?? null,
+    notice: options.notice ?? null,
   };
 }

@@ -82,6 +82,7 @@ export * from "./types.ts";
 export {
   type ActivityRowView,
   activityRow,
+  type CockpitNotice,
   type CockpitView,
   ERROR_MODAL_MAX_LINES,
   type HeaderView,

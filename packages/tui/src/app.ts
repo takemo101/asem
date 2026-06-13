@@ -187,8 +187,8 @@ export class CockpitApp {
     );
     if (!result.ok) {
       // An operator-initiated mutation failed: surface it as a dismissible
-      // dialog, not just a footer line (refresh/tick errors stay in the
-      // status line — a modal would reopen on every interval).
+      // dialog, not just a transient notice (refresh/tick errors stay as
+      // non-modal notices — a modal would reopen on every interval).
       this.reportOperationError(result.error);
       return { quit: false, effect, error: result.error };
     }
@@ -218,7 +218,7 @@ export class CockpitApp {
   /**
    * Surface a failed operator operation as the error modal. If another modal
    * is already open (e.g. a send draft) the reducer refuses to clobber it, and
-   * the error degrades to the status line instead.
+   * the error degrades to a transient notice instead.
    */
   reportOperationError(error: OperationError): void {
     const { state } = dispatchCockpit(this.state, {
@@ -278,7 +278,7 @@ export class CockpitApp {
   }
 }
 
-/** A human status line for a successful effect outcome. */
+/** A human notice message for a successful effect outcome. */
 function outcomeStatus(outcome: CockpitEffectOutcome): string {
   switch (outcome.kind) {
     case "sent":

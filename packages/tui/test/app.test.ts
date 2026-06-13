@@ -250,7 +250,7 @@ describe("CockpitApp effects", () => {
     expect(host.attaches[0]!.attachCommand).toBeNull();
   });
 
-  test("a failing close opens the error modal instead of the status line", async () => {
+  test("a failing close opens the error modal instead of a notice", async () => {
     const store = new FakeStore();
     store.sessions.push(makeSession({ id: "s1" }));
     const { app } = makeApp({ store });
@@ -305,7 +305,7 @@ describe("CockpitApp effects", () => {
     expect(app.quit).toBe(false);
   });
 
-  test("an operation error while a modal is open falls back to the status line", async () => {
+  test("an operation error while a modal is open falls back to a notice", async () => {
     const store = new FakeStore();
     store.sessions.push(makeSession({ id: "s1" }));
     const { app } = makeApp({ store });

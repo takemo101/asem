@@ -276,12 +276,25 @@ export function dispatchCockpit(
       // only asks for it.
       return withEffect(state, { kind: "refresh" });
     case "attach": {
-      if (state.selectedSessionId === null) {
+      const session = selectedSession(state);
+      if (session === null) {
         return unchanged(state);
+      }
+      if (session.status === "closed") {
+        return {
+          state: {
+            ...state,
+            modal: {
+              kind: "error",
+              code: "session_closed",
+              message: "closed Sessions cannot be attached",
+            },
+          },
+        };
       }
       return withEffect(state, {
         kind: "attach",
-        sessionId: state.selectedSessionId,
+        sessionId: session.id,
       });
     }
     case "openSend": {

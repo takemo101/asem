@@ -507,8 +507,9 @@ with mode `0600` when it contains token material. This path is covered by the `.
 6. Execute mux `create` sequence and capture mux refs.
 7. Generate launch script with env and agent command.
 8. Execute mux `run_in_pane` sequence to start the launch script.
-9. Register Session in SQLite only after successful start.
-10. If any step fails before DB registration, return a structured error, include the temp/session log path, and attempt mux cleanup.
+9. For a `paste_prompt` Agent Template only: run the Agent's `before_paste` sequence, then the mux `send` sequence with `prompt.md`'s contents as the message to paste the prompt into the now-running Agent.
+10. Register Session in SQLite only after successful start (and successful paste, when applicable).
+11. If any step fails before DB registration, return a structured error, include the temp/session log path, and attempt mux cleanup.
 
 This ordering avoids stale failed Session rows.
 

@@ -142,8 +142,11 @@ function buildLaunchScript(params: {
 
   if (params.afterAgent.length > 0) {
     // Capture the Agent exit code and expose it to after hooks, run every after
-    // hook best-effort (set -e disabled), then exit with the preserved code.
-    lines.push("set +e");
+    // hook best-effort, then exit with the preserved code. Disable both errexit
+    // and nounset (`set +eu`): errexit so a failing after hook does not abort
+    // the rest, nounset so an after hook referencing an unset variable cannot
+    // abort later after hooks either. pipefail is harmless with errexit off.
+    lines.push("set +eu");
     lines.push(params.agentCommand);
     lines.push("AS_AGENT_EXIT_CODE=$?");
     lines.push("export AS_AGENT_EXIT_CODE");
@@ -370,6 +373,39 @@ export async function createSession(
       code: runResult.error.code,
     });
     return err(withLogPath(runResult.error, sessionDir));
+  }
+
+  // Step 8b: paste delivery. For `paste_prompt` agents the launch command starts
+  // the Agent bare, so the prompt is delivered here — after the Agent starts and
+  // before the Session row exists — by running the agent template's
+  // `before_paste` setup/wait and then the mux `send` sequence with the prompt
+  // as the message. A failure cleans up the pane and leaves no row, like every
+  // other pre-insert step (principle 5). Non-paste agents skip this entirely.
+  if (agentTemplate.paste_prompt) {
+    const beforePasteResult = await engine.run(agentTemplate.before_paste, {
+      cwd,
+      variables: runVars,
+    });
+    if (!beforePasteResult.ok) {
+      await attemptMuxCleanup(engine, muxTemplate.close, runVars, cwd, deps);
+      deps.logger?.error("agent before_paste failed", {
+        sessionId: id,
+        code: beforePasteResult.error.code,
+      });
+      return err(withLogPath(beforePasteResult.error, sessionDir));
+    }
+    const sendResult = await engine.run(muxTemplate.send, {
+      cwd,
+      variables: { ...runVars, message: input.prompt },
+    });
+    if (!sendResult.ok) {
+      await attemptMuxCleanup(engine, muxTemplate.close, runVars, cwd, deps);
+      deps.logger?.error("paste prompt send failed", {
+        sessionId: id,
+        code: sendResult.error.code,
+      });
+      return err(withLogPath(sendResult.error, sessionDir));
+    }
   }
 
   // Step 9: insert the Session row — only now, after a successful start.

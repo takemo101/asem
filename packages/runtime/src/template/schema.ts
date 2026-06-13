@@ -137,13 +137,22 @@ export const AGENT_PROMPT_PLACEHOLDERS = [
   "prompt_path_shell",
 ] as const;
 
-/** Matches a `{{ name }}` placeholder; the capture group is the bare name. */
-const PLACEHOLDER_RE = /\{\{\s*(\w+)\s*\}\}/g;
+/**
+ * Matches any `{{ … }}` placeholder; the capture group is the raw inner text.
+ * Deliberately broad (not `\w+`) so malformed names like `prompt-shell`,
+ * `prompt_shell | quote`, or an empty `{{}}` are still detected and rejected
+ * rather than silently ignored (which would drop the prompt at run time).
+ */
+const PLACEHOLDER_RE = /\{\{([^}]*)\}\}/g;
 
-/** All `{{…}}` placeholder names referenced by a command string, in order. */
+/**
+ * Inner text of every `{{…}}` placeholder in a command string, trimmed, in
+ * order. The text is returned as-is (e.g. `prompt-shell`, `` for `{{}}`) so the
+ * caller decides which names are valid.
+ */
 export function agentCommandPlaceholders(command: string): string[] {
-  return [...command.matchAll(PLACEHOLDER_RE)].map(
-    (match) => match[1] as string,
+  return [...command.matchAll(PLACEHOLDER_RE)].map((match) =>
+    (match[1] as string).trim(),
   );
 }
 

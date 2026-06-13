@@ -23,8 +23,8 @@
 import { shellEscape } from "@asem/core";
 import type { AgentTemplate } from "./schema.ts";
 
-/** Matches a `{{ name }}` placeholder; the capture group is the bare name. */
-const PLACEHOLDER_RE = /\{\{\s*(\w+)\s*\}\}/g;
+/** Matches any `{{ … }}` placeholder; the capture group is the raw inner text. */
+const PLACEHOLDER_RE = /\{\{([^}]*)\}\}/g;
 
 /**
  * Render the agent invocation line for the launch script (ADR 0005).
@@ -56,7 +56,8 @@ export function renderAgentCommand(
     return template.command;
   }
   const escapedPath = shellEscape(promptPath);
-  return template.command.replace(PLACEHOLDER_RE, (_match, name: string) => {
+  return template.command.replace(PLACEHOLDER_RE, (_match, inner: string) => {
+    const name = inner.trim();
     switch (name) {
       case "prompt_shell":
         return `"$(cat ${escapedPath})"`;

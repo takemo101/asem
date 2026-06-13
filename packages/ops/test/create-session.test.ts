@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { type ConfigDiscovery, type ConfigLoader, hashToken } from "@asem/core";
 import { FakeTemplateRunner } from "@asem/runtime";
 import { createSession, TOKEN_FILE_MODE } from "../src/index.ts";
@@ -251,6 +254,130 @@ describe("createSession — launch script hooks (MIK-034)", () => {
     // Env-var references survive verbatim (hooks use env, not placeholders).
     expect(script).toContain('echo "$AS_SESSION_DIR"');
     expect(script).toContain('echo "exit=$AS_AGENT_EXIT_CODE"');
+  });
+
+  test("after_agent is best-effort under nounset and preserves the agent exit code (shell-level)", async () => {
+    // Run the actually-generated launch.sh through bash. The first after hook
+    // references an unset variable; with the script's `set -euo pipefail` still
+    // applying `nounset`, that would abort before later hooks. The fix disables
+    // nounset for the after region so every after hook is attempted, and the
+    // agent command's exit code remains the script's final exit code.
+    const realCwd = mkdtempSync(join(tmpdir(), "asem-launch-"));
+    const config = makeConfig({
+      agent: {
+        default: "claude",
+        templates: {
+          claude: {
+            // Returns 7 without exiting the launch script itself.
+            command: "sh -c 'exit 7'",
+            after_agent: [
+              'echo "first=$ASEM_DEFINITELY_UNSET_VAR"',
+              "echo second-ran",
+            ],
+          },
+        },
+      },
+    });
+    const d = { ...deps(), configLoader: configLoaderWith(config) };
+    expectOk(await createSession(d, { ...ROOT_INPUT, cwd: realCwd }, CTX));
+
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+    const scriptPath = join(realCwd, "launch.sh");
+    writeFileSync(scriptPath, script);
+    const out = Bun.spawnSync(["bash", scriptPath]);
+    const stdout = out.stdout.toString();
+
+    // The unset-var hook ran (printing an empty value) AND the next hook ran.
+    expect(stdout).toContain("first=");
+    expect(stdout).toContain("second-ran");
+    // The agent command's exit code is preserved as the final exit code.
+    expect(out.exitCode).toBe(7);
+  });
+});
+
+describe("createSession — paste_prompt delivery (MIK-030)", () => {
+  /** A FakeConfigLoader returning a `found` config carrying given templates. */
+  function configLoaderWith(config: ReturnType<typeof makeConfig>) {
+    return new FakeConfigLoader({
+      kind: "found",
+      config,
+      configPath: `${scopeA.worktreeRoot}/.asem.yaml`,
+    } satisfies ConfigDiscovery);
+  }
+
+  /** An opencode-shaped paste agent over the builtin herdr mux. */
+  function pasteAgentConfig() {
+    return makeConfig({
+      agent: {
+        default: "opencode",
+        templates: {
+          opencode: {
+            command: "opencode",
+            paste_prompt: true,
+            before_paste: [{ type: "wait_ms", ms: 750 }],
+          },
+        },
+      },
+    });
+  }
+
+  test("after run_in_pane, runs before_paste then mux send with the prompt as the message", async () => {
+    const d = { ...deps(), configLoader: configLoaderWith(pasteAgentConfig()) };
+    const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
+
+    const commands = d.runner.commands.map((c) => c.command);
+    // [0] herdr session capture, [1] workspace create, [2] run_in_pane (launch
+    // script), then the mux `send` sequence pastes the prompt: [3] idle wait,
+    // [4] pane run with the prompt as the message. before_paste (wait_ms) runs
+    // between [2] and [3] but issues no shell command.
+    expect(commands).toHaveLength(5);
+    expect(commands[2]).toContain("launch.sh");
+    expect(commands[3]).toContain("wait agent-status 'pane-1'");
+    expect(commands[4]).toBe(
+      "herdr --session 'asem' pane run 'pane-1' 'do the thing'",
+    );
+    expect(session.status).toBe("running");
+    // The row is persisted only after a successful paste.
+    expect(d.store.sessions).toHaveLength(1);
+  });
+
+  test("a non-paste agent never runs the mux send sequence during create", async () => {
+    // The default claude builtin delivers via {{prompt_shell}}, so create stops
+    // after run_in_pane — no paste send.
+    const d = deps();
+    expectOk(await createSession(d, ROOT_INPUT, CTX));
+    expect(d.runner.commands).toHaveLength(3);
+  });
+
+  test("a failed paste send attempts mux close and leaves no row", async () => {
+    const runner = new FakeTemplateRunner({
+      commands: [
+        { stdout: "asem" }, // herdr session capture
+        { stdout: HERDR_CREATE_JSON }, // workspace create
+        {}, // run_in_pane ok
+        {}, // send: idle wait (on_error ignore)
+        { exitCode: 1, stderr: "paste boom" }, // send: pane run prompt fails
+        {}, // close ok
+      ],
+    });
+    const d = {
+      ...deps({ runner }),
+      configLoader: configLoaderWith(pasteAgentConfig()),
+    };
+
+    const result = await createSession(d, ROOT_INPUT, CTX);
+    const error = expectErr(result, "sequence_step_failed");
+    expect(error.details?.logPath).toBe(SESSION_DIR);
+
+    // Best-effort cleanup ran the mux `close` sequence with the captured workspace.
+    const closed = d.runner.commands.some((c) =>
+      c.command.includes(
+        "herdr --session 'asem' workspace close 'herdr-workspace-1'",
+      ),
+    );
+    expect(closed).toBe(true);
+    // No stale Session row left after the failed paste.
+    expect(d.store.sessions).toHaveLength(0);
   });
 });
 

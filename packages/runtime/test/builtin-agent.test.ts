@@ -165,6 +165,11 @@ describe("Agent command prompt placeholders", () => {
       command: "agent < {{prompt_path_shell}}",
       expected: `agent < ${PROMPT_SHELL}`,
     },
+    {
+      name: "a placeholder with surrounding whitespace",
+      command: "agent {{ prompt_shell }}",
+      expected: `agent "$(cat ${PROMPT_SHELL})"`,
+    },
   ];
 
   for (const c of cases) {
@@ -225,6 +230,33 @@ describe("Agent template schema validation", () => {
     if (!result.success) {
       expect(JSON.stringify(result.error.issues)).toContain("bogus");
     }
+  });
+
+  test("rejects malformed placeholders the bare-word regex would miss", () => {
+    // A `\w+`-only matcher silently ignores these and would drop the prompt; a
+    // balanced `{{...}}` matcher rejects every non-allowed inner text.
+    for (const command of [
+      "agent {{prompt-shell}}", // hyphen is not a word char
+      "agent {{ prompt_shell | quote }}", // filter syntax
+      "agent {{}}", // empty
+      "agent {{ }}", // whitespace only
+      "agent {{prompt_shell }} {{other.thing}}", // dotted name
+    ]) {
+      const result = agentTemplateSchema.safeParse({ command });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  test("accepts the allowed placeholders even with surrounding whitespace", () => {
+    expect(
+      agentTemplateSchema.safeParse({ command: "agent {{ prompt_shell }}" })
+        .success,
+    ).toBe(true);
+    expect(
+      agentTemplateSchema.safeParse({
+        command: "agent {{prompt_path_shell}}",
+      }).success,
+    ).toBe(true);
   });
 
   test("rejects paste_prompt combined with a prompt placeholder in command", () => {

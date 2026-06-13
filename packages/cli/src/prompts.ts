@@ -1,10 +1,12 @@
 /** Concrete Init Wizard prompt adapter backed by `@inquirer/prompts`. */
 import {
+  checkbox as inquirerCheckbox,
   confirm as inquirerConfirm,
   input as inquirerInput,
   select as inquirerSelect,
 } from "@inquirer/prompts";
 import {
+  type CheckboxPrompt,
   type ConfirmPrompt,
   type InitWizardPrompts,
   PromptCancelledError,
@@ -38,11 +40,31 @@ export class InquirerInitWizardPrompts implements InitWizardPrompts {
     );
   }
 
+  checkbox<T extends string>(prompt: CheckboxPrompt<T>): Promise<T[]> {
+    return mapPromptExit(() =>
+      inquirerCheckbox({
+        message: prompt.message,
+        choices: prompt.choices.map((choice) => ({
+          name: choice.name,
+          value: choice.value,
+          ...(choice.checked !== undefined ? { checked: choice.checked } : {}),
+          ...(choice.disabled !== undefined
+            ? { disabled: choice.disabled }
+            : {}),
+        })),
+        ...(prompt.required !== undefined ? { required: prompt.required } : {}),
+      }),
+    );
+  }
+
   select<T extends string>(prompt: SelectPrompt<T>): Promise<T> {
     return mapPromptExit(() =>
       inquirerSelect({
         message: prompt.message,
         choices: prompt.choices,
+        ...(prompt.defaultValue !== undefined
+          ? { default: prompt.defaultValue }
+          : {}),
       }),
     );
   }

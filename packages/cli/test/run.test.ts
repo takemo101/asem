@@ -129,6 +129,7 @@ describe("runCli init", () => {
       isTty: true,
       prompts: {
         input: async () => "ws-new",
+        checkbox: async <T extends string>() => ["pi"] as T[],
         select: async <T extends string>() => "pi" as T,
         confirm: async () => false,
       },
@@ -137,6 +138,52 @@ describe("runCli init", () => {
     expect(code).toBe(EXIT_OK);
     expect(io.outText()).toContain("cancelled; no files changed");
     expect(await deps.fs.exists(configPathFor(CWD))).toBe(false);
+  });
+
+  test("interactive init materializes every selected template, sorted and deduped", async () => {
+    const { deps } = makeCliFixture();
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["init", "--interactive", "--workspace", "ws-new"],
+      cwd: CWD,
+      deps,
+      io,
+      isTty: true,
+      prompts: {
+        input: async () => "ws-new",
+        checkbox: async <T extends string>(prompt: {
+          message: string;
+        }): Promise<T[]> =>
+          (prompt.message.includes("Agent")
+            ? ["pi", "claude"]
+            : ["tmux", "herdr"]) as T[],
+        select: async <T extends string>(prompt: {
+          message: string;
+        }): Promise<T> =>
+          (prompt.message.includes("Agent") ? "pi" : "tmux") as T,
+        confirm: async () => true,
+      },
+    });
+
+    expect(code).toBe(EXIT_OK);
+    const config = await deps.fs.readFile(configPathFor(CWD));
+    expect(config).toContain("default: pi");
+    expect(config).toContain("default: tmux");
+    // both agent templates present, builtin-name ascending order
+    const claudeAt = config.indexOf("claude:");
+    const piAt = config.indexOf("pi:");
+    expect(claudeAt).toBeGreaterThan(-1);
+    expect(piAt).toBeGreaterThan(-1);
+    expect(claudeAt).toBeLessThan(piAt);
+    // both mux templates present
+    expect(config).toContain("herdr:");
+    expect(config).toContain("tmux:");
+    expect(config).toContain('command: "pi {{prompt_shell}}"');
+    expect(config).toContain('command: "claude {{prompt_shell}}"');
+    // no duplicate template keys
+    expect(config.split("\n").filter((l) => l.trim() === "pi:")).toHaveLength(
+      1,
+    );
   });
 
   test("plain init leaves an existing config untouched without requiring workspace", async () => {
@@ -177,6 +224,9 @@ describe("runCli init", () => {
       isTty: true,
       prompts: {
         input: async () => {
+          throw new Error("should not prompt");
+        },
+        checkbox: async () => {
           throw new Error("should not prompt");
         },
         select: async () => {
@@ -235,6 +285,9 @@ describe("runCli init", () => {
         input: async () => {
           throw new Error("should not prompt");
         },
+        checkbox: async () => {
+          throw new Error("should not prompt");
+        },
         select: async () => {
           throw new Error("should not prompt");
         },
@@ -261,6 +314,9 @@ describe("runCli init", () => {
       isTty: true,
       prompts: {
         input: async () => {
+          throw new Error("should not prompt");
+        },
+        checkbox: async () => {
           throw new Error("should not prompt");
         },
         select: async () => {

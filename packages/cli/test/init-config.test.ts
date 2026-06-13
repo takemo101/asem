@@ -61,4 +61,81 @@ describe("materializeInitConfig", () => {
     expect(result.error.message).toContain("unknown agent template");
     expect(String(result.error.details?.known)).toContain("pi");
   });
+
+  test("materializes multiple selected templates, default included, sorted, deduped", () => {
+    const result = materializeInitConfig({
+      workspaceId: "ws_1",
+      agent: "pi",
+      mux: "tmux",
+      // prompt selection order is intentionally not ascending and has a dupe
+      agents: ["pi", "claude", "pi"],
+      muxes: ["tmux", "herdr", "herdr"],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+
+    expect(result.value.agent.default).toBe("pi");
+    // emitted in builtin-name ascending order, deduped
+    expect(Object.keys(result.value.agent.templates)).toEqual(["claude", "pi"]);
+    expect(result.value.mux.default).toBe("tmux");
+    expect(Object.keys(result.value.mux.templates)).toEqual(["herdr", "tmux"]);
+  });
+
+  test("always includes the default even when omitted from selected arrays", () => {
+    const result = materializeInitConfig({
+      workspaceId: "ws_1",
+      agent: "pi",
+      mux: "tmux",
+      agents: ["claude"],
+      muxes: ["herdr"],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+
+    expect(result.value.agent.default).toBe("pi");
+    expect(Object.keys(result.value.agent.templates)).toEqual(["claude", "pi"]);
+    expect(result.value.mux.default).toBe("tmux");
+    expect(Object.keys(result.value.mux.templates)).toEqual(["herdr", "tmux"]);
+  });
+
+  test("rejects unknown names in selected arrays", () => {
+    const result = materializeInitConfig({
+      workspaceId: "ws_1",
+      agent: "pi",
+      mux: "tmux",
+      agents: ["pi", "not-an-agent"],
+      muxes: ["tmux"],
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected error");
+    expect(result.error.code).toBe("invalid_input");
+    expect(result.error.message).toContain("unknown agent template");
+  });
+
+  test("preserves MIK-034 hook fields across multiple materialized templates", () => {
+    const result = materializeInitConfig({
+      workspaceId: "ws_1",
+      agent: "claude",
+      mux: "herdr",
+      agents: ["claude", "opencode"],
+      muxes: ["herdr"],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+
+    // claude stays minimal (no empty hooks emitted)...
+    expect(result.value.agent.templates.claude).toEqual({
+      command: "claude {{prompt_shell}}",
+    });
+    // ...while opencode keeps its meaningful paste fields.
+    expect(result.value.agent.templates.opencode).toEqual({
+      command: "opencode",
+      paste_prompt: true,
+      before_paste: [{ type: "wait_ms", ms: 750 }],
+    });
+  });
 });

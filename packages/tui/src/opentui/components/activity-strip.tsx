@@ -4,7 +4,7 @@
  * {@link ActivityRowView} — these rows are never durable Messages or Events.
  */
 import type { ReactNode } from "react";
-import type { ActivityRowView } from "../../view.ts";
+import type { ActivityRowView } from "../../view/activity-row.ts";
 import { activityAccent, theme } from "../theme.ts";
 
 export function ActivityStrip(props: {

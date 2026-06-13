@@ -78,19 +78,18 @@ export {
 } from "./tree.ts";
 // View-model types
 export * from "./types.ts";
+// Focused render projections (modal overlay, activity strip)
+export { type ActivityRowView, activityRow } from "./view/activity-row.ts";
+export { ERROR_MODAL_MAX_LINES, type ModalView } from "./view/modal.ts";
 // Render projection (the component layer)
 export {
-  type ActivityRowView,
-  activityRow,
   type CockpitNotice,
   type CockpitView,
-  ERROR_MODAL_MAX_LINES,
   type HeaderView,
   KEYBAR,
   type KeybarItem,
   type LeftPaneView,
   type LeftRow,
-  type ModalView,
   renderCockpitView,
   STATUS_SYMBOLS,
   TAB_TITLES,

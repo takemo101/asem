@@ -7,25 +7,19 @@
  * modal overlay — without touching a terminal. The terminal host paints a
  * {@link CockpitView}; tests assert on it directly, so layout behavior is covered
  * without fragile terminal snapshots (issue test guidance).
+ *
+ * `renderCockpitView` is the composition root; the larger projections live in
+ * focused sibling modules under `./view/` (modal overlay, activity strip, right
+ * pane) so each shape can change in isolation.
  */
 import type { SessionStatus } from "@asem/core";
-import { type ActivityItem, newSessionIds } from "./activity.ts";
-import { timeLabel } from "./messages.ts";
-import type {
-  CockpitState,
-  CockpitTab,
-  MessageRow,
-  SessionTreeNode,
-} from "./types.ts";
+import { newSessionIds } from "./activity.ts";
+import type { CockpitState, CockpitTab, SessionTreeNode } from "./types.ts";
 import { COCKPIT_TABS } from "./types.ts";
-import {
-  badgeFor,
-  contextTab,
-  detailTab,
-  messagesTab,
-  selectedSession,
-  sessionTree,
-} from "./view-model.ts";
+import { type ActivityRowView, activityRow } from "./view/activity-row.ts";
+import { type ModalView, modalView } from "./view/modal.ts";
+import { rightLines } from "./view/right-pane.ts";
+import { badgeFor, sessionTree } from "./view-model.ts";
 
 /** Status symbols for the left pane (design "Status symbols"). */
 export const STATUS_SYMBOLS: Record<SessionStatus, string> = {
@@ -81,27 +75,6 @@ export interface KeybarItem {
   label: string;
 }
 
-/** The active overlay rendered above the panes. */
-export type ModalView =
-  | { kind: "send"; title: string; lines: string[]; hint: string }
-  | { kind: "confirm"; title: string; lines: string[]; hint: string }
-  | { kind: "help"; title: string; lines: string[]; hint: string }
-  | { kind: "error"; title: string; lines: string[]; hint: string };
-
-/** Max body lines of the error dialog; longer messages are elided with `…`. */
-export const ERROR_MODAL_MAX_LINES = 10;
-
-/**
- * One activity-strip row: a time label, a formatted line, and a tone for
- * themed renderers (`add` for appearances, `warn` for status/delivery changes,
- * `remove` for removals, `info` otherwise).
- */
-export interface ActivityRowView {
-  timeLabel: string;
-  text: string;
-  tone: "add" | "remove" | "warn" | "info";
-}
-
 /**
  * One-line header content (design "Visual structure"): product, scope,
  * workspace id, and the auto-refresh state. Pure data — the renderer decides
@@ -155,20 +128,6 @@ export const KEYBAR: readonly KeybarItem[] = [
   { key: "q", label: "quit" },
 ];
 
-/** Help-overlay body: every keybinding the cockpit supports. */
-const HELP_LINES: readonly string[] = [
-  "↑/k, ↓/j   select previous / next Session",
-  "Tab        switch Messages / Detail / Context",
-  "a          attach to the selected Session",
-  "s          send a Message (Ctrl+Enter send, Esc cancel)",
-  "c          close the selected Session",
-  "D          delete the selected Session",
-  "r          refresh",
-  "f          cycle the status filter",
-  "?          toggle this help",
-  "q          quit",
-];
-
 function leftRows(state: CockpitState): LeftRow[] {
   const tree = sessionTree(state);
   const rows: LeftRow[] = [];
@@ -199,162 +158,6 @@ function leftRows(state: CockpitState): LeftRow[] {
     walk(group.nodes);
   }
   return rows;
-}
-
-function messageLine(row: MessageRow): string {
-  const base = `${row.timeLabel} ${row.fromLabel} → ${row.toLabel} [${row.kind}] ${row.message.body}`;
-  return row.hasDeliveryError ? `${base} ! undelivered` : base;
-}
-
-function rightLines(state: CockpitState, attachHint: string | null): string[] {
-  switch (state.activeTab) {
-    case "messages": {
-      const rows = messagesTab(state);
-      return rows.length === 0 ? ["(no messages)"] : rows.map(messageLine);
-    }
-    case "detail": {
-      const detail = detailTab(state, attachHint);
-      if (detail === null) {
-        return ["(no Session selected)"];
-      }
-      return [
-        `id:            ${detail.id}`,
-        `name:          ${detail.name}`,
-        `status:        ${detail.status}`,
-        `agent:         ${detail.agent}`,
-        `mux:           ${detail.mux}`,
-        `parent:        ${detail.parentLabel}`,
-        `cwd:           ${detail.cwd}`,
-        `worktree_root: ${detail.worktreeRoot}`,
-        `session_dir:   ${detail.sessionDir}`,
-        `created_at:    ${detail.createdAt}`,
-        `updated_at:    ${detail.updatedAt}`,
-        `closed_at:     ${detail.closedAt ?? "-"}`,
-        `attach_hint:   ${detail.attachHint ?? "-"}`,
-      ];
-    }
-    case "context": {
-      const ctx = contextTab(state);
-      return [
-        `workspace_id:  ${ctx.workspaceId}`,
-        `worktree_root: ${ctx.worktreeRoot}`,
-        `cwd:           ${ctx.cwd}`,
-        `config:        ${ctx.configPath}`,
-        `default_mux:   ${ctx.defaultMux}`,
-        `default_agent: ${ctx.defaultAgent}`,
-        `mux_ref:       ${ctx.selectedMuxRefSummary ?? "-"}`,
-      ];
-    }
-    default: {
-      const _never: never = state.activeTab;
-      return _never;
-    }
-  }
-}
-
-/** Format one activity item into a themed activity-strip row. */
-export function activityRow(item: ActivityItem): ActivityRowView {
-  switch (item.kind) {
-    case "session_added":
-      return {
-        timeLabel: timeLabel(item.at),
-        text: `+ ${item.worktreeRoot} new Session ${item.sessionName}`,
-        tone: "add",
-      };
-    case "session_removed":
-      return {
-        timeLabel: timeLabel(item.at),
-        text: `- ${item.worktreeRoot} removed Session ${item.sessionName}`,
-        tone: "remove",
-      };
-    case "status_changed":
-      return {
-        timeLabel: timeLabel(item.at),
-        text: `! ${item.worktreeRoot} ${item.sessionName} ${item.from} → ${item.to}`,
-        tone: "warn",
-      };
-    case "message_added":
-      return {
-        timeLabel: timeLabel(item.at),
-        text: `+ ${item.fromLabel} → ${item.toLabel} [${item.messageKind}]`,
-        tone: "add",
-      };
-    case "delivery_changed":
-      return {
-        timeLabel: timeLabel(item.at),
-        text:
-          item.result === "error"
-            ? `! delivery to ${item.toLabel} failed: ${item.deliveryError ?? "unknown"}`
-            : `· delivery to ${item.toLabel} ${item.result}`,
-        tone: item.result === "error" ? "warn" : "info",
-      };
-    default: {
-      const _never: never = item;
-      return _never;
-    }
-  }
-}
-
-function modalView(state: CockpitState): ModalView | null {
-  switch (state.modal.kind) {
-    case "none":
-      return null;
-    case "send": {
-      const selected = selectedSession(state);
-      const target = selected === null ? "Session" : selected.name;
-      return {
-        kind: "send",
-        title: `Send Message to ${target}`,
-        lines: state.modal.draft.split("\n"),
-        hint: "Ctrl+Enter send · Enter newline · Esc cancel",
-      };
-    }
-    case "confirm": {
-      const { action, sessionId } = state.modal;
-      const label =
-        state.snapshot.sessions.find((s) => s.id === sessionId)?.name ??
-        sessionId;
-      const verb = action === "close" ? "Close" : "Delete";
-      return {
-        kind: "confirm",
-        title: `${verb} Session`,
-        lines: [
-          `${verb} ${label}?`,
-          action === "delete"
-            ? "This also removes its related Messages."
-            : "Its pane/process will be closed.",
-        ],
-        hint: "y confirm · n cancel",
-      };
-    }
-    case "help":
-      return {
-        kind: "help",
-        title: "Keybindings",
-        lines: [...HELP_LINES],
-        hint: "? or Esc to close",
-      };
-    case "error": {
-      const lines = [
-        `code: ${state.modal.code}`,
-        ...state.modal.message.split("\n"),
-      ];
-      const capped =
-        lines.length > ERROR_MODAL_MAX_LINES
-          ? [...lines.slice(0, ERROR_MODAL_MAX_LINES - 1), "…"]
-          : lines;
-      return {
-        kind: "error",
-        title: "Operation failed",
-        lines: capped,
-        hint: "Esc to dismiss",
-      };
-    }
-    default: {
-      const _never: never = state.modal;
-      return _never;
-    }
-  }
 }
 
 /**

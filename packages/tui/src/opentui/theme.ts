@@ -5,7 +5,7 @@
  * red is a liveness signal, never a work outcome.
  */
 import type { SessionStatus } from "@asem/core";
-import type { ActivityRowView } from "../view.ts";
+import type { ActivityRowView } from "../view/activity-row.ts";
 
 export const theme = {
   bg: "#2b2b2b",

@@ -248,6 +248,13 @@ Replaceable seams:
 - `Logger` / `Redactor`: secret redaction をテストできる。
 - `SurfaceRenderer`: operation result と human/MCP/TUI 表示を分ける。
 
+Logger implementation is selected by the real surface composition root, not by
+operation handlers. `Logger` remains the shared port, but CLI / MCP / TUI may
+receive different implementations: CLI can emit diagnostics to stderr, MCP must
+protect JSON-RPC stdout and defaults to silence, and TUI must not write operation
+logs directly while the cockpit renderer owns the terminal. See
+[`ADR 0006`](../adr/0006-surface-specific-logger-composition.md).
+
 Rules:
 
 - Interface は concrete need がある場所にだけ作る。

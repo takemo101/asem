@@ -20,7 +20,6 @@
  */
 import type {
   AttachCommand,
-  Logger,
   Message,
   OperationResult,
   Session,
@@ -178,22 +177,6 @@ export type CockpitEffectOutcome =
 /** Ports needed to carry out effects (snapshot reads plus the mutations). */
 export type EffectDeps = OpsDeps;
 
-const silentLogger: Logger = {
-  debug: () => {},
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-};
-
-/**
- * TUI draws directly into the terminal, so operation logs must not write JSON
- * lines to stderr/stdout while the renderer owns the screen. Keep structured
- * errors in-band through the view-model instead.
- */
-function withoutTerminalLogger(deps: EffectDeps): EffectDeps {
-  return { ...deps, logger: silentLogger };
-}
-
 /**
  * Carry out a {@link CockpitEffect} against `@asem/ops`.
  *
@@ -222,7 +205,7 @@ export async function executeCockpitEffect(
       // workspace scope `ctx.cwd` is the sibling worktree's root, whose own
       // current Session must not be impersonated (MIK-022; ADR 0003).
       const result = await sendMessage(
-        withoutTerminalLogger(deps),
+        deps,
         { toSessionId: effect.sessionId, body: effect.body },
         { ...ctx, origin: "operator" },
       );
@@ -232,7 +215,7 @@ export async function executeCockpitEffect(
     }
     case "close": {
       const result = await closeSession(
-        withoutTerminalLogger(deps),
+        deps,
         { id: effect.sessionId },
         {
           ...ctx,
@@ -245,7 +228,7 @@ export async function executeCockpitEffect(
     }
     case "delete": {
       const result = await deleteSession(
-        withoutTerminalLogger(deps),
+        deps,
         { id: effect.sessionId, force: true },
         { ...ctx, origin: "operator" },
       );

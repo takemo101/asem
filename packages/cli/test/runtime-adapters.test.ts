@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import type { EffectiveScope } from "@asem/core";
+import type { EffectiveScope, LogFields } from "@asem/core";
 import { FakeFileSystem } from "../../ops/src/testing/fakes.ts";
-import { FileCurrentSessionResolver } from "../src/runtime/adapters.ts";
+import {
+  createSurfaceLogger,
+  FileCurrentSessionResolver,
+} from "../src/runtime/adapters.ts";
 
 const scope: EffectiveScope = {
   workspaceId: "ws_1",
@@ -49,5 +52,68 @@ describe("FileCurrentSessionResolver", () => {
         process.env.AS_SESSION_TOKEN = previousToken;
       }
     }
+  });
+});
+
+describe("createSurfaceLogger", () => {
+  test("cli emits stderr JSON through the injected writer", () => {
+    const lines: string[] = [];
+    const logger = createSurfaceLogger("cli", {
+      writeStderr: (line) => lines.push(line),
+    });
+
+    logger.info("created Session", { sessionId: "s1" });
+
+    expect(lines).toEqual([
+      `${JSON.stringify({
+        level: "info",
+        message: "created Session",
+        sessionId: "s1",
+      })}\n`,
+    ]);
+  });
+
+  test("cli logger applies the provided redactor before writing", () => {
+    const lines: string[] = [];
+    const logger = createSurfaceLogger("cli", {
+      redactor: {
+        redact: (value) =>
+          value.replaceAll("sample-sensitive-value", "[redacted]"),
+      },
+      writeStderr: (line) => lines.push(line),
+    });
+
+    logger.error("failed", {
+      sample: "sample-sensitive-value",
+    } satisfies LogFields);
+
+    expect(lines.join("")).toContain("[redacted]");
+    expect(lines.join("")).not.toContain("sample-sensitive-value");
+  });
+
+  test("mcp is silent by default", () => {
+    const lines: string[] = [];
+    const logger = createSurfaceLogger("mcp", {
+      writeStderr: (line) => lines.push(line),
+    });
+
+    logger.debug("debug");
+    logger.info("info");
+    logger.warn("warn");
+    logger.error("error");
+
+    expect(lines).toEqual([]);
+  });
+
+  test("tui is silent by default", () => {
+    const lines: string[] = [];
+    const logger = createSurfaceLogger("tui", {
+      writeStderr: (line) => lines.push(line),
+    });
+
+    logger.info("closed Session", { sessionId: "s1" });
+    logger.warn("mux close failed", { sessionId: "s1" });
+
+    expect(lines).toEqual([]);
   });
 });

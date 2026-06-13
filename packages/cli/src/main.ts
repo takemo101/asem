@@ -18,13 +18,14 @@ import { openSqliteStore } from "@asem/store";
 import { processIo } from "./io.ts";
 import { runCli } from "./run.ts";
 import {
-  ConsoleLogger,
+  createSurfaceLogger,
   FileConfigLoader,
   FileCurrentSessionResolver,
   GitScopeResolver,
   NodeFileSystem,
   NodeTemplateRunner,
   passthroughRedactor,
+  type RuntimeSurface,
   randomTokenGenerator,
   storedStatusLivenessProbe,
   systemClock,
@@ -32,8 +33,14 @@ import {
 } from "./runtime/adapters.ts";
 import { runTuiCommand } from "./tui.ts";
 
+export interface RuntimeDepsOptions {
+  surface: RuntimeSurface;
+}
+
 /** Assemble the full {@link OpsDeps} bundle backed by the global SQLite DB. */
-export async function createRuntimeDeps(): Promise<OpsDeps> {
+export async function createRuntimeDeps(
+  options: RuntimeDepsOptions,
+): Promise<OpsDeps> {
   // Durable state lives in one global database (ADR 0001).
   const dbPath = join(homedir(), ".asem", "state.db");
   await mkdir(dirname(dbPath), { recursive: true });
@@ -54,7 +61,9 @@ export async function createRuntimeDeps(): Promise<OpsDeps> {
     clock: systemClock,
     idGenerator: uuidIdGenerator,
     tokenGenerator: randomTokenGenerator,
-    logger: new ConsoleLogger(),
+    logger: createSurfaceLogger(options.surface, {
+      redactor: passthroughRedactor,
+    }),
     redactor: passthroughRedactor,
   };
 }
@@ -71,9 +80,26 @@ function runAttachCommand(command: AttachCommand): Promise<number> {
   });
 }
 
+/**
+ * Map a CLI invocation to its runtime surface so the composition root can pick
+ * the surface-appropriate logger (ADR 0006): `asem mcp` -> `mcp`, `asem tui` ->
+ * `tui`, every other command -> `cli`. Pure so the mapping is unit-testable
+ * without building real deps.
+ */
+export function surfaceForArgv(argv: readonly string[]): RuntimeSurface {
+  switch (argv[0]) {
+    case "mcp":
+      return "mcp";
+    case "tui":
+      return "tui";
+    default:
+      return "cli";
+  }
+}
+
 /** Entry point for the installed binary. Returns the process exit code. */
 export async function main(argv: string[]): Promise<number> {
-  const deps = await createRuntimeDeps();
+  const deps = await createRuntimeDeps({ surface: surfaceForArgv(argv) });
   if (argv[0] === "mcp") {
     await runMcpStdio({ cwd: process.cwd(), deps });
     return 0;

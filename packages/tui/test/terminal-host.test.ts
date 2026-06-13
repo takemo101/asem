@@ -125,6 +125,24 @@ describe("renderFrame", () => {
     expect(frame).not.toContain("attach_hint:");
   });
 
+  test("renders info notices in the footer fallback", () => {
+    const state = createCockpitState(makeEnv(), { sessions: [], messages: [] });
+    const view = renderCockpitView(state, {
+      notice: { level: "info", message: "refreshed" },
+    });
+
+    expect(renderFrame(view)).toContain("refreshed");
+  });
+
+  test("renders error notices with code in the footer fallback", () => {
+    const state = createCockpitState(makeEnv(), { sessions: [], messages: [] });
+    const view = renderCockpitView(state, {
+      notice: { level: "error", message: "boom", code: "timeout" },
+    });
+
+    expect(renderFrame(view)).toContain("error: timeout: boom");
+  });
+
   test("redraws the last frame when the terminal is resized", () => {
     let state = createCockpitState(makeEnv(), {
       sessions: [makeSession({ id: "s1", name: "one" })],

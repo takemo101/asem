@@ -151,13 +151,25 @@ function renderPaneLine(
   return clip(`${pad(left ?? "", LEFT_WIDTH)}│ ${right ?? ""}`, columns);
 }
 
+/** Project a transient cockpit notice to a single footer line, or null. */
+function noticeLine(view: CockpitView): string | null {
+  const { notice } = view;
+  if (notice === null) {
+    return null;
+  }
+  return notice.level === "error"
+    ? `error: ${notice.code}: ${notice.message}`
+    : notice.message;
+}
+
 function footerLines(view: CockpitView): string[] {
   const lines = [
     "",
     view.keybar.map((k) => `[${k.key}] ${k.label}`).join("  "),
   ];
-  if (view.statusLine !== null) {
-    lines.push(view.statusLine);
+  const notice = noticeLine(view);
+  if (notice !== null) {
+    lines.push(notice);
   }
   if (view.modal !== null) {
     lines.push("");

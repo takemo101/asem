@@ -80,7 +80,13 @@ function runAttachCommand(command: AttachCommand): Promise<number> {
   });
 }
 
-function surfaceForArgv(argv: readonly string[]): RuntimeSurface {
+/**
+ * Map a CLI invocation to its runtime surface so the composition root can pick
+ * the surface-appropriate logger (ADR 0006): `asem mcp` -> `mcp`, `asem tui` ->
+ * `tui`, every other command -> `cli`. Pure so the mapping is unit-testable
+ * without building real deps.
+ */
+export function surfaceForArgv(argv: readonly string[]): RuntimeSurface {
   switch (argv[0]) {
     case "mcp":
       return "mcp";

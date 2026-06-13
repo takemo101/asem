@@ -65,11 +65,11 @@ describe("createSurfaceLogger", () => {
     logger.info("created Session", { sessionId: "s1" });
 
     expect(lines).toEqual([
-      JSON.stringify({
+      `${JSON.stringify({
         level: "info",
         message: "created Session",
         sessionId: "s1",
-      }) + "\n",
+      })}\n`,
     ]);
   });
 

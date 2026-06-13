@@ -81,10 +81,13 @@ describe("CockpitApp effects", () => {
     // error while a modal is open degrades to a notice rather than a modal.
     await app.dispatch({ type: "openSend" });
     await app.dispatch({ type: "updateDraft", draft: "keep" });
-    app.reportOperationError({ code: "temporary", message: "network hiccup" });
+    app.reportOperationError({
+      code: "message_delivery_failed",
+      message: "network hiccup",
+    });
     expect(app.view().notice).toEqual({
       level: "error",
-      code: "temporary",
+      code: "message_delivery_failed",
       message: "network hiccup",
     });
 

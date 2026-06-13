@@ -10,6 +10,11 @@ import {
   listWindow,
   rowText,
 } from "../src/opentui/components/session-list.tsx";
+import {
+  noticeKey,
+  noticeToastPayload,
+  TOASTER_OPTIONS,
+} from "../src/opentui/notice-toast.tsx";
 import { activityAccent, statusAccent, theme } from "../src/opentui/theme.ts";
 
 describe("opentui isolation", () => {
@@ -92,5 +97,48 @@ describe("footer", () => {
   test("footer height is compact after notices moved to toast", () => {
     expect(typeof FOOTER_HEIGHT).toBe("number");
     expect(FOOTER_HEIGHT).toBe(3);
+  });
+});
+
+describe("notice toast bridge", () => {
+  test("noticeKey dedupes identical notices and ignores null", () => {
+    expect(
+      noticeKey({ level: "error", message: "boom", code: "timeout" }),
+    ).toBe(noticeKey({ level: "error", message: "boom", code: "timeout" }));
+    expect(noticeKey({ level: "info", message: "refreshed" })).not.toBe(
+      noticeKey({ level: "success", message: "refreshed" }),
+    );
+    expect(noticeKey(null)).toBeNull();
+  });
+
+  test("noticeToastPayload maps error code to description", () => {
+    expect(
+      noticeToastPayload({ level: "error", message: "boom", code: "timeout" }),
+    ).toEqual({
+      method: "error",
+      message: "boom",
+      options: { description: "code: timeout", duration: 10000 },
+    });
+  });
+
+  test("noticeToastPayload maps success and info durations", () => {
+    expect(noticeToastPayload({ level: "success", message: "sent" })).toEqual({
+      method: "success",
+      message: "sent",
+      options: { duration: 4000 },
+    });
+    expect(noticeToastPayload({ level: "info", message: "refreshed" })).toEqual(
+      {
+        method: "info",
+        message: "refreshed",
+        options: { duration: 4000 },
+      },
+    );
+  });
+
+  test("toaster options keep notices above the compact footer", () => {
+    expect(TOASTER_OPTIONS.position).toBe("bottom-right");
+    expect(TOASTER_OPTIONS.stackingMode).toBe("single");
+    expect(TOASTER_OPTIONS.offset?.bottom).toBe(FOOTER_HEIGHT);
   });
 });

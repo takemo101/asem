@@ -14,11 +14,12 @@ import { useSyncExternalStore } from "react";
 import type { KeyEvent } from "../keymap.ts";
 import type { CockpitView } from "../view.ts";
 import { DetailPane } from "./components/detail-pane.tsx";
-import { Footer, FOOTER_HEIGHT } from "./components/footer.tsx";
+import { FOOTER_HEIGHT, Footer } from "./components/footer.tsx";
 import { Header } from "./components/header.tsx";
 import { ModalDialog } from "./components/modal.tsx";
 import { SessionList } from "./components/session-list.tsx";
 import { toKeyEvent } from "./keys.ts";
+import { NoticeToaster } from "./notice-toast.tsx";
 import { theme } from "./theme.ts";
 
 /** The host-side store the screen renders from (implemented by the host). */
@@ -76,6 +77,7 @@ export function CockpitScreen(props: { store: CockpitViewStore }): ReactNode {
         />
       </box>
       {view.modal === null ? null : <ModalDialog modal={view.modal} />}
+      <NoticeToaster notice={view.notice} />
       <Footer keybar={view.keybar} autoLabel={view.header.autoLabel} />
     </box>
   );

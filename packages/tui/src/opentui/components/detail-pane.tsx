@@ -5,7 +5,8 @@
  * footer.
  */
 import type { ReactNode } from "react";
-import type { ActivityRowView, TabHeader } from "../../view.ts";
+import type { ActivityRowView } from "../../view/activity-row.ts";
+import type { TabHeader } from "../../view.ts";
 import { theme } from "../theme.ts";
 import { ActivityStrip } from "./activity-strip.tsx";
 

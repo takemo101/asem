@@ -5,7 +5,7 @@
  * this only paints them.
  */
 import type { ReactNode } from "react";
-import type { ModalView } from "../../view.ts";
+import type { ModalView } from "../../view/modal.ts";
 import { theme } from "../theme.ts";
 
 function ModalFrame(props: {

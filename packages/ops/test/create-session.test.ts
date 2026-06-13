@@ -293,6 +293,38 @@ describe("createSession — launch script hooks (MIK-034)", () => {
     // The agent command's exit code is preserved as the final exit code.
     expect(out.exitCode).toBe(7);
   });
+
+  test("after_agent keeps nounset active for the Agent command itself", async () => {
+    // `nounset` is disabled only after the Agent command exits, for the
+    // best-effort after hook region. An unset variable in the Agent command is a
+    // launch command defect before the Agent starts, so it should still abort
+    // before any after hook runs.
+    const realCwd = mkdtempSync(join(tmpdir(), "asem-launch-"));
+    const config = makeConfig({
+      agent: {
+        default: "claude",
+        templates: {
+          claude: {
+            command: 'echo "$ASEM_DEFINITELY_UNSET_AGENT_VAR"',
+            after_agent: ["echo after-should-not-run"],
+          },
+        },
+      },
+    });
+    const d = { ...deps(), configLoader: configLoaderWith(config) };
+    expectOk(await createSession(d, { ...ROOT_INPUT, cwd: realCwd }, CTX));
+
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+    const scriptPath = join(realCwd, "launch.sh");
+    writeFileSync(scriptPath, script);
+    const out = Bun.spawnSync(["bash", scriptPath]);
+    const stdout = out.stdout.toString();
+    const stderr = out.stderr.toString();
+
+    expect(stdout).not.toContain("after-should-not-run");
+    expect(stderr).toContain("ASEM_DEFINITELY_UNSET_AGENT_VAR");
+    expect(out.exitCode).not.toBe(0);
+  });
 });
 
 describe("createSession — paste_prompt delivery (MIK-030)", () => {

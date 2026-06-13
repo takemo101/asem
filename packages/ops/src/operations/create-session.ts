@@ -142,14 +142,18 @@ function buildLaunchScript(params: {
 
   if (params.afterAgent.length > 0) {
     // Capture the Agent exit code and expose it to after hooks, run every after
-    // hook best-effort, then exit with the preserved code. Disable both errexit
-    // and nounset (`set +eu`): errexit so a failing after hook does not abort
-    // the rest, nounset so an after hook referencing an unset variable cannot
-    // abort later after hooks either. pipefail is harmless with errexit off.
-    lines.push("set +eu");
+    // hook best-effort, then exit with the preserved code. Disable errexit
+    // before running the Agent command so a non-zero Agent exit can be captured,
+    // but keep nounset active for the Agent command itself; an unset variable in
+    // the launch command is a pre-start defect, not an Agent exit. Disable
+    // nounset only for the after-hook region so an after hook referencing an
+    // unset variable cannot abort later after hooks. pipefail is harmless with
+    // errexit off.
+    lines.push("set +e");
     lines.push(params.agentCommand);
     lines.push("AS_AGENT_EXIT_CODE=$?");
     lines.push("export AS_AGENT_EXIT_CODE");
+    lines.push("set +u");
     for (const line of params.afterAgent) {
       lines.push(line);
     }

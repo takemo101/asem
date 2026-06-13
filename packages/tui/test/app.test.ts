@@ -3,8 +3,8 @@ import { hashToken } from "@asem/core";
 import {
   FakeCurrentSessionResolver,
   FakeStore,
-  makeOpsDeps,
   MemoryLogger,
+  makeOpsDeps,
 } from "../../ops/src/testing/fakes.ts";
 import type { CockpitSnapshot } from "../src/index.ts";
 import { CockpitApp, createCockpitState, runCockpit } from "../src/index.ts";

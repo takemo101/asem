@@ -333,7 +333,7 @@ export function dispatchCockpit(
         : { state: { ...state, modal: { kind: "none" } } };
     case "showError": {
       // Never clobber an open modal (e.g. a send draft) with an error dialog;
-      // the host falls back to the status line in that case.
+      // the host falls back to a transient notice in that case.
       if (state.modal.kind !== "none") {
         return unchanged(state);
       }

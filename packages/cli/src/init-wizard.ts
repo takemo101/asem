@@ -116,7 +116,7 @@ async function resolveCategory(options: {
       name: isFixed ? `${name} (default)` : name,
       value: name,
       checked: fixed !== undefined ? isFixed : name === existingDefault,
-      ...(isFixed ? { disabled: "(default)" } : {}),
+      ...(isFixed ? { disabled: true } : {}),
     };
   });
 

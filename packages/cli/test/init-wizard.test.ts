@@ -173,10 +173,37 @@ describe("runInitWizard", () => {
     const agentCheckbox = prompts.checkboxes[0]!;
     const piChoice = agentCheckbox.choices.find((c) => c.value === "pi")!;
     expect(piChoice.checked).toBe(true);
-    expect(piChoice.disabled).toBeTruthy();
+    expect(piChoice.disabled).toBe(true);
     expect(piChoice.name).toBe("pi (default)");
 
     // agent default select skipped (fixed), but mux is single so no select either
+    expect(prompts.selects).toHaveLength(0);
+  });
+
+  test("fixed --mux default is checked+locked and skips the mux default select", async () => {
+    const prompts = new FakePrompts();
+    // single Agent Template skips Agent default select; user adds herdr on top of
+    // the locked tmux default.
+    prompts.checkboxAnswers = [["pi"], ["tmux", "herdr"]];
+    prompts.confirmAnswers = [true];
+
+    const result = await runInitWizard({ ...BASE, prompts, mux: "tmux" });
+
+    expect(result).toMatchObject({
+      kind: "selected",
+      defaultAgent: "pi",
+      selectedAgents: ["pi"],
+      defaultMux: "tmux",
+      selectedMuxes: ["herdr", "tmux"],
+    });
+
+    const muxCheckbox = prompts.checkboxes[1]!;
+    const tmuxChoice = muxCheckbox.choices.find((c) => c.value === "tmux")!;
+    expect(tmuxChoice.checked).toBe(true);
+    expect(tmuxChoice.disabled).toBe(true);
+    expect(tmuxChoice.name).toBe("tmux (default)");
+
+    // Agent has a single selected Template and mux default is fixed.
     expect(prompts.selects).toHaveLength(0);
   });
 

@@ -29,6 +29,12 @@ async function run(argv: string[], deps = makeCliFixture().deps) {
   return { io, code };
 }
 
+function requiredAt<T>(items: readonly T[], index: number, label: string): T {
+  const item = items[index];
+  if (item === undefined) throw new Error(`missing ${label} at ${index}`);
+  return item;
+}
+
 const HERDR_REF = {
   pane_id: "pane-1",
   tab_id: "tab-1",
@@ -129,6 +135,7 @@ describe("runCli init", () => {
       isTty: true,
       prompts: {
         input: async () => "ws-new",
+        checkbox: async <T extends string>() => ["pi"] as T[],
         select: async <T extends string>() => "pi" as T,
         confirm: async () => false,
       },
@@ -137,6 +144,52 @@ describe("runCli init", () => {
     expect(code).toBe(EXIT_OK);
     expect(io.outText()).toContain("cancelled; no files changed");
     expect(await deps.fs.exists(configPathFor(CWD))).toBe(false);
+  });
+
+  test("interactive init materializes every selected template, sorted and deduped", async () => {
+    const { deps } = makeCliFixture();
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["init", "--interactive", "--workspace", "ws-new"],
+      cwd: CWD,
+      deps,
+      io,
+      isTty: true,
+      prompts: {
+        input: async () => "ws-new",
+        checkbox: async <T extends string>(prompt: {
+          message: string;
+        }): Promise<T[]> =>
+          (prompt.message.includes("Agent")
+            ? ["pi", "claude"]
+            : ["tmux", "herdr"]) as T[],
+        select: async <T extends string>(prompt: {
+          message: string;
+        }): Promise<T> =>
+          (prompt.message.includes("Agent") ? "pi" : "tmux") as T,
+        confirm: async () => true,
+      },
+    });
+
+    expect(code).toBe(EXIT_OK);
+    const config = await deps.fs.readFile(configPathFor(CWD));
+    expect(config).toContain("default: pi");
+    expect(config).toContain("default: tmux");
+    // both agent templates present, builtin-name ascending order
+    const claudeAt = config.indexOf("claude:");
+    const piAt = config.indexOf("pi:");
+    expect(claudeAt).toBeGreaterThan(-1);
+    expect(piAt).toBeGreaterThan(-1);
+    expect(claudeAt).toBeLessThan(piAt);
+    // both mux templates present
+    expect(config).toContain("herdr:");
+    expect(config).toContain("tmux:");
+    expect(config).toContain('command: "pi {{prompt_shell}}"');
+    expect(config).toContain('command: "claude {{prompt_shell}}"');
+    // no duplicate template keys
+    expect(config.split("\n").filter((l) => l.trim() === "pi:")).toHaveLength(
+      1,
+    );
   });
 
   test("plain init leaves an existing config untouched without requiring workspace", async () => {
@@ -177,6 +230,9 @@ describe("runCli init", () => {
       isTty: true,
       prompts: {
         input: async () => {
+          throw new Error("should not prompt");
+        },
+        checkbox: async () => {
           throw new Error("should not prompt");
         },
         select: async () => {
@@ -235,6 +291,9 @@ describe("runCli init", () => {
         input: async () => {
           throw new Error("should not prompt");
         },
+        checkbox: async () => {
+          throw new Error("should not prompt");
+        },
         select: async () => {
           throw new Error("should not prompt");
         },
@@ -261,6 +320,9 @@ describe("runCli init", () => {
       isTty: true,
       prompts: {
         input: async () => {
+          throw new Error("should not prompt");
+        },
+        checkbox: async () => {
           throw new Error("should not prompt");
         },
         select: async () => {
@@ -381,8 +443,9 @@ describe("runCli session create", () => {
     expect(io.outText()).toContain("running");
     // The operation — not the CLI — persisted the Session.
     expect(store.sessions).toHaveLength(1);
-    expect(store.sessions[0]!.name).toBe("reviewer-1");
-    expect(store.sessions[0]!.parentSessionId).toBeNull();
+    const session = requiredAt(store.sessions, 0, "session");
+    expect(session.name).toBe("reviewer-1");
+    expect(session.parentSessionId).toBeNull();
   });
 
   test("--parent <id> launches under an explicit in-scope parent", async () => {
@@ -571,7 +634,8 @@ describe("runCli session attach", () => {
     expect(commands[0]).toEqual([
       "sh",
       "-c",
-      "herdr --session 'asem' workspace focus 'herdr-workspace-1' >/dev/null && herdr --session 'asem' tab focus 'tab-1' >/dev/null && if [ \"${HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach 'asem'; fi",
+      "herdr --session 'asem' workspace focus 'herdr-workspace-1' >/dev/null && herdr --session 'asem' tab focus 'tab-1' >/dev/null && if [ \"$" +
+        "{HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach 'asem'; fi",
     ]);
   });
 
@@ -598,8 +662,9 @@ describe("runCli session close", () => {
     expect(io.outText()).toContain(s.id);
     expect(io.outText()).toContain("closed");
     // The operation — not the CLI — updated the stored status.
-    expect(store.sessions[0]!.status).toBe("closed");
-    expect(store.sessions[0]!.closedAt).not.toBeNull();
+    const session = requiredAt(store.sessions, 0, "session");
+    expect(session.status).toBe("closed");
+    expect(session.closedAt).not.toBeNull();
   });
 
   test("close of an unknown id surfaces session_not_found (exit 1)", async () => {
@@ -785,7 +850,7 @@ describe("runCli message send", () => {
     expect(io.outText()).toContain("delivered at");
     // The operation — not the CLI — recorded the Message.
     expect(store.messages).toHaveLength(1);
-    expect(store.messages[0]!.body).toBe("ping");
+    expect(requiredAt(store.messages, 0, "message").body).toBe("ping");
   });
 
   test("an unknown target surfaces session_not_found (exit 1)", async () => {
@@ -814,8 +879,9 @@ describe("runCli report parent", () => {
     expect(io.outText()).toContain("report");
     expect(io.outText()).toContain(parent.id);
     expect(store.messages).toHaveLength(1);
-    expect(store.messages[0]!.kind).toBe("report");
-    expect(store.messages[0]!.formattedBody).toContain("[asem report from");
+    const message = requiredAt(store.messages, 0, "message");
+    expect(message.kind).toBe("report");
+    expect(message.formattedBody).toContain("[asem report from");
   });
 
   test("no current Session surfaces current_session_not_found (exit 1)", async () => {

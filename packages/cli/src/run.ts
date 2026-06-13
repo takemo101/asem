@@ -179,6 +179,9 @@ async function runInit(
   let workspaceId = command.workspaceId;
   let agent = command.agent;
   let mux = command.mux;
+  // Interactive multi-select can materialize more Templates than the defaults.
+  let selectedAgents: string[] | undefined;
+  let selectedMuxes: string[] | undefined;
   const worktreeRoot = await deps.scopeResolver.resolveWorktreeRoot(cwd);
   const configPath = configPathFor(worktreeRoot);
   const configExists = await deps.fs.exists(configPath);
@@ -215,8 +218,10 @@ async function runInit(
         return EXIT_OK;
       }
       workspaceId = wizard.workspaceId;
-      agent = wizard.agent;
-      mux = wizard.mux;
+      agent = wizard.defaultAgent;
+      mux = wizard.defaultMux;
+      selectedAgents = wizard.selectedAgents;
+      selectedMuxes = wizard.selectedMuxes;
     }
   }
 
@@ -235,7 +240,13 @@ async function runInit(
     workspaceId !== undefined &&
     agent !== undefined &&
     mux !== undefined
-      ? materializeInitConfig({ workspaceId, agent, mux })
+      ? materializeInitConfig({
+          workspaceId,
+          agent,
+          mux,
+          ...(selectedAgents !== undefined ? { agents: selectedAgents } : {}),
+          ...(selectedMuxes !== undefined ? { muxes: selectedMuxes } : {}),
+        })
       : null;
   if (selectedConfig !== null && !selectedConfig.ok) {
     return fail(io, selectedConfig.error);

@@ -89,7 +89,7 @@ describe("CockpitApp effects", () => {
     expect(store.sessions[0]!.status).toBe("closed");
   });
 
-  test("close does not emit operation logs into the TUI terminal", async () => {
+  test("close uses the provided deps logger; surface composition supplies the TUI-safe logger", async () => {
     const store = new FakeStore();
     const logger = new MemoryLogger();
     store.sessions.push(makeSession({ id: "s1", status: "running" }));
@@ -107,7 +107,9 @@ describe("CockpitApp effects", () => {
 
     expect(result.error).toBeUndefined();
     expect(store.sessions[0]!.status).toBe("closed");
-    expect(logger.entries).toEqual([]);
+    expect(
+      logger.entries.some((entry) => entry.message === "closed Session"),
+    ).toBe(true);
   });
 
   test("attach leaves to the host with the get_session hint and refreshes", async () => {

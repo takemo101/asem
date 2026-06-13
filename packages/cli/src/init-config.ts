@@ -12,11 +12,36 @@ import {
   operationError,
 } from "@asem/core";
 import {
+  type AgentTemplate,
   agentTemplateSchema,
   builtinAgentTemplates,
   builtinMuxTemplates,
   muxTemplateSchema,
 } from "@asem/runtime";
+
+/**
+ * Materialize a parsed Agent Template into the minimal object written to
+ * `.asem.yaml`, omitting default/empty fields so a generated config stays close
+ * to what an author would hand-write. `paste_prompt: false` and every empty
+ * sequence/hook array (`before_paste`, `before_agent`, `after_agent`) are
+ * dropped; only fields that carry meaning are kept (MIK-030/MIK-034).
+ */
+function cleanAgentTemplate(template: AgentTemplate): Record<string, unknown> {
+  const result: Record<string, unknown> = { command: template.command };
+  if (template.paste_prompt) {
+    result.paste_prompt = true;
+  }
+  if (template.before_paste.length > 0) {
+    result.before_paste = template.before_paste;
+  }
+  if (template.before_agent.length > 0) {
+    result.before_agent = template.before_agent;
+  }
+  if (template.after_agent.length > 0) {
+    result.after_agent = template.after_agent;
+  }
+  return result;
+}
 
 export interface InitConfigSelection {
   workspaceId: string;
@@ -101,7 +126,7 @@ export function materializeInitConfig(
 
   const agent: AgentConfig = {
     default: selection.agent,
-    templates: { [selection.agent]: agentTemplate.data },
+    templates: { [selection.agent]: cleanAgentTemplate(agentTemplate.data) },
   };
   const mux: MuxConfig = {
     default: selection.mux,

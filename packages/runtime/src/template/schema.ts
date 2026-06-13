@@ -126,16 +126,87 @@ export const muxTemplateSchema = z
   .strict();
 export type MuxTemplate = z.infer<typeof muxTemplateSchema>;
 
-/** How an agent template delivers the initial prompt. */
-export const promptDeliverySchema = z.enum(["arg", "stdin", "file", "paste"]);
-export type PromptDelivery = z.infer<typeof promptDeliverySchema>;
+/**
+ * Prompt placeholders an Agent `command` may carry (ADR 0005). Both keep the
+ * prompt body out of the literal launch script — `prompt_shell` expands to a
+ * `$(cat …)` snippet, `prompt_path_shell` to the shell-escaped `prompt.md` path.
+ * Any other `{{…}}` placeholder is invalid Agent Template configuration.
+ */
+export const AGENT_PROMPT_PLACEHOLDERS = [
+  "prompt_shell",
+  "prompt_path_shell",
+] as const;
 
-/** Agent template: the agent command plus prompt delivery mode. */
+/**
+ * Matches any `{{ … }}` placeholder; the capture group is the raw inner text.
+ * Deliberately broad (not `\w+`) so malformed names like `prompt-shell`,
+ * `prompt_shell | quote`, or an empty `{{}}` are still detected and rejected
+ * rather than silently ignored (which would drop the prompt at run time).
+ */
+const PLACEHOLDER_RE = /\{\{([^}]*)\}\}/g;
+
+/**
+ * Inner text of every `{{…}}` placeholder in a command string, trimmed, in
+ * order. The text is returned as-is (e.g. `prompt-shell`, `` for `{{}}`) so the
+ * caller decides which names are valid.
+ */
+export function agentCommandPlaceholders(command: string): string[] {
+  return [...command.matchAll(PLACEHOLDER_RE)].map((match) =>
+    (match[1] as string).trim(),
+  );
+}
+
+/**
+ * Agent template: the agent command plus optional paste delivery and launch
+ * hooks (ADR 0005, MIK-030/MIK-034).
+ *
+ * - `command` is a shell command string that may carry the prompt placeholders
+ *   `{{prompt_shell}}` / `{{prompt_path_shell}}`. Unknown placeholders are
+ *   rejected so a typo cannot silently drop the prompt.
+ * - `paste_prompt: true` starts the Agent bare and lets the mux `send` sequence
+ *   paste the prompt; it is mutually exclusive with prompt placeholders.
+ * - `before_paste` runs after the Agent starts and before the paste; it is only
+ *   valid when `paste_prompt: true`.
+ * - `before_agent` / `after_agent` are literal shell command lines inserted into
+ *   the generated `launch.sh` around the Agent process (MIK-034). They are not
+ *   `{{…}}`-interpolated; hooks read launch env vars instead.
+ */
 export const agentTemplateSchema = z
   .object({
     command: nonEmptyString,
-    prompt_delivery: promptDeliverySchema,
-    after_start: commandSequenceSchema.default([]),
+    paste_prompt: z.boolean().default(false),
+    before_paste: commandSequenceSchema.default([]),
+    before_agent: z.array(nonEmptyString).default([]),
+    after_agent: z.array(nonEmptyString).default([]),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    const allowed = new Set<string>(AGENT_PROMPT_PLACEHOLDERS);
+    const placeholders = agentCommandPlaceholders(value.command);
+    for (const name of placeholders) {
+      if (!allowed.has(name)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["command"],
+          message: `unknown Agent command placeholder {{${name}}}`,
+        });
+      }
+    }
+    const hasPromptPlaceholder = placeholders.some((name) => allowed.has(name));
+    if (value.paste_prompt && hasPromptPlaceholder) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["paste_prompt"],
+        message:
+          "paste_prompt is mutually exclusive with prompt placeholders in command",
+      });
+    }
+    if (value.before_paste.length > 0 && !value.paste_prompt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["before_paste"],
+        message: "before_paste is only valid when paste_prompt is true",
+      });
+    }
+  });
 export type AgentTemplate = z.infer<typeof agentTemplateSchema>;

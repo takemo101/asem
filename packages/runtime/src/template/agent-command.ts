@@ -3,10 +3,10 @@
  * `prompt.md` path into the single shell line that the launch script runs to
  * start the agent and deliver its initial prompt.
  *
- * This lives in `@asem/runtime` because agent command + prompt delivery mode is
- * agent-template semantics (architecture overview: "Agent Templates own agent
- * command and prompt delivery mode"). It must NOT own multiplexer lifecycle or
- * Session outcome interpretation; the actual paste, for `paste` delivery, is
+ * This lives in `@asem/runtime` because the agent command + prompt placeholders
+ * are agent-template semantics (architecture overview: "Agent Templates own the
+ * agent command and prompt delivery"). It must NOT own multiplexer lifecycle or
+ * Session outcome interpretation; the actual paste, for `paste_prompt`, is
  * performed later by the mux `send` sequence the operation runs, not here.
  *
  * Token safety (implementation principle 8): the rendered line never contains
@@ -16,49 +16,56 @@
  * through the centralized `@asem/core` {@link shellEscape} primitive (principle
  * 9) so a path with spaces or shell metacharacters cannot break out.
  *
- * `prompt.md` itself is always written by `create_session` regardless of
- * delivery mode, so it remains the audit/debug source of the prompt even when
- * the prompt is delivered by `stdin`, `file`, or `paste` rather than inlined.
+ * `prompt.md` itself is always written by `create_session`, so it remains the
+ * audit/debug source of the prompt even when the command does not reference it
+ * (a bare command, or `paste_prompt` delivery).
  */
 import { shellEscape } from "@asem/core";
 import type { AgentTemplate } from "./schema.ts";
 
+/** Matches any `{{ … }}` placeholder; the capture group is the raw inner text. */
+const PLACEHOLDER_RE = /\{\{([^}]*)\}\}/g;
+
 /**
- * Render the agent invocation line for the launch script per delivery mode.
+ * Render the agent invocation line for the launch script (ADR 0005).
  *
- * The `command` field carries the agent binary plus any fixed flags (for
- * example `agy -i`); the delivery mode decides how `prompt.md` is appended:
+ * The `command` field carries the agent binary, fixed flags, and optionally the
+ * prompt placeholders:
  *
- * - `arg`   — `<command> "$(cat <prompt>)"`: the prompt is read at run time and
- *   passed as a positional argument. Using `$(cat …)` keeps the prompt body out
- *   of the literal command string (and out of shell history / process argv as a
- *   static string), so long or multiline prompts do not leak into the visible
- *   command; the file path is the only interpolated value.
- * - `stdin` — `<command> < <prompt>`: the prompt file is piped on stdin.
- * - `file`  — `<command> <prompt>`: the prompt file path is passed as an
- *   argument for CLIs that accept a prompt file directly.
- * - `paste` — `<command>`: the agent starts with no prompt; the prompt is pasted
- *   afterwards by the mux `send` sequence (see {@link AgentTemplate.after_start}).
+ * - `{{prompt_shell}}` — expands to `"$(cat <escaped-prompt-path>)"`: the prompt
+ *   is read at run time, keeping the body out of the literal command string
+ *   (and out of shell history / process argv as a static string) so long or
+ *   multiline prompts never leak into the visible command; the file path is the
+ *   only interpolated value.
+ * - `{{prompt_path_shell}}` — expands to the shell-escaped `prompt.md` path, for
+ *   CLIs that take a prompt-file argument or for stdin redirection.
+ *
+ * When `paste_prompt` is set the command is returned verbatim (it carries no
+ * prompt placeholders); the prompt is pasted afterwards by the mux `send`
+ * sequence. A command with neither placeholder nor `paste_prompt` is also
+ * returned verbatim — the prompt stays in `prompt.md` unread by the agent.
+ *
+ * The schema validates the placeholder set before this runs, so only the two
+ * known placeholders can reach here.
  */
 export function renderAgentCommand(
   template: AgentTemplate,
   promptPath: string,
 ): string {
-  const promptShell = shellEscape(promptPath);
-  switch (template.prompt_delivery) {
-    case "arg":
-      return `${template.command} "$(cat ${promptShell})"`;
-    case "stdin":
-      return `${template.command} < ${promptShell}`;
-    case "file":
-      return `${template.command} ${promptShell}`;
-    case "paste":
-      // The prompt is pasted later via the mux `send` sequence after the agent
-      // starts; the launch script only starts the agent here.
-      return template.command;
-    default: {
-      const exhaustive: never = template.prompt_delivery;
-      throw new Error(`unknown prompt_delivery: ${String(exhaustive)}`);
-    }
+  if (template.paste_prompt) {
+    return template.command;
   }
+  const escapedPath = shellEscape(promptPath);
+  return template.command.replace(PLACEHOLDER_RE, (_match, inner: string) => {
+    const name = inner.trim();
+    switch (name) {
+      case "prompt_shell":
+        return `"$(cat ${escapedPath})"`;
+      case "prompt_path_shell":
+        return escapedPath;
+      default:
+        // Unreachable: agentTemplateSchema rejects unknown placeholders.
+        throw new Error(`unknown Agent command placeholder {{${name}}}`);
+    }
+  });
 }

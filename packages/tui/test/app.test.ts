@@ -288,6 +288,59 @@ describe("CockpitApp workspace scope", () => {
     expect(delivered?.fromSessionId).toBeNull();
     expect(delivered?.formattedBody).toBe("[asem message]\noperator note");
   });
+
+  test("close ignores a stale current-Session pointer because it is an operator action", async () => {
+    const store = new FakeStore();
+    store.sessions.push(
+      makeSession({ id: "a", worktreeRoot: WORKTREE_A }),
+      makeSession({ id: "b", name: "b", worktreeRoot: WORKTREE_B }),
+    );
+    const currentSessionResolver = new FakeCurrentSessionResolver({
+      sessionId: "missing-current",
+      token: "stale-token",
+    });
+    const { app } = makeApp({
+      store,
+      scopeMode: "workspace",
+      currentSessionResolver,
+    });
+
+    await app.dispatch({ type: "select", sessionId: "b" });
+    await app.dispatch({ type: "requestClose" });
+    const result = await app.dispatch({ type: "confirm" });
+
+    expect(result.error).toBeUndefined();
+    expect(store.sessions.find((s) => s.id === "b")?.status).toBe("closed");
+  });
+
+  test("delete ignores a stale current-Session pointer because it is an operator action", async () => {
+    const store = new FakeStore();
+    store.sessions.push(
+      makeSession({ id: "a", worktreeRoot: WORKTREE_A }),
+      makeSession({
+        id: "b",
+        name: "b",
+        status: "closed",
+        worktreeRoot: WORKTREE_B,
+      }),
+    );
+    const currentSessionResolver = new FakeCurrentSessionResolver({
+      sessionId: "missing-current",
+      token: "stale-token",
+    });
+    const { app } = makeApp({
+      store,
+      scopeMode: "workspace",
+      currentSessionResolver,
+    });
+
+    await app.dispatch({ type: "select", sessionId: "b" });
+    await app.dispatch({ type: "requestDelete" });
+    const result = await app.dispatch({ type: "confirm" });
+
+    expect(result.error).toBeUndefined();
+    expect(store.sessions.map((s) => s.id)).toEqual(["a"]);
+  });
 });
 
 describe("run loop", () => {

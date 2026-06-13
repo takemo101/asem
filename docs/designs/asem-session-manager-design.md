@@ -520,7 +520,7 @@ Agent-originated operations require Session token verification.
 - DB stores `token_hash`, never raw token.
 - Raw token is injected through env or mode-`0600` files.
 
-Human/operator CLI and TUI operations operate under local trust. TUI is an operator surface and may send/close/delete without Session token, guarded by confirmation for destructive operations.
+Human/operator CLI and TUI operations operate under local trust. TUI is an operator surface and may send/close/delete without Session token, guarded by confirmation for destructive operations. TUI mutation effects mark themselves operator-originated so a stale or sibling-worktree current-session pointer cannot block an explicit human close/delete action.
 
 `send_message` decides a Message's source by resolving the current-Session
 pointer for the operation's Effective Scope: an agent-originated call verifies

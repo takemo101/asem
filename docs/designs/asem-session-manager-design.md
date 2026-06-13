@@ -364,22 +364,24 @@ Builtin mux lifecycle follows the cuekit-proven model where possible: tmux and z
 Agent templates contain:
 
 ```yaml
-command: "..."
-prompt_delivery: "arg" | "stdin" | "file" | "paste"
-after_start: [] # optional, mainly for paste flow
+command: "... {{prompt_shell}} ..."
+paste_prompt: false
+before_paste: [] # optional; only valid when paste_prompt is true
 ```
 
 Prompt handling:
 
 - Always write the prompt to `prompt.md` in the Session dir for audit/debug.
 - The agent template decides how the prompt is delivered.
-
-Prompt delivery modes:
-
-- `arg` — pass prompt as a CLI argument.
-- `stdin` — pipe prompt to the process.
-- `file` — pass prompt file path if supported.
-- `paste` — start the agent, then use mux `send` to paste prompt.
+- Agent `command` is a shell command template with a deliberately small prompt placeholder set:
+  - `{{prompt_shell}}` — a shell-safe snippet that reads `prompt.md`, such as `"$(cat /path/to/prompt.md)"`; it does not embed the prompt body directly in `launch.sh`.
+  - `{{prompt_path_shell}}` — the shell-escaped path to `prompt.md`.
+- Unknown `{{...}}` placeholders in Agent `command` are invalid template configuration.
+- `paste_prompt: true` starts the Agent without prompt placeholders and then uses the mux `send` sequence to paste the prompt.
+- `before_paste` replaces the old `after_start` name; it is a Command Sequence that runs after Agent start and before the prompt paste, and is valid only when `paste_prompt: true`.
+- `paste_prompt: true` is mutually exclusive with prompt placeholders in `command`.
+- A command with no prompt placeholder and no `paste_prompt` is allowed. In that case the prompt is still saved to `prompt.md`, but asem does not pass it to the Agent unless the command/wrapper reads it itself.
+- The previous `prompt_delivery` field is removed; see [ADR 0005](../adr/0005-agent-prompt-delivery-uses-command-templates.md).
 
 Initial builtin agent templates:
 

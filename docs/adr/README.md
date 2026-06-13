@@ -11,6 +11,7 @@ Use ADRs for durable decisions. Use `docs/designs/` for feature/subsystem design
 - [`0003-tui-operator-message-attribution.md`](./0003-tui-operator-message-attribution.md) — TUI sends are operator-originated and never attributed to the target worktree's current Session.
 - [`0004-tui-defaults-to-workspace-live-cockpit.md`](./0004-tui-defaults-to-workspace-live-cockpit.md) — `asem tui` defaults to a workspace-wide live cockpit while normal CLI/MCP scope remains worktree-isolated.
 - [`0005-agent-prompt-delivery-uses-command-templates.md`](./0005-agent-prompt-delivery-uses-command-templates.md) — Agent prompt delivery is expressed with command templates, replacing `prompt_delivery`.
+- [`0006-surface-specific-logger-composition.md`](./0006-surface-specific-logger-composition.md) — Logger implementations are selected by CLI/MCP/TUI surface so protocol and terminal output stay safe.
 
 ## ADR rules
 

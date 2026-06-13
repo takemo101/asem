@@ -121,15 +121,29 @@ export const randomTokenGenerator: TokenGenerator = {
 /** Identity redactor seam; token-aware redaction is owned by `@asem/runtime`. */
 export const passthroughRedactor: Redactor = { redact: (value) => value };
 
+export type RuntimeSurface = "cli" | "mcp" | "tui";
+
+export interface ConsoleLoggerOptions {
+  redactor?: Redactor;
+  writeStderr?: (line: string) => void;
+}
+
 /** stderr JSON logger. Token material is never passed in by operations. */
 export class ConsoleLogger implements Logger {
-  constructor(private readonly redactor: Redactor = passthroughRedactor) {}
+  private readonly redactor: Redactor;
+  private readonly writeStderr: (line: string) => void;
+
+  constructor(options: ConsoleLoggerOptions = {}) {
+    this.redactor = options.redactor ?? passthroughRedactor;
+    this.writeStderr =
+      options.writeStderr ?? ((line) => process.stderr.write(line));
+  }
 
   private write(level: string, message: string, fields?: LogFields): void {
     const line = JSON.stringify(
       fields === undefined ? { level, message } : { level, message, ...fields },
     );
-    process.stderr.write(`${this.redactor.redact(line)}\n`);
+    this.writeStderr(`${this.redactor.redact(line)}\n`);
   }
 
   debug(message: string, fields?: LogFields): void {
@@ -143,6 +157,40 @@ export class ConsoleLogger implements Logger {
   }
   error(message: string, fields?: LogFields): void {
     this.write("error", message, fields);
+  }
+}
+
+const silentLogger: Logger = {
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
+
+export interface SurfaceLoggerOptions {
+  redactor?: Redactor;
+  writeStderr?: (line: string) => void;
+}
+
+/**
+ * Select the logger implementation for a runtime surface (ADR 0006). CLI emits
+ * stderr JSON diagnostics; MCP and TUI default to silence so they never write
+ * unsolicited lines to protocol stdout or the cockpit-owned terminal.
+ */
+export function createSurfaceLogger(
+  surface: RuntimeSurface,
+  options: SurfaceLoggerOptions = {},
+): Logger {
+  switch (surface) {
+    case "cli":
+      return new ConsoleLogger(options);
+    case "mcp":
+    case "tui":
+      return silentLogger;
+    default: {
+      const _never: never = surface;
+      return _never;
+    }
   }
 }
 

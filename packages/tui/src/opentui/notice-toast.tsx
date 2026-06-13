@@ -4,22 +4,21 @@
  * The OpenTUI toast bridge: it isolates the `@opentui-ui/toast` dependency to
  * this file (kept under `src/opentui`, never imported by MCP or the root
  * `@asem/tui` entry) and translates a transient {@link CockpitNotice} into a
- * single themed toast above the compact footer. The pure helpers — `noticeKey`,
+ * single themed toast in the top-right corner. The pure helpers — `noticeKey`,
  * `noticeToastPayload`, and `TOASTER_OPTIONS` — are exported for smoke tests so
  * the mapping is covered without driving a real terminal.
  */
 import { Toaster, toast } from "@opentui-ui/toast/react";
 import { type ReactNode, useEffect, useRef } from "react";
 import type { CockpitNotice } from "../view.ts";
-import { FOOTER_HEIGHT } from "./components/footer.tsx";
 import { theme } from "./theme.ts";
 
 type ToastMethod = "success" | "info" | "error";
 
 export const TOASTER_OPTIONS = {
-  position: "bottom-right" as const,
+  position: "top-right" as const,
   stackingMode: "single" as const,
-  offset: { bottom: FOOTER_HEIGHT, right: 2 },
+  offset: { top: 1, right: 2 },
   maxWidth: 60,
   toastOptions: {
     style: {

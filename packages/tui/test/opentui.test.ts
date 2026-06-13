@@ -136,9 +136,11 @@ describe("notice toast bridge", () => {
     );
   });
 
-  test("toaster options keep notices above the compact footer", () => {
-    expect(TOASTER_OPTIONS.position).toBe("bottom-right");
+  test("toaster options keep notices in the top-right corner", () => {
+    expect(TOASTER_OPTIONS.position).toBe("top-right");
     expect(TOASTER_OPTIONS.stackingMode).toBe("single");
-    expect(TOASTER_OPTIONS.offset?.bottom).toBe(FOOTER_HEIGHT);
+    expect(TOASTER_OPTIONS.offset?.top).toBe(1);
+    expect(TOASTER_OPTIONS.offset?.right).toBe(2);
+    expect("bottom" in TOASTER_OPTIONS.offset).toBe(false);
   });
 });

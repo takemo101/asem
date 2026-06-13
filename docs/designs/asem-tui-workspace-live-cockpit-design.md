@@ -217,8 +217,8 @@ selection, filters, tabs, modals, drafts, and in-memory Activity.
 OpenTUI renders notices as toasts through `@opentui-ui/toast`:
 
 - use the package only inside the OpenTUI renderer path;
-- add the toaster above the compact footer, positioned `bottom-right` with a
-  footer-sized bottom offset;
+- position the toaster at `top-right` with a small top/right offset so it avoids
+  the footer keybar and keeps the operator controls unobscured;
 - use `stackingMode: "single"` so a new notice replaces the previous one;
 - suppress a new toast when it has the same `level`, `message`, and `code` as
   the immediately previous notice;

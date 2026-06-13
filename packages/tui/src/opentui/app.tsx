@@ -76,11 +76,7 @@ export function CockpitScreen(props: { store: CockpitViewStore }): ReactNode {
         />
       </box>
       {view.modal === null ? null : <ModalDialog modal={view.modal} />}
-      <Footer
-        keybar={view.keybar}
-        statusLine={view.statusLine}
-        autoLabel={view.header.autoLabel}
-      />
+      <Footer keybar={view.keybar} autoLabel={view.header.autoLabel} />
     </box>
   );
 }

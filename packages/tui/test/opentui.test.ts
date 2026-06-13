@@ -5,7 +5,6 @@ import { KEYBAR, type LeftRow } from "../src/index.ts";
 import {
   FOOTER_HEIGHT,
   keybarText,
-  statusLineText,
 } from "../src/opentui/components/footer.tsx";
 import {
   listWindow,
@@ -90,23 +89,8 @@ describe("footer", () => {
     expect(text).toContain("auto 3s");
   });
 
-  test("footer height is constant regardless of the status line", () => {
-    // A single fixed height: the layout must not jump when a status appears.
+  test("footer height is compact after notices moved to toast", () => {
     expect(typeof FOOTER_HEIGHT).toBe("number");
-    expect(FOOTER_HEIGHT).toBe(4);
-  });
-
-  test("statusLineText clamps to a single bounded line", () => {
-    expect(statusLineText(null)).toBe("");
-    expect(statusLineText("refreshed")).toBe("refreshed");
-    // Multiline errors collapse to their first line.
-    expect(statusLineText("error: timeout: boom\nstack trace\nmore")).toBe(
-      "error: timeout: boom",
-    );
-    // Very long lines are truncated so they cannot wrap the footer.
-    const long = `error: ${"x".repeat(500)}`;
-    const clamped = statusLineText(long);
-    expect(clamped.length).toBeLessThanOrEqual(160);
-    expect(clamped.endsWith("…")).toBe(true);
+    expect(FOOTER_HEIGHT).toBe(3);
   });
 });

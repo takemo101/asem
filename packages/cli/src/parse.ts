@@ -657,6 +657,41 @@ function isHelpFlag(arg: string | undefined): boolean {
   return arg === "--help" || arg === "-h" || arg === "help";
 }
 
+const HELP_SUBCOMMANDS: Record<string, readonly string[]> = {
+  session: ["create", "list", "get", "attach", "close", "delete"],
+  message: ["list", "wait", "send"],
+  report: ["parent"],
+};
+
+function helpResult(command: string, rest: readonly string[]): ParseResult {
+  const directCommands = ["init", "init-session", "mcp", "tui"];
+  if (directCommands.includes(command)) {
+    const first = rest[0];
+    if (first !== undefined && !first.startsWith("-") && !isHelpFlag(first)) {
+      return invalid(`unexpected argument for ${command}: ${first}`);
+    }
+    return { kind: "help", topic: command };
+  }
+
+  const subcommands = HELP_SUBCOMMANDS[command];
+  if (subcommands === undefined) {
+    return invalid(`unknown command: ${command}`, {
+      expected: ["init", "init-session", "session", "message", "report"],
+    });
+  }
+
+  const sub = rest[0];
+  if (sub === undefined || sub.startsWith("-") || isHelpFlag(sub)) {
+    return { kind: "help", topic: command };
+  }
+  if (!subcommands.includes(sub)) {
+    return invalid(`unknown ${command} subcommand: ${sub}`, {
+      expected: [...subcommands],
+    });
+  }
+  return { kind: "help", topic: `${command} ${sub}` };
+}
+
 /** Parse `argv` (already stripped of node/script) into a {@link ParseResult}. */
 export function parseArgs(argv: readonly string[]): ParseResult {
   const [command, ...rest] = argv;
@@ -664,9 +699,11 @@ export function parseArgs(argv: readonly string[]): ParseResult {
   if (command === undefined || isHelpFlag(command)) {
     return { kind: "help" };
   }
-  // `asem <group> --help` / `asem <group> help` shows group help.
+  // `asem <command> --help` shows focused help only for known commands and
+  // subcommands; unknown command paths still report `invalid_input` instead of
+  // being masked by the root help page.
   if (rest.length > 0 && isHelpFlag(rest[rest.length - 1])) {
-    return { kind: "help", topic: command };
+    return helpResult(command, rest);
   }
 
   switch (command) {

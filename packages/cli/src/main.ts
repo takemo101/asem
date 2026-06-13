@@ -97,16 +97,27 @@ export function surfaceForArgv(argv: readonly string[]): RuntimeSurface {
   }
 }
 
+/**
+ * True when any token requests help (`--help`, `-h`, or `help`). Used to let
+ * `asem mcp --help` / `asem tui --help` fall through to the pure help renderer
+ * instead of starting the server or cockpit.
+ */
+export function wantsHelp(argv: readonly string[]): boolean {
+  return argv.some((arg) => arg === "--help" || arg === "-h" || arg === "help");
+}
+
 /** Entry point for the installed binary. Returns the process exit code. */
 export async function main(argv: string[]): Promise<number> {
   const deps = await createRuntimeDeps({ surface: surfaceForArgv(argv) });
-  if (argv[0] === "mcp") {
+  // `asem mcp --help` / `asem tui --help` fall through to the pure help path
+  // below so they print focused help instead of starting the server or cockpit.
+  if (argv[0] === "mcp" && !wantsHelp(argv)) {
     await runMcpStdio({ cwd: process.cwd(), deps });
     return 0;
   }
   // The TUI needs a real terminal host, so it is launched from the composition
   // root rather than the pure dispatch table (mirroring `asem mcp`).
-  if (argv[0] === "tui") {
+  if (argv[0] === "tui" && !wantsHelp(argv)) {
     return runTuiCommand({
       args: argv.slice(1),
       cwd: process.cwd(),

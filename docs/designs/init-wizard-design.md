@@ -163,9 +163,7 @@ agent:
   default: pi
   templates:
     pi:
-      command: pi
-      prompt_delivery: arg
-      after_start: []
+      command: "pi {{prompt_shell}}"
 ```
 
 The command strings come from `@asem/runtime` builtin Templates. The wizard does not invent separate command definitions.
@@ -174,6 +172,7 @@ Materialization rules:
 
 - Use `builtinAgentTemplates` and `builtinMuxTemplates` from `@asem/runtime` as the source of truth.
 - Materialize only the selected Agent and selected Multiplexer.
+- Materialized Agent Templates use the current Agent Template schema; prompt-aware commands may include placeholders such as `{{prompt_shell}}` and `{{prompt_path_shell}}`.
 - Parse the selected Agent Template with `agentTemplateSchema` before writing.
 - Parse the selected Multiplexer Template with `muxTemplateSchema` before writing.
 - Write the parsed values using the existing `.asem.yaml` config shape.

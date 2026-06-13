@@ -753,6 +753,7 @@ Context:
 - Enter inserts newline, Ctrl+Enter sends, Esc cancels.
 - Close and delete require confirmation dialogs.
 - Operator-initiated send/close/delete failures open a dismissible error modal. Refresh and auto-refresh failures stay in the footer status line so a transient or repeated refresh error does not reopen a modal every interval.
+- Operation logs must not write JSON/prose lines directly into the terminal while the TUI renderer owns the screen; operator-facing errors and status are rendered in-band through the cockpit view.
 
 ## Testing strategy
 

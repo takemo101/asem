@@ -119,6 +119,22 @@ describe("filter", () => {
   });
 });
 
+describe("attach", () => {
+  test("closed Sessions open an error modal and emit no attach effect", () => {
+    const session = makeSession({ id: "s1", status: "closed" });
+    const state = createCockpitState(makeEnv(), snapshot([session]));
+
+    const result = dispatchCockpit(state, { type: "attach" });
+
+    expect(result.effect).toBeUndefined();
+    expect(result.state.modal).toEqual({
+      kind: "error",
+      code: "session_closed",
+      message: "closed Sessions cannot be attached",
+    });
+  });
+});
+
 describe("send modal", () => {
   test("open -> draft -> submit emits a send effect and closes the modal", () => {
     const session = makeSession({ id: "s1" });

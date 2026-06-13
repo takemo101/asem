@@ -131,6 +131,25 @@ describe("CockpitApp effects", () => {
     });
   });
 
+  test("attach on a closed Session opens an error modal and does not call the host", async () => {
+    const store = new FakeStore();
+    store.sessions.push(
+      makeSession({ id: "s1", name: "one", status: "closed" }),
+    );
+    const { app, host } = makeApp({ store });
+
+    const result = await app.dispatch({ type: "attach" });
+
+    expect(result.effect).toBeUndefined();
+    expect(result.error).toBeUndefined();
+    expect(host.attaches).toEqual([]);
+    expect(app.state.modal).toEqual({
+      kind: "error",
+      code: "session_closed",
+      message: "closed Sessions cannot be attached",
+    });
+  });
+
   test("attach passes a null hint when the mux ref cannot render one", async () => {
     const store = new FakeStore();
     // herdr's attach references session/workspace/tab refs, which this ref lacks → no hint.

@@ -169,7 +169,7 @@ Rules:
 
 - `workspace.id` is required after `asem init`.
 - Builtin templates are available even when project-local `templates` is omitted or empty.
-- Generated config omits schema-default empty fields such as empty `templates` maps, empty command sequences, empty `attach_command`, and empty `refs` maps. Hand-written config may still use explicit empty maps such as `templates: {}`.
+- Generated config uses block-style YAML and avoids flow-style empty collection notation such as `: {}` or `: []`. Empty schema-default fields such as empty `templates` maps, empty command sequences, empty `attach_command`, and empty `refs` maps are omitted. Hand-written config may still use explicit YAML flow-style empty collections; parsing remains representation-neutral.
 - `asem init --interactive` may materialize the selected builtin Agent and Multiplexer Templates into project-local `templates`; see [`init-wizard-design.md`](./init-wizard-design.md).
 - Non-interactive `asem init --workspace <id> --agent <name> --mux <name>` may also materialize selected builtin Templates.
 - Project-local templates are trusted like local code.

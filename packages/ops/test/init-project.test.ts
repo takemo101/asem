@@ -80,6 +80,47 @@ describe("initProject", () => {
     expect(config).toContain("mux:\n  default: herdr\nagent:");
   });
 
+  test("generated .asem.yaml omits empty collections instead of flow-style notation", async () => {
+    const fs = new FakeFileSystem();
+    const result = await initProject(
+      { fs, scopeResolver: scopeAt() },
+      {
+        cwd: CWD,
+        workspaceId: "ws_42",
+        agent: {
+          default: "custom-agent",
+          templates: {
+            "custom-agent": { command: "agent", before_agent: [] },
+            empty: {},
+          },
+        },
+        mux: {
+          default: "custom-mux",
+          templates: {
+            "custom-mux": {
+              create: [],
+              refs: {},
+              send: [{ type: "run", command: "send {{message_shell}}" }],
+            },
+            empty: {},
+          },
+        },
+      },
+    );
+
+    const { configPath } = expectOk(result);
+    const config = requiredFileContents(fs, configPath);
+    expect(config).not.toContain(": {}");
+    expect(config).not.toContain("- {}");
+    expect(config).not.toContain(": []");
+    expect(config).not.toContain("- []");
+    expect(config).not.toContain("empty:");
+    expect(config).not.toContain("before_agent:");
+    expect(config).not.toContain("create:");
+    expect(config).not.toContain("refs:");
+    expect(config).toContain("send:\n        - type: run");
+  });
+
   test("creates .asem.yaml with selected agent and mux templates", async () => {
     const fs = new FakeFileSystem();
     const result = await initProject(

@@ -16,6 +16,7 @@ import {
   agentTemplateSchema,
   builtinAgentTemplates,
   builtinMuxTemplates,
+  type MuxTemplate,
   muxTemplateSchema,
 } from "@asem/runtime";
 
@@ -39,6 +40,32 @@ function cleanAgentTemplate(template: AgentTemplate): Record<string, unknown> {
   }
   if (template.after_agent.length > 0) {
     result.after_agent = template.after_agent;
+  }
+  return result;
+}
+
+function cleanMuxTemplate(template: MuxTemplate): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  if (template.create.length > 0) {
+    result.create = template.create;
+  }
+  if (template.run_in_pane.length > 0) {
+    result.run_in_pane = template.run_in_pane;
+  }
+  if (template.send.length > 0) {
+    result.send = template.send;
+  }
+  if (template.attach.length > 0) {
+    result.attach = template.attach;
+  }
+  if (template.attach_command.length > 0) {
+    result.attach_command = template.attach_command;
+  }
+  if (template.close.length > 0) {
+    result.close = template.close;
+  }
+  if (Object.keys(template.refs).length > 0) {
+    result.refs = template.refs;
   }
   return result;
 }
@@ -163,7 +190,7 @@ function materializeMuxTemplate(
       }),
     };
   }
-  return { ok: true, value: parsed.data };
+  return { ok: true, value: cleanMuxTemplate(parsed.data) };
 }
 
 /** Materialize selected builtin Agent/Mux Templates into a Config object. */

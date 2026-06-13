@@ -31,6 +31,38 @@ describe("materializeInitConfig", () => {
     });
   });
 
+  test("omits empty default fields from materialized mux templates", () => {
+    const result = materializeInitConfig({
+      workspaceId: "ws_1",
+      agent: "claude",
+      mux: "herdr",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+
+    expect(result.value.mux.templates.herdr).not.toHaveProperty("refs");
+    expect(result.value.mux.templates.herdr).not.toHaveProperty(
+      "attach_command",
+      [],
+    );
+  });
+
+  test("keeps non-empty mux refs in block-renderable object form", () => {
+    const result = materializeInitConfig({
+      workspaceId: "ws_1",
+      agent: "pi",
+      mux: "tmux",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+
+    expect(result.value.mux.templates.tmux).toMatchObject({
+      refs: { tmux_session_name: "{{session_id}}" },
+    });
+  });
+
   test("keeps paste_prompt and before_paste for the paste builtin", () => {
     const result = materializeInitConfig({
       workspaceId: "ws_1",

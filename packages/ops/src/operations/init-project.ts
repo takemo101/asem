@@ -132,6 +132,16 @@ function renderYamlArray(values: unknown[], indent: number): string[] {
   return lines;
 }
 
+function configSectionWithOptionalTemplates(
+  section: MuxConfig | AgentConfig,
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { default: section.default };
+  if (Object.keys(section.templates).length > 0) {
+    result.templates = section.templates;
+  }
+  return result;
+}
+
 /** Render the initial `.asem.yaml` for a workspace (design "Config design"). */
 function renderConfigYaml(
   workspaceId: string,
@@ -140,8 +150,12 @@ function renderConfigYaml(
 ): string {
   const config = {
     workspace: { id: workspaceId },
-    mux: mux ?? { default: "herdr", templates: {} },
-    agent: agent ?? { default: "claude", templates: {} },
+    mux: configSectionWithOptionalTemplates(
+      mux ?? { default: "herdr", templates: {} },
+    ),
+    agent: configSectionWithOptionalTemplates(
+      agent ?? { default: "claude", templates: {} },
+    ),
   };
   return `${renderYamlObject(config, 0).join("\n")}\n`;
 }

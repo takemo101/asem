@@ -32,6 +32,12 @@ function expectOk<T>(
   return result.value;
 }
 
+function requiredFileContents(fs: FakeFileSystem, path: string): string {
+  const file = fs.files.get(path);
+  if (file === undefined) throw new Error(`expected file at ${path}`);
+  return file.contents;
+}
+
 describe("initProject", () => {
   test("creates .asem.yaml with the workspace id when missing", async () => {
     const fs = new FakeFileSystem();
@@ -43,10 +49,35 @@ describe("initProject", () => {
     const { configPath } = expectOk(result);
     expect(configPath).toBe("/repo/a/.asem.yaml");
 
-    const config = fs.files.get(configPath);
-    expect(config).toBeDefined();
-    expect(config!.contents).toContain("id: ws_42");
-    expect(config!.contents).toContain("workspace:");
+    expect(requiredFileContents(fs, configPath)).toBe(
+      [
+        "workspace:",
+        "  id: ws_42",
+        "mux:",
+        "  default: herdr",
+        "agent:",
+        "  default: claude",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  test("omits empty project-local template maps from generated .asem.yaml", async () => {
+    const fs = new FakeFileSystem();
+    const result = await initProject(
+      { fs, scopeResolver: scopeAt() },
+      {
+        cwd: CWD,
+        workspaceId: "ws_42",
+        agent: { default: "claude", templates: {} },
+        mux: { default: "herdr", templates: {} },
+      },
+    );
+
+    const { configPath } = expectOk(result);
+    const config = requiredFileContents(fs, configPath);
+    expect(config).not.toContain("templates: {}");
+    expect(config).toContain("mux:\n  default: herdr\nagent:");
   });
 
   test("creates .asem.yaml with selected agent and mux templates", async () => {
@@ -98,7 +129,7 @@ describe("initProject", () => {
     );
 
     const { configPath } = expectOk(result);
-    const config = fs.files.get(configPath)!.contents;
+    const config = requiredFileContents(fs, configPath);
     expect(config).toContain("default: tmux");
     expect(config).toContain("default: pi");
     expect(config).toContain("templates:\n    tmux:");

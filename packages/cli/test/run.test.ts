@@ -65,6 +65,99 @@ describe("runCli help & usage", () => {
     ]);
     expect(code).toBe(EXIT_USAGE);
   });
+
+  test("root help is grouped into scannable sections with workflows", async () => {
+    const { io, code } = await run(["--help"]);
+    expect(code).toBe(EXIT_OK);
+    const out = io.outText();
+    for (const heading of [
+      "Common workflows:",
+      "Setup:",
+      "Sessions:",
+      "Messages:",
+      "Surfaces:",
+    ]) {
+      expect(out).toContain(heading);
+    }
+    // The workflow block names the first-run sequence.
+    expect(out).toContain("asem init --interactive");
+    expect(out).toContain("asem init-session");
+    expect(out).toContain("asem session create");
+    expect(out).toContain("asem tui");
+  });
+
+  test("group help shows focused subcommands, not the root command map", async () => {
+    const { io, code } = await run(["session", "--help"]);
+    expect(code).toBe(EXIT_OK);
+    const out = io.outText();
+    expect(out).toContain("asem session <subcommand>");
+    expect(out).toContain("create");
+    expect(out).toContain("attach");
+    // Group help must not fall back to the root listing's other groups.
+    expect(out).not.toContain("Surfaces:");
+  });
+
+  test("message and report group help are focused on their nouns", async () => {
+    const message = await run(["message", "--help"]);
+    expect(message.code).toBe(EXIT_OK);
+    expect(message.io.outText()).toContain("asem message <subcommand>");
+
+    const report = await run(["report", "--help"]);
+    expect(report.code).toBe(EXIT_OK);
+    expect(report.io.outText()).toContain("asem report <subcommand>");
+  });
+
+  test("subcommand help separates usage, required, options, and examples", async () => {
+    const { io, code } = await run(["session", "create", "--help"]);
+    expect(code).toBe(EXIT_OK);
+    const out = io.outText();
+    expect(out).toContain("asem session create <name> --prompt <text>");
+    expect(out).toContain("required:");
+    expect(out).toContain("--prompt <text>");
+    expect(out).toContain("options:");
+    expect(out).toContain("examples:");
+  });
+
+  test("message wait help documents the wait filters and timeout", async () => {
+    const { io, code } = await run(["message", "wait", "--help"]);
+    expect(code).toBe(EXIT_OK);
+    const out = io.outText();
+    expect(out).toContain("asem message wait --to <id>");
+    expect(out).toContain("--timeout-ms");
+    expect(out).toContain("--kind");
+  });
+
+  test("init and init-session each render their own focused page", async () => {
+    const init = await run(["init", "--help"]);
+    expect(init.code).toBe(EXIT_OK);
+    expect(init.io.outText()).toContain("asem init — initialize an asem");
+
+    const initSession = await run(["init-session", "--help"]);
+    expect(initSession.code).toBe(EXIT_OK);
+    expect(initSession.io.outText()).toContain("--mux-ref");
+  });
+
+  test("tui --help exits 0 and shows TUI-specific scope help", async () => {
+    const { io, code } = await run(["tui", "--help"]);
+    expect(code).toBe(EXIT_OK);
+    const out = io.outText();
+    expect(out).toContain("asem tui — open the human Cockpit");
+    expect(out).toContain("--scope worktree");
+    expect(out).toContain("--scope workspace");
+    expect(out).toContain("(default)");
+  });
+
+  test("mcp --help exits 0 and describes the AI-facing server", async () => {
+    const { io, code } = await run(["mcp", "--help"]);
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("asem mcp — start the AI-facing MCP server");
+  });
+
+  test("an unknown option still errors instead of printing help", async () => {
+    const { io, code } = await run(["session", "list", "--bogus"]);
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("invalid_input");
+  });
 });
 
 describe("runCli init", () => {

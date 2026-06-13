@@ -36,8 +36,56 @@ describe("parseArgs help", () => {
     if (result.kind === "help") expect(result.topic).toBe("init-session");
   });
 
+  /** Parse a help request and return its topic (undefined for root help). */
+  function helpTopic(argv: string[]): string | undefined {
+    const result = parseArgs(argv);
+    expect(result.kind).toBe("help");
+    if (result.kind !== "help") throw new Error("unreachable");
+    return result.topic;
+  }
+
+  test("a bare group --help carries just the group as the topic", () => {
+    expect(helpTopic(["session", "--help"])).toBe("session");
+    expect(helpTopic(["message", "--help"])).toBe("message");
+    expect(helpTopic(["report", "--help"])).toBe("report");
+  });
+
+  test("subcommand --help carries the `group subcommand` topic", () => {
+    expect(helpTopic(["session", "create", "--help"])).toBe("session create");
+    expect(helpTopic(["message", "wait", "--help"])).toBe("message wait");
+    expect(helpTopic(["report", "parent", "--help"])).toBe("report parent");
+  });
+
+  test("tui and mcp --help carry their command as the topic", () => {
+    expect(helpTopic(["tui", "--help"])).toBe("tui");
+    expect(helpTopic(["mcp", "--help"])).toBe("mcp");
+  });
+
   test("unknown command is invalid_input", () => {
     expect(errorCode(["frobnicate"])).toBe("invalid_input");
+  });
+
+  test("unknown command with --help is invalid_input", () => {
+    expect(errorCode(["frobnicate", "--help"])).toBe("invalid_input");
+  });
+
+  test("unknown subcommand with --help is invalid_input", () => {
+    expect(errorCode(["session", "frobnicate", "--help"])).toBe(
+      "invalid_input",
+    );
+    expect(errorCode(["message", "frobnicate", "--help"])).toBe(
+      "invalid_input",
+    );
+    expect(errorCode(["report", "frobnicate", "--help"])).toBe("invalid_input");
+  });
+
+  test("direct command help tolerates option-shaped context", () => {
+    expect(helpTopic(["init", "--workspace", "ws", "--help"])).toBe("init");
+    expect(helpTopic(["tui", "--scope", "workspace", "--help"])).toBe("tui");
+  });
+
+  test("an unknown option is still invalid_input, not masked as help", () => {
+    expect(errorCode(["session", "list", "--bogus"])).toBe("invalid_input");
   });
 });
 

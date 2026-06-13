@@ -188,7 +188,7 @@ Materialization rules:
 - Write the parsed values using the existing `.asem.yaml` config shape.
 - Keep `agent.default` and `mux.default` equal to the selected default Template names.
 - Keep project-local template names equal to the selected builtin Template names.
-- Omit schema-default empty fields from generated config: empty top-level `templates` maps, empty Mux Template command sequences, empty `attach_command`, and empty `refs` maps. Existing hand-written config may still spell those values explicitly, including with YAML inline empty maps such as `templates: {}`.
+- Generate block-style YAML and avoid flow-style empty collection notation such as `: {}` or `: []`. Omit schema-default empty fields from generated config: empty top-level `templates` maps, empty Mux Template command sequences, empty `attach_command`, and empty `refs` maps. Existing hand-written config may still spell those values explicitly; parsing remains representation-neutral.
 
 The renderer should be deterministic so tests can assert exact output. A small YAML renderer for the known config/template shapes is acceptable; no new YAML stringification dependency is required.
 

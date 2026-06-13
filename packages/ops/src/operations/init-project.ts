@@ -54,6 +54,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function renderYamlCollection(value: unknown, indent: number): string[] {
+  if (Array.isArray(value)) return renderYamlArray(value, indent);
+  if (isRecord(value)) return renderYamlObject(value, indent);
+  return [`${" ".repeat(indent)}${yamlValue(value)}`];
+}
+
 function renderYamlObject(
   object: Record<string, unknown>,
   indent: number,
@@ -62,21 +68,18 @@ function renderYamlObject(
   const lines: string[] = [];
   for (const [key, value] of Object.entries(object)) {
     if (Array.isArray(value)) {
-      if (value.length === 0) {
-        lines.push(`${pad}${key}: []`);
-      } else {
+      const childLines = renderYamlArray(value, indent + 2);
+      if (childLines.length > 0) {
         lines.push(`${pad}${key}:`);
-        lines.push(...renderYamlArray(value, indent + 2));
+        lines.push(...childLines);
       }
       continue;
     }
     if (isRecord(value)) {
-      const entries = Object.entries(value);
-      if (entries.length === 0) {
-        lines.push(`${pad}${key}: {}`);
-      } else {
+      const childLines = renderYamlObject(value, indent + 2);
+      if (childLines.length > 0) {
         lines.push(`${pad}${key}:`);
-        lines.push(...renderYamlObject(value, indent + 2));
+        lines.push(...childLines);
       }
       continue;
     }
@@ -85,45 +88,59 @@ function renderYamlObject(
   return lines;
 }
 
+function pushArrayChild(
+  lines: string[],
+  keyPrefix: string,
+  value: unknown,
+  childIndent: number,
+): void {
+  if (Array.isArray(value)) {
+    const childLines = renderYamlArray(value, childIndent);
+    if (childLines.length > 0) {
+      lines.push(`${keyPrefix}:`);
+      lines.push(...childLines);
+    }
+    return;
+  }
+  if (isRecord(value)) {
+    const childLines = renderYamlObject(value, childIndent);
+    if (childLines.length > 0) {
+      lines.push(`${keyPrefix}:`);
+      lines.push(...childLines);
+    }
+    return;
+  }
+  lines.push(`${keyPrefix}: ${yamlValue(value)}`);
+}
+
 function renderYamlArray(values: unknown[], indent: number): string[] {
   const pad = " ".repeat(indent);
   const lines: string[] = [];
   for (const value of values) {
     if (Array.isArray(value)) {
-      lines.push(`${pad}-`);
-      lines.push(...renderYamlArray(value, indent + 2));
+      const childLines = renderYamlArray(value, indent + 2);
+      if (childLines.length > 0) {
+        lines.push(`${pad}-`);
+        lines.push(...childLines);
+      }
       continue;
     }
     if (isRecord(value)) {
       const entries = Object.entries(value);
-      if (entries.length === 0) {
-        lines.push(`${pad}- {}`);
+      const firstRenderable = entries.find(([, child]) =>
+        Array.isArray(child) || isRecord(child)
+          ? renderYamlCollection(child, indent + 2).length > 0
+          : true,
+      );
+      if (firstRenderable === undefined) {
         continue;
       }
-      const first = entries[0];
-      if (first === undefined) {
-        continue;
-      }
-      const [firstKey, firstValue] = first;
-      if (Array.isArray(firstValue)) {
-        lines.push(`${pad}- ${firstKey}:`);
-        lines.push(...renderYamlArray(firstValue, indent + 2));
-      } else if (isRecord(firstValue)) {
-        lines.push(`${pad}- ${firstKey}:`);
-        lines.push(...renderYamlObject(firstValue, indent + 2));
-      } else {
-        lines.push(`${pad}- ${firstKey}: ${yamlValue(firstValue)}`);
-      }
-      for (const [key, child] of entries.slice(1)) {
-        if (Array.isArray(child)) {
-          lines.push(`${pad}  ${key}:`);
-          lines.push(...renderYamlArray(child, indent + 4));
-        } else if (isRecord(child)) {
-          lines.push(`${pad}  ${key}:`);
-          lines.push(...renderYamlObject(child, indent + 4));
-        } else {
-          lines.push(`${pad}  ${key}: ${yamlValue(child)}`);
-        }
+      const [firstKey, firstValue] = firstRenderable;
+      pushArrayChild(lines, `${pad}- ${firstKey}`, firstValue, indent + 2);
+      for (const [key, child] of entries.slice(
+        entries.indexOf(firstRenderable) + 1,
+      )) {
+        pushArrayChild(lines, `${pad}  ${key}`, child, indent + 4);
       }
       continue;
     }

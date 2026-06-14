@@ -11,7 +11,7 @@ import {
 /**
  * Builtin mux template tests (MIK-007).
  *
- * These exercise the herdr / tmux / zellij builtin mux templates entirely
+ * These exercise the herdr / tmux / rmux / zellij builtin mux templates entirely
  * through the FakeTemplateRunner — no real multiplexer binary is required.
  */
 
@@ -443,7 +443,7 @@ describe("builtin mux: a created pane is addressed by the same template", () => 
       addressedBy: "w",
     },
     {
-      // tmux/zellij address later sequences by the declared session-name ref
+      // tmux/rmux/zellij address later sequences by the declared session-name ref
       // (derived from the session id), not a captured value.
       name: "tmux",
       createScript: [{ stdout: "%12\n" }],

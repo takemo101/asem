@@ -87,6 +87,7 @@ Default tests should not require:
 
 - herdr
 - tmux
+- rmux
 - zellij
 - real agent CLIs
 - real MCP client

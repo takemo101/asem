@@ -353,15 +353,16 @@ close: []           # close pane/session process
 refs: {}            # derivable mux refs interpolated from create base vars
 ```
 
-`refs` records coordinates that are known before the mux `create` sequence runs, such as a native tmux/zellij session name derived from the asem Session id. Runtime merges `refs` with `create` captures into `mux_ref_json`; if both define the same key, the `create` capture wins because it carries the live mux coordinate.
+`refs` records coordinates that are known before the mux `create` sequence runs, such as a native tmux/rmux/zellij session name derived from the asem Session id. Runtime merges `refs` with `create` captures into `mux_ref_json`; if both define the same key, the `create` capture wins because it carries the live mux coordinate.
 
 Initial builtin mux templates:
 
 - `herdr`
 - `tmux`
+- `rmux`
 - `zellij`
 
-Builtin mux lifecycle follows the cuekit-proven model where possible: tmux and zellij create one native multiplexer session per asem Session, then attach and close by that native session name. Herdr creates one workspace per asem Session under an explicit `herdr_session`; `send` targets the captured root pane, `attach` focuses the captured workspace/tab, and `close` closes the workspace. CLI/TUI attach prefer `attach_command` argv over shelling an `attach` string.
+Builtin mux lifecycle follows the cuekit-proven model where possible: tmux, rmux, and zellij create one native multiplexer session per asem Session, then attach and close by that native session name. Herdr creates one workspace per asem Session under an explicit `herdr_session`; `send` targets the captured root pane, `attach` focuses the captured workspace/tab, and `close` closes the workspace. CLI/TUI attach prefer `attach_command` argv over shelling an `attach` string.
 
 ### Agent template shape
 
@@ -866,7 +867,7 @@ Operation test matrix:
 
 Real mux integration tests:
 
-- herdr, tmux, and zellij tests are optional;
+- herdr, tmux, rmux, and zellij tests are optional;
 - skip when the binary is unavailable;
 - default CI must not require real multiplexers.
 
@@ -937,7 +938,7 @@ The opt-in real-mux/agent checks are separate and off by default: the
    - `asem message list`.
 
 7. **Mux templates**
-   - herdr, tmux, zellij builtin templates;
+   - herdr, tmux, rmux, zellij builtin templates;
    - fake-runner tests first;
    - optional real integration tests.
 

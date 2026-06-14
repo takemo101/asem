@@ -11,7 +11,7 @@ import {
  *
  * `renderAttachHint` turns a mux template's `attach` sequence plus a Session's
  * captured mux refs into a single human/operator attach command. These exercise
- * the builtin herdr / tmux / zellij attach sequences purely as string
+ * the builtin herdr / tmux / rmux / zellij attach sequences purely as string
  * interpolation — no real multiplexer binary is involved (implementation
  * principle 4) — and assert the fallback when refs are missing.
  */
@@ -29,6 +29,15 @@ describe("renderAttachCommand: builtin mux templates", () => {
     });
     expect(command).toEqual({
       argv: ["tmux", "attach-session", "-t", "asem-s_0001"],
+    });
+  });
+
+  test("rmux renders a structured attach argv instead of a shell string", () => {
+    const command = renderAttachCommand(muxTemplate("rmux").attach_command, {
+      rmux_session_name: "asem-s_0001",
+    });
+    expect(command).toEqual({
+      argv: ["rmux", "attach-session", "-t", "asem-s_0001"],
     });
   });
 
@@ -80,6 +89,13 @@ describe("renderAttachHint: builtin mux templates", () => {
       tmux_session_name: "main",
     });
     expect(hint).toBe("tmux attach-session -t 'main'");
+  });
+
+  test("rmux renders a session attach hint", () => {
+    const hint = renderAttachHint(muxTemplate("rmux").attach, {
+      rmux_session_name: "main",
+    });
+    expect(hint).toBe("rmux attach-session -t 'main'");
   });
 
   test("zellij renders a session attach hint with the short socket dir", () => {

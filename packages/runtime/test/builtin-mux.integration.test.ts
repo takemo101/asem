@@ -5,7 +5,7 @@ import { createTemplateRegistry, type MuxTemplate } from "../src/index.ts";
  * Optional real-mux integration checks for the builtin templates (MIK-007).
  *
  * These are intentionally **off by default**: the default `bun run test` must
- * never require a real herdr / tmux / zellij binary (testability rules;
+ * never require a real herdr / tmux / rmux / zellij binary (testability rules;
  * implementation principle 4). They run only when explicitly opted in with
  * `ASEM_MUX_INTEGRATION=1`, and each per-mux block additionally skips when its
  * binary is unavailable.
@@ -68,6 +68,17 @@ describe.skipIf(!INTEGRATION)("builtin mux integration (opt-in)", () => {
         "tmux",
       ) as MuxTemplate;
       expect(firstWords(template).every((w) => w === "tmux")).toBe(true);
+    });
+  });
+
+  describe.skipIf(!has("rmux"))("rmux", () => {
+    test("binary is invocable and the template targets the rmux CLI", () => {
+      const out = Bun.spawnSync(["rmux", "-V"]);
+      expect(out.exitCode).toBe(0);
+      const template = createTemplateRegistry().getMuxTemplate(
+        "rmux",
+      ) as MuxTemplate;
+      expect(firstWords(template).every((w) => w === "rmux")).toBe(true);
     });
   });
 

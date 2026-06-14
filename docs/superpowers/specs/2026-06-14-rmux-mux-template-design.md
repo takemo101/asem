@@ -53,7 +53,7 @@ Create a detached RMUX session named by `session_id` and rooted at the requested
 
 ```sh
 rmux new-session -d -s {{session_id_shell}} -c {{cwd_shell}}
-rmux list-panes -t {{rmux_session_name_shell}} -F '#{pane_id}'
+rmux list-panes -t {{session_id_shell}} -F '#{pane_id}'
 ```
 
 Why not `rmux new-session -P -F '#{pane_id}'`? RMUX has tmux-compatible command names, but `-P -F` support is not established by the README excerpt. `list-panes` has source-backed format support, so it is the safer first template. If real integration proves `new-session -P -F` works, the template can be simplified.

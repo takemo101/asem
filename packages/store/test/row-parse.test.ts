@@ -122,17 +122,27 @@ describe("row parse failures — sessions", () => {
     db.query(INSERT_RAW_SESSION).run(
       ...rawSessionRow({ mux_ref_json: "not json" }),
     );
-    await expect(store.getSessionById(scopeA, "s_bad")).rejects.toMatchObject({
-      code: "row_parse_failed",
-    });
+
+    let caught: unknown;
+    try {
+      await store.getSessionById(scopeA, "s_bad");
+    } catch (error) {
+      caught = error;
+    }
+    expect(isStoreError(caught, "row_parse_failed")).toBe(true);
   });
 
   test("listSessions surfaces a corrupt row", async () => {
     const { store, db } = freshStore();
     db.query(INSERT_RAW_SESSION).run(...rawSessionRow({ status: "weird" }));
-    await expect(store.listSessions(scopeA)).rejects.toMatchObject({
-      code: "row_parse_failed",
-    });
+
+    let caught: unknown;
+    try {
+      await store.listSessions(scopeA);
+    } catch (error) {
+      caught = error;
+    }
+    expect(isStoreError(caught, "row_parse_failed")).toBe(true);
   });
 
   test("parseSessionRow rejects a missing required field", () => {
@@ -167,9 +177,13 @@ describe("row parse failures — messages", () => {
       null,
       "2026-06-05T12:00:00Z",
     );
-    await expect(store.listMessages(scopeA)).rejects.toMatchObject({
-      code: "row_parse_failed",
-    });
+    let caught: unknown;
+    try {
+      await store.listMessages(scopeA);
+    } catch (error) {
+      caught = error;
+    }
+    expect(isStoreError(caught, "row_parse_failed")).toBe(true);
   });
 
   test("parseMessageRow rejects a bad timestamp", () => {

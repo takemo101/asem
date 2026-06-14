@@ -12,6 +12,7 @@ Use ADRs for durable decisions. Use `docs/designs/` for feature/subsystem design
 - [`0004-tui-defaults-to-workspace-live-cockpit.md`](./0004-tui-defaults-to-workspace-live-cockpit.md) — `asem tui` defaults to a workspace-wide live cockpit while normal CLI/MCP scope remains worktree-isolated.
 - [`0005-agent-prompt-delivery-uses-command-templates.md`](./0005-agent-prompt-delivery-uses-command-templates.md) — Agent prompt delivery is expressed with command templates, replacing `prompt_delivery`.
 - [`0006-surface-specific-logger-composition.md`](./0006-surface-specific-logger-composition.md) — Logger implementations are selected by CLI/MCP/TUI surface so protocol and terminal output stay safe.
+- [`0007-agent-profiles-are-explicit-prompt-shaping.md`](./0007-agent-profiles-are-explicit-prompt-shaping.md) — Agent Profiles are explicit prompt-shaping bundles, not workflow roles or automatic selectors.
 
 ## ADR rules
 

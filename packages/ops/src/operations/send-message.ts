@@ -52,13 +52,12 @@ import {
   type TemplateRunner,
 } from "@asem/core";
 import {
-  createRedactor,
-  noopRedactor,
-  SequenceEngine,
-  withRedaction,
-} from "@asem/runtime";
-import { authenticateCurrentSession, resolveContext } from "../context.ts";
+  authenticateCurrentSessionWithToken,
+  resolveContext,
+  resolveMutationActor,
+} from "../context.ts";
 import type { OpContext } from "../deps.ts";
+import { muxExecutionFor } from "../mux-execution.ts";
 import { muxRefVars } from "../mux-vars.ts";
 import { resolveMuxTemplate } from "../templates.ts";
 
@@ -117,26 +116,17 @@ export async function sendMessage(
   }
   const { config, scope } = contextResult.value;
 
-  // Auth: agent-originated calls present a current Session and must verify its
-  // token; human local-trust calls have none and send with no attribution. An
-  // operator surface (`ctx.origin === "operator"`, set by the TUI) forces the
-  // human path: it never resolves the current-Session pointer, so a workspace-
-  // scope send into a sibling worktree is recorded operator-originated rather
-  // than silently impersonating that worktree's current Session (MIK-022;
-  // ADR 0003).
-  let sender: Session | null = null;
-  let senderToken: string | null = null;
-  if (ctx.origin !== "operator") {
-    const ref = await deps.currentSessionResolver.resolve(scope);
-    if (ctx.origin === "agent" || ref !== null) {
-      const auth = await authenticateCurrentSession(deps, scope);
-      if (!auth.ok) {
-        return auth;
-      }
-      sender = auth.value;
-      senderToken = ref?.token ?? null;
-    }
+  // Auth: the actor ladder (ADR 0003) lives in resolveMutationActor. Agent
+  // origin verifies the current Session; an operator surface (TUI) forces the
+  // human path with no source attribution so a workspace-scope send into a
+  // sibling worktree is not silently impersonated; unset origin attributes to
+  // the current Session when one is registered or sends anonymously when none is
+  // (MIK-022; ADR 0003). `human-anon`/`operator` carry no Session and no token.
+  const actorResult = await resolveMutationActor(deps, scope, ctx);
+  if (!actorResult.ok) {
+    return actorResult;
   }
+  const actor = actorResult.value;
 
   // Same effective scope is enforced for sender and target: the target lookup
   // is scoped, so a Session in a sibling worktree is simply not found.
@@ -152,11 +142,11 @@ export async function sendMessage(
   }
 
   return deliver(deps, scope, {
-    fromSession: sender,
+    fromSession: actor.session,
     target,
     kind: input.kind ?? "message",
     body: input.body,
-    redactor: redactorFor(deps, senderToken),
+    token: actor.token,
     // Build the registry from this cwd's config so a project-local mux `send`
     // template overrides the builtin for delivery.
     templateRegistry: deps.templateRegistryFactory.forConfig(config),
@@ -185,12 +175,14 @@ export async function reportParent(
   const { config, scope } = contextResult.value;
 
   // report_parent always acts as the current Session: resolve and verify it.
-  const ref = await deps.currentSessionResolver.resolve(scope);
-  const auth = await authenticateCurrentSession(deps, scope);
+  // Unlike send/close/delete it has no operator/anonymous path, so it does not
+  // use resolveMutationActor — it must always be the verified current Session
+  // (ADR 0003).
+  const auth = await authenticateCurrentSessionWithToken(deps, scope);
   if (!auth.ok) {
     return auth;
   }
-  const current = auth.value;
+  const current = auth.value.session;
 
   if (current.parentSessionId === null) {
     return err(
@@ -220,7 +212,7 @@ export async function reportParent(
     target: parent,
     kind: "report",
     body: input.body,
-    redactor: redactorFor(deps, ref?.token ?? null),
+    token: auth.value.token,
     templateRegistry: deps.templateRegistryFactory.forConfig(config),
   });
 }
@@ -238,12 +230,11 @@ async function deliver(
     target: Session;
     kind: MessageKind;
     body: string;
-    redactor: Redactor;
+    token: string | null;
     templateRegistry: TemplateRegistry;
   },
 ): Promise<OperationResult<{ message: Message }>> {
-  const { fromSession, target, kind, body, redactor, templateRegistry } =
-    params;
+  const { fromSession, target, kind, body, token, templateRegistry } = params;
 
   // Resolve the target's mux template before recording the Message. A malformed
   // project-local template is a recoverable config defect, surfaced as a
@@ -278,10 +269,10 @@ async function deliver(
   // Persist the Message before recording the delivery result (principle 6).
   await deps.store.insertMessage(message);
 
-  const logger =
-    deps.logger !== undefined
-      ? withRedaction(deps.logger, redactor)
-      : undefined;
+  // One token-scoped redactor + redacted logger + SequenceEngine for delivery,
+  // so the sender's raw token is masked from every sequence error, log line, and
+  // persisted `delivery_error` (principle 8).
+  const { redactor, logger, engine } = muxExecutionFor(deps, token);
 
   // Delivery uses the target Session's stored mux ref + its mux template `send`
   // sequence, executed through @asem/runtime via the injected TemplateRunner. A
@@ -297,11 +288,6 @@ async function deliver(
     );
   }
 
-  const engine = new SequenceEngine({
-    runner: deps.templateRunner,
-    redactor,
-    logger,
-  });
   const result = await engine.run(muxTemplate.send, {
     cwd: target.cwd,
     variables: { ...muxRefVars(target.muxRef), message: formattedBody },
@@ -348,16 +334,4 @@ async function recordDeliveryError(
     deliveryError,
   });
   return ok({ message });
-}
-
-/**
- * A redactor scoped to the sender's raw token so it is masked from any sequence
- * error, log line, or persisted `delivery_error`. Human calls have no token, so
- * fall back to the injected redactor.
- */
-function redactorFor(deps: MessagingDeps, token: string | null): Redactor {
-  if (token === null) {
-    return deps.redactor ?? noopRedactor;
-  }
-  return createRedactor([token]);
 }

@@ -41,15 +41,10 @@ import {
   type TemplateRegistryFactory,
   type TemplateRunner,
 } from "@asem/core";
-import {
-  createRedactor,
-  type MuxTemplate,
-  noopRedactor,
-  SequenceEngine,
-  withRedaction,
-} from "@asem/runtime";
-import { authenticateCurrentSession, resolveContext } from "../context.ts";
+import type { MuxTemplate } from "@asem/runtime";
+import { resolveContext, resolveMutationActor } from "../context.ts";
 import type { OpContext } from "../deps.ts";
+import { muxExecutionFor } from "../mux-execution.ts";
 import { muxRefVars } from "../mux-vars.ts";
 import { resolveMuxTemplate } from "../templates.ts";
 
@@ -92,22 +87,17 @@ export async function closeSession(
   }
   const { config, scope } = contextResult.value;
 
-  // Auth: MCP/agent-origin calls must verify the current Session. Human
-  // local-trust calls keep the previous behavior: if a pointer is present,
-  // verify it; if none is present, close under local trust. An explicit
-  // operator surface (TUI) forces local trust and must not be blocked by a
-  // stale current-session pointer in the target scope.
-  let currentToken: string | null = null;
-  if (ctx.origin !== "operator") {
-    const ref = await deps.currentSessionResolver.resolve(scope);
-    if (ctx.origin === "agent" || ref !== null) {
-      const auth = await authenticateCurrentSession(deps, scope);
-      if (!auth.ok) {
-        return auth;
-      }
-      currentToken = ref?.token ?? null;
-    }
+  // Auth: the actor ladder (ADR 0003) lives in resolveMutationActor. Agent
+  // origin verifies the current Session; an operator surface (TUI) forces local
+  // trust so a stale current-session pointer in the target scope cannot block
+  // the close; unset origin verifies a present pointer or closes under anonymous
+  // local trust. Close performs no attribution — only the token is used, to
+  // scope the mux redactor.
+  const actorResult = await resolveMutationActor(deps, scope, ctx);
+  if (!actorResult.ok) {
+    return actorResult;
   }
+  const actor = actorResult.value;
 
   // Scoped lookup enforces same-scope close: a sibling-worktree Session is not
   // found here, never closed across the isolation boundary.
@@ -125,11 +115,11 @@ export async function closeSession(
     return ok({ session });
   }
 
-  const redactor = redactorFor(deps, currentToken);
-  const logger =
-    deps.logger !== undefined
-      ? withRedaction(deps.logger, redactor)
-      : undefined;
+  // One token-scoped redactor + redacted logger + SequenceEngine, so the current
+  // Session's raw token is masked from any sequence error or log line
+  // (principle 8). Operator/anonymous closes have no token and fall back to the
+  // injected redactor.
+  const { logger, engine } = muxExecutionFor(deps, actor.token);
 
   // Mux `close` runs only when a live pane could exist and asem owns the mux
   // resource. Sessions registered through `init-session` borrow an existing
@@ -159,11 +149,6 @@ export async function closeSession(
     }
     const muxTemplate: MuxTemplate = muxResult.value;
 
-    const engine = new SequenceEngine({
-      runner: deps.templateRunner,
-      redactor,
-      logger,
-    });
     const result = await engine.run(muxTemplate.close, {
       cwd: session.cwd,
       variables: muxRefVars(session.muxRef),
@@ -197,19 +182,4 @@ export async function closeSession(
       updatedAt: closedAt,
     },
   });
-}
-
-/**
- * A redactor scoped to the current Session's raw token so it is masked from any
- * sequence error or log line. Human calls have no token, so fall back to the
- * injected redactor.
- */
-function redactorFor(
-  deps: { redactor?: Redactor },
-  token: string | null,
-): Redactor {
-  if (token === null) {
-    return deps.redactor ?? noopRedactor;
-  }
-  return createRedactor([token]);
 }

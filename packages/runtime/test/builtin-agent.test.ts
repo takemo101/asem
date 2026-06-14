@@ -80,14 +80,30 @@ describe("builtin agent templates: set & shape", () => {
   });
 
   test("builtin commands carry the prompt placeholder, except the paste builtin", () => {
-    expect(agentTemplate("claude").command).toBe("claude {{prompt_shell}}");
-    expect(agentTemplate("codex").command).toBe("codex {{prompt_shell}}");
-    expect(agentTemplate("pi").command).toBe("pi {{prompt_shell}}");
-    expect(agentTemplate("gemini").command).toBe("gemini {{prompt_shell}}");
+    expect(agentTemplate("claude").command).toBe(
+      "claude {{model_shell}} {{prompt_shell}}",
+    );
+    expect(agentTemplate("codex").command).toBe(
+      "codex {{model_shell}} {{prompt_shell}}",
+    );
+    expect(agentTemplate("pi").command).toBe(
+      "pi {{model_shell}} {{prompt_shell}}",
+    );
+    expect(agentTemplate("gemini").command).toBe(
+      "gemini {{model_shell}} {{prompt_shell}}",
+    );
     expect(agentTemplate("agy").command).toBe("agy -i {{prompt_shell}}");
-    // opencode starts bare and pastes the prompt instead.
-    expect(agentTemplate("opencode").command).toBe("opencode");
+    // opencode starts bare and pastes the prompt instead, but still supports
+    // model selection through its startup command.
+    expect(agentTemplate("opencode").command).toBe("opencode {{model_shell}}");
     expect(agentTemplate("opencode").paste_prompt).toBe(true);
+  });
+
+  test("model-supported builtins declare model_flag; agy does not", () => {
+    for (const name of ["claude", "codex", "pi", "gemini", "opencode"]) {
+      expect(agentTemplate(name).model_flag).toBe("--model");
+    }
+    expect(agentTemplate("agy").model_flag).toBeUndefined();
   });
 
   test("only the paste builtin sets paste_prompt and a before_paste sequence", () => {
@@ -114,30 +130,129 @@ describe("builtin agent templates: rendered launch command", () => {
   test("placeholder builtins read prompt.md via $(cat ...) with a shell-escaped path", () => {
     // {{prompt_shell}} keeps the prompt body out of the literal command (and
     // argv), so only the escaped file path appears — long/multiline prompts
-    // never leak into the visible command.
-    expect(renderAgentCommand(agentTemplate("claude"), PROMPT_PATH)).toBe(
-      `claude "$(cat ${PROMPT_SHELL})"`,
-    );
-    expect(renderAgentCommand(agentTemplate("codex"), PROMPT_PATH)).toBe(
-      `codex "$(cat ${PROMPT_SHELL})"`,
-    );
-    expect(renderAgentCommand(agentTemplate("pi"), PROMPT_PATH)).toBe(
-      `pi "$(cat ${PROMPT_SHELL})"`,
-    );
-    expect(renderAgentCommand(agentTemplate("gemini"), PROMPT_PATH)).toBe(
-      `gemini "$(cat ${PROMPT_SHELL})"`,
-    );
-    expect(renderAgentCommand(agentTemplate("agy"), PROMPT_PATH)).toBe(
-      `agy -i "$(cat ${PROMPT_SHELL})"`,
-    );
+    // never leak into the visible command. With no model, {{model_shell}}
+    // collapses to empty, leaving a harmless double space.
+    expect(
+      renderAgentCommand(agentTemplate("claude"), { promptPath: PROMPT_PATH }),
+    ).toBe(`claude  "$(cat ${PROMPT_SHELL})"`);
+    expect(
+      renderAgentCommand(agentTemplate("codex"), { promptPath: PROMPT_PATH }),
+    ).toBe(`codex  "$(cat ${PROMPT_SHELL})"`);
+    expect(
+      renderAgentCommand(agentTemplate("pi"), { promptPath: PROMPT_PATH }),
+    ).toBe(`pi  "$(cat ${PROMPT_SHELL})"`);
+    expect(
+      renderAgentCommand(agentTemplate("gemini"), { promptPath: PROMPT_PATH }),
+    ).toBe(`gemini  "$(cat ${PROMPT_SHELL})"`);
+    // agy is model-unsupported, so its command carries no {{model_shell}}.
+    expect(
+      renderAgentCommand(agentTemplate("agy"), { promptPath: PROMPT_PATH }),
+    ).toBe(`agy -i "$(cat ${PROMPT_SHELL})"`);
+  });
+
+  test("model-supported builtins render the model flag when a model is given", () => {
+    expect(
+      renderAgentCommand(agentTemplate("claude"), {
+        promptPath: PROMPT_PATH,
+        model: "sonnet",
+      }),
+    ).toBe(`claude --model 'sonnet' "$(cat ${PROMPT_SHELL})"`);
   });
 
   test("paste builtin renders the bare command (prompt pasted later)", () => {
     // No prompt token on the command line — the prompt is delivered by the mux
-    // `send` sequence after the agent starts.
-    expect(renderAgentCommand(agentTemplate("opencode"), PROMPT_PATH)).toBe(
-      "opencode",
+    // `send` sequence after the agent starts. With no model the {{model_shell}}
+    // collapses to empty, leaving a trailing space.
+    expect(
+      renderAgentCommand(agentTemplate("opencode"), {
+        promptPath: PROMPT_PATH,
+      }),
+    ).toBe("opencode ");
+    expect(
+      renderAgentCommand(agentTemplate("opencode"), {
+        promptPath: PROMPT_PATH,
+        model: "grok",
+      }),
+    ).toBe("opencode --model 'grok'");
+  });
+});
+
+// --- model placeholder rendering & schema ----------------------------------
+
+describe("Agent command model placeholder", () => {
+  test("{{model_shell}} renders model_flag + shell-escaped model when specified", () => {
+    const template = agentTemplateSchema.parse({
+      command: "agent {{model_shell}} {{prompt_shell}}",
+      model_flag: "--model",
+    });
+    expect(
+      renderAgentCommand(template, {
+        promptPath: PROMPT_PATH,
+        model: "sonnet",
+      }),
+    ).toBe(`agent --model 'sonnet' "$(cat ${PROMPT_SHELL})"`);
+  });
+
+  test("{{model_shell}} renders empty when model is omitted", () => {
+    const template = agentTemplateSchema.parse({
+      command: "agent {{model_shell}} {{prompt_shell}}",
+      model_flag: "--model",
+    });
+    expect(renderAgentCommand(template, { promptPath: PROMPT_PATH })).toBe(
+      `agent  "$(cat ${PROMPT_SHELL})"`,
     );
+    // An explicit null model behaves like an omitted one.
+    expect(
+      renderAgentCommand(template, { promptPath: PROMPT_PATH, model: null }),
+    ).toBe(`agent  "$(cat ${PROMPT_SHELL})"`);
+  });
+
+  test("{{model_shell}} shell-escapes both the flag and the model value", () => {
+    const template = agentTemplateSchema.parse({
+      command: "agent {{model_shell}}",
+      model_flag: "-m",
+    });
+    expect(
+      renderAgentCommand(template, {
+        promptPath: PROMPT_PATH,
+        model: "claude's model",
+      }),
+    ).toBe("agent -m 'claude'\\''s model'");
+  });
+
+  test("rejects {{model_shell}} without model_flag", () => {
+    expect(
+      agentTemplateSchema.safeParse({ command: "agent {{model_shell}}" })
+        .success,
+    ).toBe(false);
+  });
+
+  test("rejects model_flag without a {{model_shell}} placeholder", () => {
+    expect(
+      agentTemplateSchema.safeParse({
+        command: "agent {{prompt_shell}}",
+        model_flag: "--model",
+      }).success,
+    ).toBe(false);
+  });
+
+  test("paste_prompt may coexist with {{model_shell}}", () => {
+    expect(
+      agentTemplateSchema.safeParse({
+        command: "opencode {{model_shell}}",
+        model_flag: "--model",
+        paste_prompt: true,
+      }).success,
+    ).toBe(true);
+  });
+
+  test("an empty model_flag is rejected", () => {
+    expect(
+      agentTemplateSchema.safeParse({
+        command: "agent {{model_shell}}",
+        model_flag: "",
+      }).success,
+    ).toBe(false);
   });
 });
 
@@ -175,7 +290,9 @@ describe("Agent command prompt placeholders", () => {
   for (const c of cases) {
     test(`renders ${c.name}`, () => {
       const template = agentTemplateSchema.parse({ command: c.command });
-      expect(renderAgentCommand(template, PROMPT_PATH)).toBe(c.expected);
+      expect(renderAgentCommand(template, { promptPath: PROMPT_PATH })).toBe(
+        c.expected,
+      );
     });
   }
 
@@ -183,7 +300,9 @@ describe("Agent command prompt placeholders", () => {
     // The prompt is still written to prompt.md by create_session, but the
     // command does not reference it (ADR 0005).
     const template = agentTemplateSchema.parse({ command: "agent --resume" });
-    expect(renderAgentCommand(template, PROMPT_PATH)).toBe("agent --resume");
+    expect(renderAgentCommand(template, { promptPath: PROMPT_PATH })).toBe(
+      "agent --resume",
+    );
   });
 
   test("every placeholder keeps the prompt path shell-escaped where it appears", () => {
@@ -193,7 +312,9 @@ describe("Agent command prompt placeholders", () => {
       "agent < {{prompt_path_shell}}",
     ]) {
       const template = agentTemplateSchema.parse({ command });
-      const rendered = renderAgentCommand(template, PROMPT_PATH);
+      const rendered = renderAgentCommand(template, {
+        promptPath: PROMPT_PATH,
+      });
       expect(rendered).toContain(PROMPT_SHELL);
       // The raw, unescaped path (with a bare space) must never appear.
       expect(rendered).not.toContain(" 1/prompt.md ");
@@ -318,7 +439,9 @@ describe("agent command rendering: token safety", () => {
       "agent --resume",
     ]) {
       const template = agentTemplateSchema.parse({ command });
-      const rendered = renderAgentCommand(template, PROMPT_PATH);
+      const rendered = renderAgentCommand(template, {
+        promptPath: PROMPT_PATH,
+      });
       expect(rendered).not.toContain("AS_SESSION_TOKEN");
       expect(rendered).not.toContain("tok_");
     }
@@ -336,8 +459,10 @@ describe("paste flow: before_paste precedes a mux send after the agent starts", 
     expect(template.paste_prompt).toBe(true);
 
     // 1) The launch command starts the agent with no prompt argument.
-    const launchCommand = renderAgentCommand(template, PROMPT_PATH);
-    expect(launchCommand).toBe("opencode");
+    const launchCommand = renderAgentCommand(template, {
+      promptPath: PROMPT_PATH,
+    });
+    expect(launchCommand).toBe("opencode ");
 
     // 2) The operation would start that command in the pane (run_in_pane). We
     //    model the post-start steps here: the agent template's `before_paste`

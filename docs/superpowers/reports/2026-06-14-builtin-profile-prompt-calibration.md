@@ -86,37 +86,39 @@ Compare current, medium, and short builtin Agent Profile prompts before changing
 
 | Variant | Notes | Decision |
 | --- | --- | --- |
-| Current | Pending evaluation. | Pending. |
-| Medium | Pending evaluation. | Pending. |
-| Short | Pending evaluation. | Pending. |
+| Current | Strongest specificity: files, entry points, data flow, line citations, no edits, ambiguity handling. Downside: 201 words and a more prescriptive final format. | Useful but heavier than needed. |
+| Medium | Keeps inspect-first behavior, targeted search, files/data flow/constraints, verified facts vs hypotheses, no edits, and no completion authority. Much lower weight while staying actionable. | Preferred. |
+| Short | Safest on weight and still evidence-based, but loses useful specificity such as entry points, likely change locations, and richer next-step guidance. | Too compressed. |
 
 ### reviewer
 
 | Variant | Notes | Decision |
 | --- | --- | --- |
-| Current | Pending evaluation. | Pending. |
-| Medium | Pending evaluation. | Pending. |
-| Short | Pending evaluation. | Pending. |
+| Current | Strongest evidence discipline and project-fit reminders, including tests and repository standards. Downside: 218 words and a rigid response structure. | Useful but too heavy. |
+| Medium | Keeps bounded-change review, repository standards, concrete evidence, severity separation, no rewrite, and no lifecycle/final-outcome authority. Verdict format remains actionable without adding workflow semantics. | Preferred. |
+| Short | Concise and safe, but less protective: drops durable-docs nuance, edge-case cautions, and explicit clean-review behavior. | Too compressed. |
 
 ### debugger
 
 | Variant | Notes | Decision |
 | --- | --- | --- |
-| Current | Pending evaluation. | Pending. |
-| Medium | Pending evaluation. | Pending. |
-| Short | Pending evaluation. | Pending. |
+| Current | Excellent method: reproduce, minimize, hypothesize, test, regression checks, cleanup instrumentation. Downside: 193 words and more implementation-heavy wording by default. | Useful but heavier than needed. |
+| Medium | Best prompt-shaping fit: diagnose from evidence, restate expected/observed behavior, narrow the path, propose smallest safe fix, and include validation. Avoids broad refactoring and final-outcome judgment. | Preferred. |
+| Short | Good diagnostic skeleton, but loses expected-vs-observed detail, confidence, and validation-command specificity. | Too compressed. |
 
 ### planner
 
 | Variant | Notes | Decision |
 | --- | --- | --- |
-| Current | Pending evaluation. | Pending. |
-| Medium | Pending evaluation. | Pending. |
-| Short | Pending evaluation. | Pending. |
+| Current | Strongest specificity: exact files/modules/tests, ordered tasks, dependencies, validation, approval decisions. Downside: 211 words and more rigid structure. | Useful but too heavy. |
+| Medium | Keeps essential planning behavior: inspect context, name files/interfaces/tests/dependencies/commands, small reviewable steps, no implementation, no unapproved decisions, and no scheduling/lifecycle/final-outcome authority. | Preferred. |
+| Short | Very concise and safe, but less actionable: drops approval points, interfaces, dependencies, and validation-command emphasis. | Too compressed. |
 
 ## Decision
 
-Pending evaluation.
+Adopt Medium. It preserved boundary safety and actionability for `scout`, `reviewer`, `debugger`, and `planner` while reducing prompt weight from 1,991 to 1,144 words, a 43% reduction. The strongest observation was that Medium kept the behavior-shaping constraints that matter for each profile while Short repeatedly lost useful specificity, especially review evidence discipline, debugger expected-vs-observed detail, and planner validation/dependency guidance.
+
+A reviewer subagent independently recommended Medium for all four required profiles. It found one draft issue: two positive Medium bullets were accidentally placed under `Do not:` in the temporary drafts. The temporary Medium drafts were corrected before implementation.
 
 ## Variant metrics
 

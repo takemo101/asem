@@ -9,7 +9,7 @@ import {
   resolveContext,
   resolveMutationActor,
   sameScope,
-} from "../src/index.ts";
+} from "../src/context.ts";
 import {
   FakeConfigLoader,
   FakeCurrentSessionResolver,

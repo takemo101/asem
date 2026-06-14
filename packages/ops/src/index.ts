@@ -17,13 +17,9 @@ export const PACKAGE_NAME = "@asem/ops";
 // Shared resolution / auth helpers
 export {
   authenticateCurrentSession,
-  authenticateCurrentSessionWithToken,
-  type MutationActor,
   type ProjectContext,
   resolveContext,
-  resolveMutationActor,
   sameScope,
-  type VerifiedCurrentSession,
 } from "./context.ts";
 
 // Dependency bundle & invocation context

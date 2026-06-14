@@ -32,6 +32,8 @@ export function detailView(
     agent: session.agent,
     mux: session.mux,
     model: session.model,
+    profile: session.profile,
+    profileSource: session.profileSource,
     parentLabel,
     parentSessionId: session.parentSessionId,
     cwd: session.cwd,

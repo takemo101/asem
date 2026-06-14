@@ -33,6 +33,14 @@ export function rightLines(
         `agent:         ${detail.agent}`,
         `mux:           ${detail.mux}`,
         `model:         ${detail.model ?? "-"}`,
+        // Profile metadata appears only when the Session was created with one
+        // (MIK-041), keeping the common no-profile detail view uncluttered.
+        ...(detail.profile !== null
+          ? [
+              `profile:       ${detail.profile}`,
+              `profile_src:   ${detail.profileSource ?? "-"}`,
+            ]
+          : []),
         `parent:        ${detail.parentLabel}`,
         `cwd:           ${detail.cwd}`,
         `worktree_root: ${detail.worktreeRoot}`,

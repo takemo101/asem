@@ -564,6 +564,50 @@ describe("runCli session create", () => {
     expect(store.sessions[0]?.model).toBe("sonnet");
   });
 
+  test("--profile shapes prompt.md and persists profile/profileSource", async () => {
+    const { deps, store } = createDeps();
+    const { io, code } = await run(
+      [
+        "session",
+        "create",
+        "reviewer-1",
+        "--prompt",
+        "do it",
+        "--root",
+        "--profile",
+        "reviewer",
+        "--json",
+      ],
+      deps,
+    );
+    expect(code).toBe(EXIT_OK);
+    expect(JSON.parse(io.outText())).toMatchObject({
+      profile: "reviewer",
+      profileSource: "builtin",
+    });
+    expect(store.sessions[0]?.profile).toBe("reviewer");
+    expect(store.sessions[0]?.profileSource).toBe("builtin");
+  });
+
+  test("--profile with an unknown id fails as a usage error", async () => {
+    const { deps, store } = createDeps();
+    const { code } = await run(
+      [
+        "session",
+        "create",
+        "reviewer-1",
+        "--prompt",
+        "do it",
+        "--root",
+        "--profile",
+        "does-not-exist",
+      ],
+      deps,
+    );
+    expect(code).toBe(EXIT_USAGE);
+    expect(store.sessions).toHaveLength(0);
+  });
+
   test("--model against a model-unsupported Agent Template fails as usage error", async () => {
     const { deps, store } = createDeps();
     const { io, code } = await run(
@@ -641,6 +685,40 @@ describe("runCli session create", () => {
     );
     expect(code).toBe(EXIT_ERROR);
     expect(io.errText()).toContain("session_name_conflict");
+  });
+});
+
+describe("runCli profile list/get", () => {
+  test("profile list renders builtin profiles with id, source, agent, model", async () => {
+    const { io, code } = await run(["profile", "list"]);
+    expect(code).toBe(EXIT_OK);
+    const out = io.outText();
+    expect(out).toContain("reviewer");
+    expect(out).toContain("[builtin]");
+    // agent/model columns are always shown (design lists them), `-` when null.
+    expect(out).toContain("agent=-");
+    expect(out).toContain("model=-");
+  });
+
+  test("profile list --json returns the resolved profiles", async () => {
+    const { io, code } = await run(["profile", "list", "--json"]);
+    expect(code).toBe(EXIT_OK);
+    const profiles = JSON.parse(io.outText());
+    expect(Array.isArray(profiles)).toBe(true);
+    expect(profiles.map((p: { id: string }) => p.id)).toContain("scout");
+  });
+
+  test("profile get renders metadata and full instructions", async () => {
+    const { io, code } = await run(["profile", "get", "reviewer"]);
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("id:          reviewer");
+    expect(io.outText()).toContain("source:      builtin");
+    expect(io.outText()).toContain("instructions:");
+  });
+
+  test("profile get with an unknown id fails as a usage error", async () => {
+    const { code } = await run(["profile", "get", "nope"]);
+    expect(code).toBe(EXIT_USAGE);
   });
 });
 

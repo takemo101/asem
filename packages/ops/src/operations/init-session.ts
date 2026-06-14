@@ -107,6 +107,11 @@ export async function initSession(
     // init-session registers an already-running Session; model selection is a
     // create-time launch concern, so a registered Session has no model (MIK-040).
     model: null,
+    // Agent Profiles shape a Session's launch prompt, which init-session does not
+    // own (it registers a pane the agent already started), so a registered
+    // Session carries no profile (MIK-041).
+    profile: null,
+    profileSource: null,
     parentSessionId,
     status: "running",
     // `init-session` registers an already-existing pane/workspace. asem did

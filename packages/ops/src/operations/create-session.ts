@@ -32,6 +32,7 @@ import {
   type EffectiveScope,
   err,
   type FileSystem,
+  type HostPaths,
   hashToken,
   type IdGenerator,
   type Logger,
@@ -49,6 +50,11 @@ import {
   verifyToken,
 } from "@asem/core";
 import {
+  type ResolvedProfile,
+  renderProfilePrompt,
+  resolveProfile,
+} from "@asem/profiles";
+import {
   type AgentTemplate,
   type CommandSequence,
   createRedactor,
@@ -65,6 +71,7 @@ import {
 } from "../context.ts";
 import type { OpContext } from "../deps.ts";
 import { joinPath, sessionDirFor, TOKEN_FILE_MODE } from "../paths.ts";
+import { profileDirsFor } from "../profiles.ts";
 import { resolveAgentTemplate, resolveMuxTemplate } from "../templates.ts";
 
 type CreateSessionDeps = {
@@ -75,6 +82,7 @@ type CreateSessionDeps = {
   currentSessionResolver: CurrentSessionResolver;
   templateRegistryFactory: TemplateRegistryFactory;
   templateRunner: TemplateRunner;
+  hostPaths: HostPaths;
   clock: Clock;
   idGenerator: IdGenerator;
   tokenGenerator: TokenGenerator;
@@ -225,12 +233,29 @@ export async function createSession(
   }
   const parentSessionId = parentResult.value;
 
+  // --- Resolve the requested Agent Profile (fail fast, before side effects) ---
+  // Profile discovery reads files but mutates nothing; an unknown id is
+  // `invalid_input` and a malformed/duplicate profile file is `invalid_config`,
+  // both surfaced here before any filesystem/mux/store side effect (MIK-041).
+  let selectedProfile: ResolvedProfile | null = null;
+  if (input.profile !== undefined) {
+    const dirs = profileDirsFor(scope.worktreeRoot, deps.hostPaths.homeDir());
+    const profileResult = await resolveProfile(deps.fs, dirs, input.profile);
+    if (!profileResult.ok) {
+      return err(profileResult.error);
+    }
+    selectedProfile = profileResult.value;
+  }
+
   // --- Resolve templates (fail fast, before any filesystem side effects) ---
   // Layer this config's project-local templates over the builtins, so a
   // `.asem.yaml` mux/agent definition resolves through the same typed path.
   const templateRegistry = deps.templateRegistryFactory.forConfig(config);
   const mux = input.mux ?? config.mux.default;
-  const agent = input.agent ?? config.agent.default;
+  // Agent/model precedence: explicit input > selected profile default > config
+  // default (design "Create Session resolution").
+  const agent = input.agent ?? selectedProfile?.agent ?? config.agent.default;
+  const resolvedModel = resolveModel(input, selectedProfile);
 
   // A malformed project-local template is a recoverable config defect, surfaced
   // as a structured `invalid_template` error before any side effects rather than
@@ -267,12 +292,12 @@ export async function createSession(
   // Requesting a model for a Template that cannot use it must fail before any
   // filesystem/mux/store side effects rather than silently launching without it
   // (MIK-040). asem does not validate the model name itself.
-  if (input.model !== undefined && agentTemplate.model_flag === undefined) {
+  if (resolvedModel !== undefined && agentTemplate.model_flag === undefined) {
     return err(
       operationError(
         "invalid_input",
         "agent template does not support --model",
-        { agent, model: input.model },
+        { agent, model: resolvedModel },
       ),
     );
   }
@@ -304,7 +329,7 @@ export async function createSession(
     name: input.name,
     agent,
     mux,
-    model: input.model ?? "",
+    model: resolvedModel ?? "",
     session_dir: sessionDir,
     prompt_path: promptPath,
     launch_script: launchScriptPath,
@@ -331,12 +356,24 @@ export async function createSession(
     throw error;
   }
 
+  // The effective prompt is the user prompt shaped by the selected profile
+  // (instructions first, original prompt preserved under `# User Prompt`). With
+  // no profile it is the user prompt unchanged. It is what `prompt.md` stores and
+  // what `paste_prompt` delivery sends, so all delivery modes agree (MIK-041).
+  const effectivePrompt =
+    selectedProfile === null
+      ? input.prompt
+      : renderProfilePrompt(selectedProfile, input.prompt);
+  // prompt.md and `paste_prompt` delivery must use identical bytes (design: the
+  // same effective prompt is used for every delivery mode). Derive one canonical
+  // `promptContents` — the effective prompt with the file's trailing-newline
+  // policy applied once — and use it for both the file write and the paste
+  // `send` below, so neither path can drift from the other.
+  const promptContents = ensureTrailingNewline(effectivePrompt);
+
   // Step 4 & 5: create the Session dir and always write prompt.md.
   await deps.fs.mkdirp(sessionDir);
-  await deps.fs.writeFileAtomic(
-    promptPath,
-    ensureTrailingNewline(input.prompt),
-  );
+  await deps.fs.writeFileAtomic(promptPath, promptContents);
 
   // Step 6: run the mux `create` sequence and capture mux refs.
   const createResult = await engine.run(muxTemplate.create, {
@@ -371,12 +408,15 @@ export async function createSession(
       AS_SESSION_NAME: input.name,
       AS_AGENT: agent,
       AS_MUX: mux,
-      AS_MODEL: input.model ?? "",
+      AS_MODEL: resolvedModel ?? "",
+      // Empty when no profile was selected (design "Create Session resolution").
+      AS_PROFILE: selectedProfile?.id ?? "",
+      AS_PROFILE_SOURCE: selectedProfile?.source ?? "",
     },
     cwd,
     agentCommand: renderAgentCommand(agentTemplate, {
       promptPath,
-      model: input.model ?? null,
+      model: resolvedModel ?? null,
     }),
     beforeAgent: agentTemplate.before_agent,
     afterAgent: agentTemplate.after_agent,
@@ -420,7 +460,7 @@ export async function createSession(
     }
     const sendResult = await engine.run(muxTemplate.send, {
       cwd,
-      variables: { ...runVars, message: input.prompt },
+      variables: { ...runVars, message: promptContents },
     });
     if (!sendResult.ok) {
       await attemptMuxCleanup(engine, muxTemplate.close, runVars, cwd, deps);
@@ -441,7 +481,9 @@ export async function createSession(
     cwd,
     agent,
     mux,
-    model: input.model ?? null,
+    model: resolvedModel ?? null,
+    profile: selectedProfile?.id ?? null,
+    profileSource: selectedProfile?.source ?? null,
     parentSessionId,
     status: "running",
     muxRef,
@@ -591,6 +633,35 @@ async function attemptMuxCleanup(
   } catch {
     deps.logger?.warn("best-effort mux cleanup threw");
   }
+}
+
+/**
+ * Resolve the launch model per the design precedence:
+ *
+ *   explicit `model` input > selected profile `model` > none
+ *
+ * with one suppression rule: if an explicit `agent` is given that differs from
+ * the selected profile's default `agent`, the profile's default `model` is
+ * dropped. This avoids applying a Claude-oriented profile model to a different
+ * Agent such as `pi` or `agy`. A profile with no default `agent` is treated as
+ * "differs" whenever an explicit agent is supplied, so its model never leaks onto
+ * an unrelated Agent. The profile *instructions* still apply regardless. Whether
+ * the final Agent Template actually supports a model is validated separately.
+ */
+function resolveModel(
+  input: CreateSessionInput,
+  profile: ResolvedProfile | null,
+): string | undefined {
+  if (input.model !== undefined) {
+    return input.model;
+  }
+  if (profile?.model == null) {
+    return undefined;
+  }
+  if (input.agent !== undefined && input.agent !== profile.agent) {
+    return undefined;
+  }
+  return profile.model;
 }
 
 function ensureTrailingNewline(text: string): string {

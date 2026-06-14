@@ -29,6 +29,7 @@ import {
   randomTokenGenerator,
   storedStatusLivenessProbe,
   systemClock,
+  systemHostPaths,
   uuidIdGenerator,
 } from "./runtime/adapters.ts";
 import { runTuiCommand } from "./tui.ts";
@@ -57,6 +58,7 @@ export async function createRuntimeDeps(
     // stay available when the project-local maps are empty.
     templateRegistryFactory: createTemplateRegistryFactory(),
     templateRunner: new NodeTemplateRunner(fs),
+    hostPaths: systemHostPaths,
     livenessProbe: storedStatusLivenessProbe,
     clock: systemClock,
     idGenerator: uuidIdGenerator,

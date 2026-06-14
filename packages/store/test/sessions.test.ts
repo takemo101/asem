@@ -12,6 +12,21 @@ describe("Session CRUD", () => {
     expect(got).toEqual(session);
   });
 
+  test("round-trips a non-null profile and profileSource", async () => {
+    const { store } = freshStore();
+    const session = makeSession({
+      name: "reviewer-1",
+      profile: "reviewer",
+      profileSource: "project",
+    });
+    await store.insertSession(session);
+
+    const got = await store.getSessionById(scopeA, session.id);
+    expect(got).toEqual(session);
+    expect(got?.profile).toBe("reviewer");
+    expect(got?.profileSource).toBe("project");
+  });
+
   test("getSessionByName resolves within scope", async () => {
     const { store } = freshStore();
     const session = makeSession({ name: "reviewer-1" });

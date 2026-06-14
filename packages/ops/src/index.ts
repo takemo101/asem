@@ -14,6 +14,7 @@ import type { OperationError, OperationResult } from "@asem/core";
 
 export const PACKAGE_NAME = "@asem/ops";
 
+export type { ResolvedProfile } from "@asem/profiles";
 // Shared resolution / auth helpers
 export {
   authenticateCurrentSession,
@@ -21,14 +22,12 @@ export {
   resolveContext,
   sameScope,
 } from "./context.ts";
-
 // Dependency bundle & invocation context
 export type { OpContext, OpsDeps } from "./deps.ts";
 export { closeSession } from "./operations/close-session.ts";
 export { createSession } from "./operations/create-session.ts";
 export { deleteSession } from "./operations/delete-session.ts";
 export { getSession } from "./operations/get-session.ts";
-
 // Operation handlers
 export { initProject } from "./operations/init-project.ts";
 export { initSession } from "./operations/init-session.ts";
@@ -38,6 +37,12 @@ export {
   refreshLiveness,
   refreshLivenessAll,
 } from "./operations/liveness.ts";
+export {
+  type GetProfileOutput,
+  getProfile,
+  type ListProfilesOutput,
+  listProfiles,
+} from "./operations/profiles.ts";
 export {
   formatMessageBody,
   reportParent,
@@ -59,4 +64,5 @@ export {
   TOKEN_FILE_MODE,
   tokenFileFor,
 } from "./paths.ts";
+export { profileDirsFor } from "./profiles.ts";
 export type { OperationError, OperationResult };

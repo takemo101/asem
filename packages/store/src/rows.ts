@@ -25,6 +25,8 @@ export interface SessionRow {
   agent: unknown;
   mux: unknown;
   model: unknown;
+  profile: unknown;
+  profile_source: unknown;
   parent_session_id: unknown;
   status: unknown;
   mux_ref_json: unknown;
@@ -80,6 +82,8 @@ export function parseSessionRow(row: SessionRow): Session {
     agent: row.agent,
     mux: row.mux,
     model: row.model ?? null,
+    profile: row.profile ?? null,
+    profileSource: row.profile_source ?? null,
     parentSessionId: row.parent_session_id ?? null,
     status: row.status,
     muxRef: parseMuxRefJson(row.mux_ref_json, row.id),
@@ -137,6 +141,8 @@ export function sessionInsertValues(session: Session): SQLQueryBindings[] {
     session.agent,
     session.mux,
     session.model,
+    session.profile,
+    session.profileSource,
     session.parentSessionId,
     session.status,
     JSON.stringify(session.muxRef),

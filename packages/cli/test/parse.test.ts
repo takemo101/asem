@@ -330,6 +330,26 @@ describe("parseArgs session create", () => {
     ).toBe("invalid_input");
   });
 
+  test("--profile maps to profile", () => {
+    expect(
+      command([
+        "session",
+        "create",
+        "reviewer-1",
+        "--prompt",
+        "do it",
+        "--profile",
+        "reviewer",
+      ]),
+    ).toMatchObject({ type: "session-create", profile: "reviewer" });
+  });
+
+  test("omitting --profile leaves profile unset", () => {
+    expect(
+      command(["session", "create", "reviewer-1", "--prompt", "do it"]),
+    ).not.toHaveProperty("profile");
+  });
+
   test("missing name is invalid_input", () => {
     expect(errorCode(["session", "create", "--prompt", "p"])).toBe(
       "invalid_input",
@@ -442,6 +462,47 @@ describe("parseArgs session", () => {
 
   test("unknown option is invalid_input", () => {
     expect(errorCode(["session", "list", "--bogus"])).toBe("invalid_input");
+  });
+});
+
+describe("parseArgs profile", () => {
+  test("profile list maps to profile-list", () => {
+    expect(command(["profile", "list"])).toMatchObject({
+      type: "profile-list",
+      json: false,
+    });
+  });
+
+  test("profile list --json sets json", () => {
+    expect(command(["profile", "list", "--json"])).toMatchObject({
+      type: "profile-list",
+      json: true,
+    });
+  });
+
+  test("profile get <id> maps to profile-get", () => {
+    expect(command(["profile", "get", "reviewer"])).toMatchObject({
+      type: "profile-get",
+      id: "reviewer",
+      json: false,
+    });
+  });
+
+  test("profile get without an id is invalid_input", () => {
+    expect(errorCode(["profile", "get"])).toBe("invalid_input");
+  });
+
+  test("missing profile subcommand is invalid_input", () => {
+    expect(errorCode(["profile"])).toBe("invalid_input");
+  });
+
+  test("unknown profile subcommand is invalid_input", () => {
+    expect(errorCode(["profile", "frobnicate"])).toBe("invalid_input");
+  });
+
+  test("profile --help is a help topic", () => {
+    const result = parseArgs(["profile", "--help"]);
+    expect(result.kind).toBe("help");
   });
 });
 

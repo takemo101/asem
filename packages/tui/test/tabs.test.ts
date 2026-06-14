@@ -36,6 +36,23 @@ describe("detailView", () => {
     expect(detailView(session, [session]).model).toBe("sonnet");
   });
 
+  test("surfaces the Agent Profile and source when present", () => {
+    const session = makeSession({
+      id: "s1",
+      profile: "reviewer",
+      profileSource: "project",
+    });
+    const view = detailView(session, [session]);
+    expect(view.profile).toBe("reviewer");
+    expect(view.profileSource).toBe("project");
+  });
+
+  test("profile/profileSource are null when no profile was selected", () => {
+    const view = detailView(makeSession({ id: "s1" }), []);
+    expect(view.profile).toBeNull();
+    expect(view.profileSource).toBeNull();
+  });
+
   test("resolves the parent label to the parent name when in scope", () => {
     const parent = makeSession({ id: "p", name: "parent" });
     const child = makeSession({ id: "c", parentSessionId: "p" });

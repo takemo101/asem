@@ -39,11 +39,14 @@ export type CliCommand =
       agent?: string;
       mux?: string;
       model?: string;
+      profile?: string;
       cwd?: string;
       parentSessionId?: string;
       root?: boolean;
       json: boolean;
     }
+  | { type: "profile-list"; json: boolean }
+  | { type: "profile-get"; id: string; json: boolean }
   | {
       type: "session-list";
       filter?: SessionListFilter;
@@ -272,7 +275,16 @@ function parseInitSession(args: string[]): ParseResult {
 function parseSessionCreate(args: string[]): ParseResult {
   const flags = parseFlags(args, {
     booleans: ["root", "json"],
-    values: ["name", "prompt", "agent", "mux", "model", "cwd", "parent"],
+    values: [
+      "name",
+      "prompt",
+      "agent",
+      "mux",
+      "model",
+      "profile",
+      "cwd",
+      "parent",
+    ],
   });
   if (!flags.ok) return { kind: "error", error: flags.error };
   const { values, booleans, positionals } = flags.value;
@@ -304,6 +316,7 @@ function parseSessionCreate(args: string[]): ParseResult {
   const agent = values.get("agent");
   const mux = values.get("mux");
   const model = values.get("model");
+  const profile = values.get("profile");
   const cwd = values.get("cwd");
 
   const command: CliCommand = {
@@ -314,6 +327,7 @@ function parseSessionCreate(args: string[]): ParseResult {
     ...(agent !== undefined ? { agent } : {}),
     ...(mux !== undefined ? { mux } : {}),
     ...(model !== undefined ? { model } : {}),
+    ...(profile !== undefined ? { profile } : {}),
     ...(cwd !== undefined ? { cwd } : {}),
     ...(parent !== undefined ? { parentSessionId: parent } : {}),
     ...(isRoot ? { root: true } : {}),
@@ -477,6 +491,57 @@ function parseSession(args: string[]): ParseResult {
     default:
       return invalid(`unknown session subcommand: ${sub}`, {
         expected: ["create", "list", "get", "attach", "close", "delete"],
+      });
+  }
+}
+
+/** `asem profile list [--json]`. */
+function parseProfileList(args: string[]): ParseResult {
+  const flags = parseFlags(args, { booleans: ["json"], values: [] });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { positionals, booleans } = flags.value;
+  if (positionals.length > 0) {
+    return invalid("unexpected extra arguments", { extra: positionals });
+  }
+  return {
+    kind: "command",
+    command: { type: "profile-list", json: booleans.has("json") },
+  };
+}
+
+/** `asem profile get <id> [--json]`. */
+function parseProfileGet(args: string[]): ParseResult {
+  const flags = parseFlags(args, { booleans: ["json"], values: [] });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { positionals, booleans } = flags.value;
+
+  const id = positionals[0];
+  if (id === undefined || id.length === 0) {
+    return invalid("profile id is required (use `asem profile get <id>`)");
+  }
+  if (positionals.length > 1) {
+    return invalid("unexpected extra arguments", {
+      extra: positionals.slice(1),
+    });
+  }
+  return {
+    kind: "command",
+    command: { type: "profile-get", id, json: booleans.has("json") },
+  };
+}
+
+function parseProfile(args: string[]): ParseResult {
+  const [sub, ...rest] = args;
+  switch (sub) {
+    case undefined:
+      return invalid("missing profile subcommand (list | get)");
+    case "list":
+      return parseProfileList(rest);
+    case "get":
+      return parseProfileGet(rest);
+    default:
+      return invalid(`unknown profile subcommand: ${sub}`, {
+        expected: ["list", "get"],
       });
   }
 }
@@ -662,6 +727,7 @@ function isHelpFlag(arg: string | undefined): boolean {
 
 const HELP_SUBCOMMANDS: Record<string, readonly string[]> = {
   session: ["create", "list", "get", "attach", "close", "delete"],
+  profile: ["list", "get"],
   message: ["list", "wait", "send"],
   report: ["parent"],
 };
@@ -679,7 +745,14 @@ function helpResult(command: string, rest: readonly string[]): ParseResult {
   const subcommands = HELP_SUBCOMMANDS[command];
   if (subcommands === undefined) {
     return invalid(`unknown command: ${command}`, {
-      expected: ["init", "init-session", "session", "message", "report"],
+      expected: [
+        "init",
+        "init-session",
+        "session",
+        "profile",
+        "message",
+        "report",
+      ],
     });
   }
 
@@ -716,13 +789,22 @@ export function parseArgs(argv: readonly string[]): ParseResult {
       return parseInitSession(rest);
     case "session":
       return parseSession(rest);
+    case "profile":
+      return parseProfile(rest);
     case "message":
       return parseMessage(rest);
     case "report":
       return parseReport(rest);
     default:
       return invalid(`unknown command: ${command}`, {
-        expected: ["init", "init-session", "session", "message", "report"],
+        expected: [
+          "init",
+          "init-session",
+          "session",
+          "profile",
+          "message",
+          "report",
+        ],
       });
   }
 }

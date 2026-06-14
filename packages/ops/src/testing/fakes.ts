@@ -15,6 +15,7 @@ import type {
   CurrentSessionResolver,
   EffectiveScope,
   FileSystem,
+  HostPaths,
   IdGenerator,
   LivenessProbe,
   LogFields,
@@ -89,6 +90,18 @@ export class FakeFileSystem implements FileSystem {
 
   async realpath(path: string): Promise<string> {
     return this.realpaths.get(path) ?? path;
+  }
+
+  async readDir(path: string): Promise<string[]> {
+    const prefix = `${path.replace(/\/+$/, "")}/`;
+    const names = new Set<string>();
+    for (const key of this.files.keys()) {
+      if (key.startsWith(prefix)) {
+        const rest = key.slice(prefix.length);
+        if (!rest.includes("/")) names.add(rest);
+      }
+    }
+    return [...names];
   }
 }
 
@@ -463,6 +476,15 @@ export class MemoryLogger implements Logger {
 /** Identity {@link Redactor}; redaction itself is exercised in `@asem/runtime`. */
 export const noopRedactor: Redactor = { redact: (value) => value };
 
+/** Fixed {@link HostPaths}; defaults to a `/home` root for `~/.asem/agents`. */
+export class FakeHostPaths implements HostPaths {
+  constructor(private readonly home = "/home") {}
+
+  homeDir(): string {
+    return this.home;
+  }
+}
+
 // --- Bundle ---------------------------------------------------------------
 
 /**
@@ -491,6 +513,7 @@ export function makeOpsDeps(overrides: Partial<OpsDeps> = {}): OpsDeps {
     currentSessionResolver: new FakeCurrentSessionResolver(),
     templateRegistryFactory: makeTemplateRegistryFactory(),
     templateRunner: makeTemplateRunner(),
+    hostPaths: new FakeHostPaths(),
     livenessProbe: new FakeLivenessProbe(),
     clock: new FakeClock(),
     idGenerator: new FakeIdGenerator(),

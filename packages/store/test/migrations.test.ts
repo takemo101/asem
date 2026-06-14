@@ -60,7 +60,7 @@ describe("migrations — initialization", () => {
       user_version: number;
     };
     expect(row.user_version).toBe(LATEST_SCHEMA_VERSION);
-    expect(LATEST_SCHEMA_VERSION).toBe(2);
+    expect(LATEST_SCHEMA_VERSION).toBe(3);
   });
 
   test("adds the nullable sessions.model column (schema version 2)", () => {
@@ -69,6 +69,15 @@ describe("migrations — initialization", () => {
       db.query("PRAGMA table_info(sessions)").all() as Array<{ name: string }>
     ).map((c) => c.name);
     expect(columns).toContain("model");
+  });
+
+  test("adds the nullable profile/profile_source columns (schema version 3)", () => {
+    const { db } = freshStore();
+    const columns = (
+      db.query("PRAGMA table_info(sessions)").all() as Array<{ name: string }>
+    ).map((c) => c.name);
+    expect(columns).toContain("profile");
+    expect(columns).toContain("profile_source");
   });
 });
 
@@ -136,6 +145,9 @@ describe("migrations — forward from a version-1 database", () => {
     );
     expect(session).not.toBeNull();
     expect(session?.model).toBeNull();
+    // MIK-041: the profile columns also migrate forward as null for old rows.
+    expect(session?.profile).toBeNull();
+    expect(session?.profileSource).toBeNull();
   });
 });
 

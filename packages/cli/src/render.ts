@@ -14,6 +14,7 @@ import {
   type Session,
   shellEscape,
 } from "@asem/core";
+import type { ResolvedProfile } from "@asem/ops";
 
 /** Render a structured error as `error: <code>: <message>` plus detail lines. */
 export function renderError(error: OperationError): string[] {
@@ -67,6 +68,8 @@ export function renderSessionDetail(
     `agent:         ${session.agent}`,
     `mux:           ${session.mux}`,
     `model:         ${session.model ?? "-"}`,
+    `profile:       ${session.profile ?? "-"}`,
+    `profile_src:   ${session.profileSource ?? "-"}`,
     `parent:        ${session.parentSessionId ?? "-"}`,
     `cwd:           ${session.cwd}`,
     `worktree_root: ${session.worktreeRoot}`,
@@ -144,6 +147,47 @@ export function renderDeletedSession(output: DeleteSessionOutput): string[] {
   return [
     `deleted Session ${output.deletedSessionId}`,
     `removed ${output.deletedMessageCount} related message${plural}`,
+  ];
+}
+
+// --- profiles --------------------------------------------------------------
+
+/**
+ * One Agent Profile as a compact row showing every documented list field —
+ * id, source, agent, model, and description — with `-` for absent values so the
+ * agent/model defaults are always visible (design "CLI and MCP surfaces": list
+ * shows id/source/description/agent/model).
+ */
+function profileRow(profile: ResolvedProfile): string {
+  return [
+    profile.id,
+    `[${profile.source}]`,
+    `agent=${profile.agent ?? "-"}`,
+    `model=${profile.model ?? "-"}`,
+    `— ${profile.description ?? "-"}`,
+  ].join("  ");
+}
+
+export function renderProfileList(
+  profiles: readonly ResolvedProfile[],
+): string[] {
+  if (profiles.length === 0) {
+    return ["no Agent Profiles available"];
+  }
+  return profiles.map(profileRow);
+}
+
+/** Full Agent Profile detail: metadata then the complete instructions. */
+export function renderProfileGet(profile: ResolvedProfile): string[] {
+  return [
+    `id:          ${profile.id}`,
+    `source:      ${profile.source}`,
+    `description: ${profile.description ?? "-"}`,
+    `agent:       ${profile.agent ?? "-"}`,
+    `model:       ${profile.model ?? "-"}`,
+    "",
+    "instructions:",
+    profile.instructions,
   ];
 }
 

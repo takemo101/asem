@@ -5,7 +5,7 @@ import {
   type Message,
   type Session,
 } from "@asem/core";
-import { getSession, listSessions } from "@asem/ops";
+import { getProfile, getSession, listProfiles, listSessions } from "@asem/ops";
 import {
   FakeCurrentSessionResolver,
   FakeStore,
@@ -27,6 +27,8 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     agent: "claude",
     mux: "herdr",
     model: null,
+    profile: null,
+    profileSource: null,
     muxRef: { pane_id: "pane-1" },
     sessionDir: `${scope.worktreeRoot}/.asem/sessions/s_1`,
     cwd: scope.worktreeRoot,
@@ -90,9 +92,11 @@ describe("MCP tool registry", () => {
       "close_session",
       "create_session",
       "delete_session",
+      "get_profile",
       "get_session",
       "init_session",
       "list_messages",
+      "list_profiles",
       "list_sessions",
       "report_parent",
       "send_message",
@@ -116,6 +120,22 @@ describe("MCP tool registry", () => {
     expect(schema.properties.model).toMatchObject({ type: "string" });
     // model is optional: it is not in the required list.
     expect(schema.required).not.toContain("model");
+  });
+
+  test("create_session input schema exposes an optional profile", () => {
+    const tool = listMcpTools().find((t) => t.name === "create_session");
+    const schema = tool?.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.properties).toHaveProperty("profile");
+    expect(schema.required).not.toContain("profile");
+  });
+
+  test("get_profile requires an id", () => {
+    const tool = listMcpTools().find((t) => t.name === "get_profile");
+    const schema = tool?.inputSchema as { required: string[] };
+    expect(schema.required).toContain("id");
   });
 });
 
@@ -269,5 +289,40 @@ describe("MCP tool calls", () => {
       deletedMessageCount: 1,
     });
     expect(store.sessions.map((s) => s.id)).toEqual(["current"]);
+  });
+});
+
+describe("MCP profile tools", () => {
+  test("list_profiles delegates to the same ops handler as a direct call", async () => {
+    const deps = makeOpsDeps();
+    const mcp = await callMcpTool("list_profiles", {}, { ...ctx, deps });
+    const direct = await listProfiles(deps, {}, { ...ctx, origin: "agent" });
+
+    expect(mcp.isError).toBeUndefined();
+    expect(parsed(mcp)).toEqual(direct.ok ? direct.value : direct.error);
+  });
+
+  test("get_profile returns a builtin profile by id", async () => {
+    const deps = makeOpsDeps();
+    const result = await callMcpTool(
+      "get_profile",
+      { id: "reviewer" },
+      { ...ctx, deps },
+    );
+    expect(result.isError).toBeUndefined();
+    expect(parsed(result)).toMatchObject({
+      profile: { id: "reviewer", source: "builtin" },
+    });
+  });
+
+  test("get_profile with an unknown id is an error result", async () => {
+    const deps = makeOpsDeps();
+    const result = await callMcpTool(
+      "get_profile",
+      { id: "nope" },
+      { ...ctx, deps },
+    );
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("invalid_input");
   });
 });

@@ -38,6 +38,10 @@ const ROOT_USAGE = [
   "  session close   close a Session's pane/process and mark it closed",
   "  session delete  delete a Session and its Messages (destructive)",
   "",
+  "Profiles:",
+  "  profile list    list Agent Profiles for `session create --profile`",
+  "  profile get     show one Agent Profile's instructions",
+  "",
   "Messages:",
   "  message list    list Message history in the Effective Scope",
   "  message wait    wait for a Message or Report",
@@ -164,6 +168,7 @@ const SESSION_CREATE_USAGE = [
   "  --model <model>    model value passed through the Agent Template",
   "                     {{model_shell}} (fails if the selected Agent Template",
   "                     does not support models)",
+  "  --profile <id>     Agent Profile to shape the prompt (see `asem profile list`)",
   "  --cwd <dir>        working directory for the child (defaults to current)",
   "  --root             create as a root Session (no parent)",
   "  --parent <id>      create under an explicit parent Session",
@@ -173,11 +178,59 @@ const SESSION_CREATE_USAGE = [
   "  asem session create reviewer-1 --prompt 'review PR #42'",
   "  asem session create build --prompt 'run CI' --agent codex --mux tmux",
   "  asem session create reviewer-2 --prompt 'review' --agent claude --model sonnet",
+  "  asem session create reviewer-3 --prompt 'review the diff' --profile reviewer",
   "",
   "notes:",
   "  Without --root or --parent, the child is parented to the current Session.",
   "  --root and --parent are mutually exclusive.",
   "  Model support is Agent-Template-dependent; builtin agy is model-unsupported.",
+  "  --profile shapes prompt.md (profile instructions first, your prompt second);",
+  "  the profile may also set default --agent/--model, but explicit flags win.",
+];
+
+const PROFILE_GROUP_USAGE = [
+  "asem profile — inspect Agent Profiles available for `session create`",
+  "",
+  "usage: asem profile <subcommand> [options]",
+  "",
+  "subcommands:",
+  "  list   list Agent Profiles (project, user, and builtin)",
+  "  get    show one Agent Profile's metadata and full instructions",
+  "",
+  "Run `asem profile <subcommand> --help` for usage, options, and examples.",
+];
+
+const PROFILE_LIST_USAGE = [
+  "asem profile list — list available Agent Profiles",
+  "",
+  "usage:",
+  "  asem profile list [--json]",
+  "",
+  "options:",
+  "  --json    print the Agent Profiles as JSON",
+  "",
+  "examples:",
+  "  asem profile list",
+  "",
+  "notes:",
+  "  Profiles resolve project > user > builtin; a project or user profile fully",
+  "  replaces a builtin of the same id. Files live under .asem/agents/*.md.",
+];
+
+const PROFILE_GET_USAGE = [
+  "asem profile get — show one Agent Profile with its full instructions",
+  "",
+  "usage:",
+  "  asem profile get <id> [--json]",
+  "",
+  "required:",
+  "  <id>      Agent Profile id (see `asem profile list`)",
+  "",
+  "options:",
+  "  --json    print the Agent Profile as JSON",
+  "",
+  "examples:",
+  "  asem profile get reviewer",
 ];
 
 const SESSION_LIST_USAGE = [
@@ -382,6 +435,7 @@ const TUI_USAGE = [
 /** Focused pages keyed by their command path (`group subcommand` or command). */
 const PAGES: Record<string, string[]> = {
   session: SESSION_GROUP_USAGE,
+  profile: PROFILE_GROUP_USAGE,
   message: MESSAGE_GROUP_USAGE,
   report: REPORT_GROUP_USAGE,
   init: INIT_USAGE,
@@ -392,6 +446,8 @@ const PAGES: Record<string, string[]> = {
   "session attach": SESSION_ATTACH_USAGE,
   "session close": SESSION_CLOSE_USAGE,
   "session delete": SESSION_DELETE_USAGE,
+  "profile list": PROFILE_LIST_USAGE,
+  "profile get": PROFILE_GET_USAGE,
   "message list": MESSAGE_LIST_USAGE,
   "message wait": MESSAGE_WAIT_USAGE,
   "message send": MESSAGE_SEND_USAGE,

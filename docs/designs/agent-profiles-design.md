@@ -76,18 +76,24 @@ Rules:
 - `model` is optional and acts as a create-session default only when it is compatible with the resolved Agent default rules below.
 - Unknown frontmatter fields are rejected in MVP so profile files stay small and intentional.
 
-Builtin profiles use the same parsed shape, but the initial builtin set is instructions-only and does not carry `agent` or `model` defaults.
+Builtin profiles use the same parsed shape, but the builtin set is instructions-only and does not carry `agent` or `model` defaults.
 
 ## Builtin profiles
 
-Initial builtin ids:
+Builtin ids:
 
-- `scout` — inspect code/docs and report findings without changing files unless asked.
-- `planner` — turn a goal into implementation steps, risks, and validation checks.
-- `worker` — implement a bounded change and report changed files/checks.
-- `reviewer` — review work against the user request, docs, tests, and repo standards.
+- `context-builder` — gather requirements/code context and write compact handoff material for a planner or worker.
 - `debugger` — reproduce, minimize, hypothesize, instrument, fix, and regression-test a bug.
+- `delegate` — handle a direct bounded task while staying close to the user's request.
 - `docs-writer` — update durable docs with clear domain language and cross-links.
+- `oracle` — challenge assumptions and protect inherited decisions from hidden drift.
+- `planner` — turn a goal into implementation steps, risks, and validation checks.
+- `researcher` — research external facts with primary sources, citations, and explicit gaps.
+- `reviewer` — review work against the user request, docs, tests, and repo standards.
+- `scout` — inspect code/docs and report findings without changing files unless asked.
+- `worker` — implement a bounded change and report changed files/checks.
+
+Builtin profile instructions are intentionally stronger than a one-line persona: each profile states responsibilities, working rules, boundaries, and final response expectations. They are inspired by `pi-subagents` prompts but omit runtime-specific fields such as tool allowlists, output files, inherited context, progress tracking, or supervisor APIs because asem Agent Profiles are prompt shaping only.
 
 Do not add `coordinator`, `parent`, `pr-finisher`, or similar workflow-shaped builtin profiles without a new design discussion. Those names imply orchestration or lifecycle authority, which is outside Agent Profile responsibility.
 

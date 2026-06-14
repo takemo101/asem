@@ -116,7 +116,7 @@ Compare current, medium, and short builtin Agent Profile prompts before changing
 
 ## Decision
 
-Adopt Medium. It preserved boundary safety and actionability for `scout`, `reviewer`, `debugger`, and `planner` while reducing prompt weight from 1,991 to 1,144 words, a 43% reduction. The strongest observation was that Medium kept the behavior-shaping constraints that matter for each profile while Short repeatedly lost useful specificity, especially review evidence discipline, debugger expected-vs-observed detail, and planner validation/dependency guidance.
+Adopt Medium. It preserved boundary safety and actionability for `scout`, `reviewer`, `debugger`, and `planner` while reducing prompt weight from 1,991 to 1,146 words, a 42% reduction. The strongest observation was that Medium kept the behavior-shaping constraints that matter for each profile while Short repeatedly lost useful specificity, especially review evidence discipline, debugger expected-vs-observed detail, and planner validation/dependency guidance.
 
 A reviewer subagent independently recommended Medium for all four required profiles. It found one draft issue: two positive Medium bullets were accidentally placed under `Do not:` in the temporary drafts. The temporary Medium drafts were corrected before implementation.
 
@@ -126,58 +126,58 @@ A reviewer subagent independently recommended Medium for all four required profi
 [
   {
     "variant": "medium",
-    "totalWords": 1144,
-    "averageWords": 114,
+    "totalWords": 1146,
+    "averageWords": 115,
     "rows": [
       {
         "id": "context-builder",
-        "words": 119,
-        "chars": 818
+        "words": 120,
+        "chars": 824
       },
       {
         "id": "debugger",
         "words": 122,
-        "chars": 798
+        "chars": 796
       },
       {
         "id": "delegate",
-        "words": 112,
-        "chars": 731
+        "words": 114,
+        "chars": 737
       },
       {
         "id": "docs-writer",
         "words": 118,
-        "chars": 811
+        "chars": 809
       },
       {
         "id": "oracle",
-        "words": 116,
-        "chars": 783
+        "words": 115,
+        "chars": 789
       },
       {
         "id": "planner",
         "words": 110,
-        "chars": 728
+        "chars": 726
       },
       {
         "id": "researcher",
         "words": 107,
-        "chars": 746
+        "chars": 744
       },
       {
         "id": "reviewer",
         "words": 111,
-        "chars": 749
+        "chars": 745
       },
       {
         "id": "scout",
         "words": 115,
-        "chars": 723
+        "chars": 721
       },
       {
         "id": "worker",
         "words": 114,
-        "chars": 749
+        "chars": 747
       }
     ]
   },

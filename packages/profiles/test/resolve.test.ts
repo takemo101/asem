@@ -48,8 +48,10 @@ describe("builtin profiles", () => {
       expect(profile.source).toBe("builtin");
       expect(profile.agent).toBeNull();
       expect(profile.model).toBeNull();
-      expect(profile.instructions).toContain("## Working rules");
-      expect(profile.instructions).toContain("## Final response");
+      expect(profile.instructions).toContain("Mission:");
+      expect(profile.instructions).toContain("Do:");
+      expect(profile.instructions).toContain("Do not:");
+      expect(profile.instructions).toContain("Output:");
     }
   });
 

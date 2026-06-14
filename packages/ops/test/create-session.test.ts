@@ -142,8 +142,59 @@ describe("createSession — happy path", () => {
     expect(script).toContain("export AS_SESSION_NAME='reviewer-1'");
     expect(script).toContain("export AS_AGENT='claude'");
     expect(script).toContain("export AS_MUX='herdr'");
+    // No model requested, so AS_MODEL is empty and {{model_shell}} collapses to
+    // an empty fragment (a harmless double space before the prompt).
+    expect(script).toContain("export AS_MODEL=''");
     // Agent (claude) reads the prompt file via {{prompt_shell}}.
-    expect(script).toContain(`claude "$(cat '${PROMPT_PATH}')"`);
+    expect(script).toContain(`claude  "$(cat '${PROMPT_PATH}')"`);
+  });
+});
+
+describe("createSession — model selection (MIK-040)", () => {
+  test("persists the model and renders the model flag for a supported Agent Template", async () => {
+    const d = deps();
+    const { session } = expectOk(
+      await createSession(d, { ...ROOT_INPUT, model: "sonnet" }, CTX),
+    );
+
+    expect(session.model).toBe("sonnet");
+    // The launch command carries the shell-escaped model via {{model_shell}}.
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+    expect(script).toContain(
+      `claude --model 'sonnet' "$(cat '${PROMPT_PATH}')"`,
+    );
+    expect(script).toContain("export AS_MODEL='sonnet'");
+    // Persisted on the stored row too.
+    expect(d.store.sessions[0]!.model).toBe("sonnet");
+  });
+
+  test("omitting the model keeps Session.model null and emits no model flag", async () => {
+    const d = deps();
+    const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
+
+    expect(session.model).toBeNull();
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+    expect(script).not.toContain("--model");
+  });
+
+  test("a model for a model-unsupported Agent Template fails before any side effects", async () => {
+    // agy is the builtin model-unsupported Agent (no model_flag).
+    const d = deps();
+    const result = await createSession(
+      d,
+      { ...ROOT_INPUT, agent: "agy", model: "sonnet" },
+      CTX,
+    );
+    const error = expectErr(result, "invalid_input");
+    expect(error.message).toContain("does not support");
+    expect(error.details?.agent).toBe("agy");
+    expect(error.details?.model).toBe("sonnet");
+
+    // Fails before the Session dir, prompt, mux commands, and the store insert.
+    expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
+    expect(d.fs.files.has(PROMPT_PATH)).toBe(false);
+    expect(d.runner.commands).toHaveLength(0);
+    expect(d.store.sessions).toHaveLength(0);
   });
 });
 
@@ -176,7 +227,7 @@ describe("createSession — launch script hooks (MIK-034)", () => {
     const d = deps();
     expectOk(await createSession(d, ROOT_INPUT, CTX));
     const script = d.fs.files.get(LAUNCH_PATH)!.contents;
-    expect(script).toContain(`claude "$(cat '${PROMPT_PATH}')"`);
+    expect(script).toContain(`claude  "$(cat '${PROMPT_PATH}')"`);
     // Without after hooks there is no exit-code capture machinery.
     expect(script).not.toContain("AS_AGENT_EXIT_CODE");
     expect(script).not.toContain("set +e");
@@ -740,7 +791,7 @@ describe("createSession — project-local templates from .asem.yaml", () => {
       "herdr --session 'asem' workspace create",
     );
     expect(d.fs.files.get(LAUNCH_PATH)!.contents).toContain(
-      `claude "$(cat '${PROMPT_PATH}')"`,
+      `claude  "$(cat '${PROMPT_PATH}')"`,
     );
   });
 

@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { surfaceForArgv, wantsHelp } from "../src/main.ts";
+import { BufferIo } from "../src/io.ts";
+import {
+  createReadOnlyCliDeps,
+  surfaceForArgv,
+  wantsHelp,
+} from "../src/main.ts";
+import { runCli } from "../src/run.ts";
 
 describe("surfaceForArgv", () => {
   test("asem mcp selects the mcp surface", () => {
@@ -16,6 +22,21 @@ describe("surfaceForArgv", () => {
 
   test("a normal CLI command selects the cli surface", () => {
     expect(surfaceForArgv(["session", "list"])).toBe("cli");
+  });
+});
+
+describe("read-only CLI deps", () => {
+  test("doctor runs without durable store access", async () => {
+    const deps = createReadOnlyCliDeps({ surface: "cli" });
+    const io = new BufferIo();
+
+    const code = await runCli({ argv: ["doctor"], cwd: "/tmp", deps, io });
+
+    expect(code).toBe(0);
+    expect(io.outText()).toContain("asem doctor");
+    expect(() => deps.store.listSessions).toThrow(
+      "store is unavailable in read-only CLI deps",
+    );
   });
 });
 

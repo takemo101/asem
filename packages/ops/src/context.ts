@@ -69,8 +69,15 @@ export function sameScope(a: EffectiveScope, b: EffectiveScope): boolean {
   return a.workspaceId === b.workspaceId && a.worktreeRoot === b.worktreeRoot;
 }
 
+/** A verified current Session paired with the raw token that authenticated it. */
+export interface VerifiedCurrentSession {
+  session: Session;
+  token: string;
+}
+
 /**
- * Resolve and verify the current Session for `scope`.
+ * Resolve and verify the current Session for `scope`, returning both the Session
+ * and the raw token that authenticated it.
  *
  * Produces the full ladder of recoverable auth errors:
  * - `current_session_not_found` when no current-session pointer resolves;
@@ -78,13 +85,15 @@ export function sameScope(a: EffectiveScope, b: EffectiveScope): boolean {
  * - `session_not_found` when the referenced row is gone from this scope;
  * - `invalid_session_token` when the raw token fails to verify against the hash.
  *
- * Verification compares the raw token to the stored hash only; it never logs or
- * returns token material (implementation principle 8).
+ * The raw token is returned only so mutating operations can scope a redactor to
+ * it (principle 8); verification still compares it to the stored hash only and
+ * never logs it. {@link authenticateCurrentSession} delegates here and keeps the
+ * Session-only return type for read/report callers that need no token material.
  */
-export async function authenticateCurrentSession(
+export async function authenticateCurrentSessionWithToken(
   deps: { store: Store; currentSessionResolver: CurrentSessionResolver },
   scope: EffectiveScope,
-): Promise<OperationResult<Session>> {
+): Promise<OperationResult<VerifiedCurrentSession>> {
   const ref = await deps.currentSessionResolver.resolve(scope);
   if (ref === null) {
     return err(
@@ -122,7 +131,98 @@ export async function authenticateCurrentSession(
       ),
     );
   }
-  return ok(session);
+  return ok({ session, token: ref.token });
+}
+
+/**
+ * Resolve and verify the current Session for `scope`.
+ *
+ * Produces the full ladder of recoverable auth errors:
+ * - `current_session_not_found` when no current-session pointer resolves;
+ * - `scope_mismatch` when the pointer was registered in another scope;
+ * - `session_not_found` when the referenced row is gone from this scope;
+ * - `invalid_session_token` when the raw token fails to verify against the hash.
+ *
+ * Verification compares the raw token to the stored hash only; it never logs or
+ * returns token material (implementation principle 8).
+ */
+export async function authenticateCurrentSession(
+  deps: { store: Store; currentSessionResolver: CurrentSessionResolver },
+  scope: EffectiveScope,
+): Promise<OperationResult<Session>> {
+  const auth = await authenticateCurrentSessionWithToken(deps, scope);
+  if (!auth.ok) {
+    return auth;
+  }
+  return ok(auth.value.session);
+}
+
+/**
+ * The trust outcome of a mutating operation that allows human local trust.
+ *
+ * The variant carries exactly the material the operation may use: a verified
+ * Session for attribution and a raw token for redaction when the actor is a real
+ * Session, or neither when the operation runs under operator/anonymous local
+ * trust. Modeling all four cases here keeps ADR 0003 origin semantics in one
+ * place instead of re-deriving the ladder in send/close/delete.
+ */
+export type MutationActor =
+  | { kind: "operator"; session: null; token: null }
+  | { kind: "human-anon"; session: null; token: null }
+  | { kind: "human-current"; session: Session; token: string }
+  | { kind: "agent"; session: Session; token: string };
+
+/**
+ * Resolve the trusted actor for a mutating operation that permits human local
+ * trust (send/close/delete), centralizing the ADR 0003 origin ladder:
+ *
+ * - `operator` (TUI human surface): never resolves or authenticates a current
+ *   Session, so a workspace-scope action into a sibling worktree is not silently
+ *   attributed to that worktree's current-Session pointer;
+ * - `agent` (MCP): requires and verifies the current Session;
+ * - unset (CLI/direct human): if a current-Session pointer is present it is
+ *   verified (`human-current`); if none resolves the action proceeds under
+ *   anonymous local trust (`human-anon`).
+ *
+ * The returned token is the raw current-Session token, exposed only so callers
+ * can scope a redactor to it; it is never logged or persisted (principle 8).
+ *
+ * `report_parent` does not use this helper: it is always the verified current
+ * Session and must not gain an optional/anonymous actor path (ADR 0003).
+ */
+export async function resolveMutationActor(
+  deps: { store: Store; currentSessionResolver: CurrentSessionResolver },
+  scope: EffectiveScope,
+  ctx: OpContext,
+): Promise<OperationResult<MutationActor>> {
+  if (ctx.origin === "operator") {
+    return ok({ kind: "operator", session: null, token: null });
+  }
+  if (ctx.origin === "agent") {
+    const auth = await authenticateCurrentSessionWithToken(deps, scope);
+    if (!auth.ok) {
+      return auth;
+    }
+    return ok({
+      kind: "agent",
+      session: auth.value.session,
+      token: auth.value.token,
+    });
+  }
+
+  const ref = await deps.currentSessionResolver.resolve(scope);
+  if (ref === null) {
+    return ok({ kind: "human-anon", session: null, token: null });
+  }
+  const auth = await authenticateCurrentSessionWithToken(deps, scope);
+  if (!auth.ok) {
+    return auth;
+  }
+  return ok({
+    kind: "human-current",
+    session: auth.value.session,
+    token: auth.value.token,
+  });
 }
 
 /**

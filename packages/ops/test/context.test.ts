@@ -7,6 +7,7 @@ import {
 import {
   authenticateCurrentSession,
   resolveContext,
+  resolveMutationActor,
   sameScope,
 } from "../src/index.ts";
 import {
@@ -141,5 +142,148 @@ describe("authenticateCurrentSession", () => {
     );
     // The error payload must never carry token material (principle 8).
     expect(JSON.stringify(error)).not.toContain("wrong");
+  });
+});
+
+describe("resolveMutationActor", () => {
+  const CURRENT_TOKEN = "tok-current";
+
+  function actorDeps(
+    overrides: {
+      store?: FakeStore;
+      currentSessionResolver?: FakeCurrentSessionResolver;
+    } = {},
+  ) {
+    const store = overrides.store ?? new FakeStore();
+    return {
+      store,
+      currentSessionResolver:
+        overrides.currentSessionResolver ??
+        new FakeCurrentSessionResolver(null),
+    };
+  }
+
+  test("operator origin skips current-session resolution", async () => {
+    const store = new FakeStore();
+    const me = makeSession({ tokenHash: hashToken(CURRENT_TOKEN) });
+    store.sessions.push(me);
+    const deps = actorDeps({
+      store,
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: me.id,
+        token: CURRENT_TOKEN,
+      }),
+    });
+
+    const actor = expectOk(
+      await resolveMutationActor(deps, scopeA, {
+        cwd: scopeA.worktreeRoot,
+        origin: "operator",
+      }),
+    );
+
+    expect(actor).toEqual({ kind: "operator", session: null, token: null });
+  });
+
+  test("agent origin requires and returns the verified current Session", async () => {
+    const store = new FakeStore();
+    const me = makeSession({ tokenHash: hashToken(CURRENT_TOKEN) });
+    store.sessions.push(me);
+    const deps = actorDeps({
+      store,
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: me.id,
+        token: CURRENT_TOKEN,
+      }),
+    });
+
+    const actor = expectOk(
+      await resolveMutationActor(deps, scopeA, {
+        cwd: scopeA.worktreeRoot,
+        origin: "agent",
+      }),
+    );
+
+    expect(actor.kind).toBe("agent");
+    expect(actor.session?.id).toBe(me.id);
+    expect(actor.token).toBe(CURRENT_TOKEN);
+  });
+
+  test("agent origin requires a current Session", async () => {
+    expectErr(
+      await resolveMutationActor(actorDeps(), scopeA, {
+        cwd: scopeA.worktreeRoot,
+        origin: "agent",
+      }),
+      "current_session_not_found",
+    );
+  });
+
+  test("unset origin with no pointer is anonymous human local trust", async () => {
+    const actor = expectOk(
+      await resolveMutationActor(actorDeps(), scopeA, {
+        cwd: scopeA.worktreeRoot,
+      }),
+    );
+
+    expect(actor).toEqual({ kind: "human-anon", session: null, token: null });
+  });
+
+  test("unset origin with pointer verifies and returns the current Session", async () => {
+    const store = new FakeStore();
+    const me = makeSession({ tokenHash: hashToken(CURRENT_TOKEN) });
+    store.sessions.push(me);
+    const deps = actorDeps({
+      store,
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: me.id,
+        token: CURRENT_TOKEN,
+      }),
+    });
+
+    const actor = expectOk(
+      await resolveMutationActor(deps, scopeA, { cwd: scopeA.worktreeRoot }),
+    );
+
+    expect(actor.kind).toBe("human-current");
+    expect(actor.session?.id).toBe(me.id);
+    expect(actor.token).toBe(CURRENT_TOKEN);
+  });
+
+  test("token and scope errors are preserved", async () => {
+    const store = new FakeStore();
+    const me = makeSession({ tokenHash: hashToken(CURRENT_TOKEN) });
+    store.sessions.push(me);
+
+    expectErr(
+      await resolveMutationActor(
+        actorDeps({
+          store,
+          currentSessionResolver: new FakeCurrentSessionResolver({
+            sessionId: me.id,
+            token: "wrong",
+          }),
+        }),
+        scopeA,
+        { cwd: scopeA.worktreeRoot },
+      ),
+      "invalid_session_token",
+    );
+
+    expectErr(
+      await resolveMutationActor(
+        actorDeps({
+          store,
+          currentSessionResolver: new FakeCurrentSessionResolver({
+            sessionId: me.id,
+            token: CURRENT_TOKEN,
+            scope: scopeB,
+          }),
+        }),
+        scopeA,
+        { cwd: scopeA.worktreeRoot },
+      ),
+      "scope_mismatch",
+    );
   });
 });

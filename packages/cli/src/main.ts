@@ -18,6 +18,7 @@ import { openSqliteStore } from "@asem/store";
 import { processIo } from "./io.ts";
 import { runCli } from "./run.ts";
 import {
+  bunExecutableResolver,
   createSurfaceLogger,
   FileConfigLoader,
   FileCurrentSessionResolver,
@@ -59,6 +60,7 @@ export async function createRuntimeDeps(
     templateRegistryFactory: createTemplateRegistryFactory(),
     templateRunner: new NodeTemplateRunner(fs),
     hostPaths: systemHostPaths,
+    executableResolver: bunExecutableResolver,
     livenessProbe: storedStatusLivenessProbe,
     clock: systemClock,
     idGenerator: uuidIdGenerator,

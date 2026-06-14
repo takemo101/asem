@@ -1,8 +1,8 @@
 import {
   type DoctorExecutableCheck,
   type DoctorInput,
-  doctorInputSchema,
   type DoctorOutput,
+  doctorInputSchema,
   type OperationResult,
   operationError,
 } from "@asem/core";

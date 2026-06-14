@@ -99,8 +99,9 @@ describe("doctor", () => {
       defaultAgent: "pi",
       defaultMux: "rmux",
     });
-    expect(output.multiplexers.find((c) => c.template === "rmux")?.isDefault)
-      .toBe(true);
+    expect(
+      output.multiplexers.find((c) => c.template === "rmux")?.isDefault,
+    ).toBe(true);
     expect(output.agents.find((c) => c.template === "pi")?.isDefault).toBe(
       true,
     );

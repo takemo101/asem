@@ -132,7 +132,9 @@ describe("runCli help & usage", () => {
   test("doctor renders focused help", async () => {
     const { io, code } = await run(["doctor", "--help"]);
     expect(code).toBe(EXIT_OK);
-    expect(io.outText()).toContain("asem doctor — check local Agent and Multiplexer command availability");
+    expect(io.outText()).toContain(
+      "asem doctor — check local Agent and Multiplexer command availability",
+    );
     expect(io.outText()).toContain("Missing executables are diagnostics");
   });
 

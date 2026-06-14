@@ -138,12 +138,29 @@ function runAttachCommand(command: AttachCommand): Promise<number> {
 export function surfaceForArgv(argv: readonly string[]): RuntimeSurface {
   switch (argv[0]) {
     case "mcp":
-      return "mcp";
+      // Only the bare `asem mcp` server runs on the mcp surface; `asem mcp add`
+      // is a local-config CLI command, so it stays on the cli surface.
+      return argv[1] === undefined ? "mcp" : "cli";
     case "tui":
       return "tui";
     default:
       return "cli";
   }
+}
+
+/**
+ * True for commands that must not open the durable SQLite store: help, `doctor`,
+ * and the Integration Target setup commands (`mcp add`, `skills add`). These run
+ * on {@link createReadOnlyCliDeps} so setup never creates ~/.asem or opens
+ * state.db just to write a target's local config. The bare `asem mcp` server is
+ * excluded — it needs full runtime deps.
+ */
+export function isReadOnlyCommand(argv: readonly string[]): boolean {
+  if (wantsHelp(argv)) return true;
+  if (argv[0] === "doctor") return true;
+  if (argv[0] === "skills") return true;
+  if (argv[0] === "mcp" && argv[1] === "add") return true;
+  return false;
 }
 
 /**
@@ -158,13 +175,13 @@ export function wantsHelp(argv: readonly string[]): boolean {
 /** Entry point for the installed binary. Returns the process exit code. */
 export async function main(argv: string[]): Promise<number> {
   const surface = surfaceForArgv(argv);
-  const readOnly = wantsHelp(argv) || argv[0] === "doctor";
-  const deps = readOnly
+  const deps = isReadOnlyCommand(argv)
     ? createReadOnlyCliDeps({ surface })
     : await createRuntimeDeps({ surface });
-  // `asem mcp --help` / `asem tui --help` fall through to the pure help path
-  // below so they print focused help instead of starting the server or cockpit.
-  if (argv[0] === "mcp" && !wantsHelp(argv)) {
+  // Only the bare `asem mcp` invocation starts the stdio server. `asem mcp add`
+  // falls through to runCli as a local-config command, and `asem mcp --help`
+  // falls through to the pure help path so it prints focused help.
+  if (argv[0] === "mcp" && argv[1] === undefined && !wantsHelp(argv)) {
     await runMcpStdio({ cwd: process.cwd(), deps });
     return 0;
   }

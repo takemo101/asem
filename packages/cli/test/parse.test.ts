@@ -90,6 +90,72 @@ describe("parseArgs help", () => {
   });
 });
 
+describe("parseArgs integrations", () => {
+  test("mcp add maps --for and defaults global", () => {
+    expect(command(["mcp", "add", "--for", "pi"])).toEqual({
+      type: "mcp-add",
+      target: "pi",
+      global: true,
+    });
+  });
+
+  test("mcp add maps --no-global", () => {
+    expect(command(["mcp", "add", "--for", "pi", "--no-global"])).toEqual({
+      type: "mcp-add",
+      target: "pi",
+      global: false,
+    });
+  });
+
+  test("mcp with no subcommand still maps to the stdio server command", () => {
+    expect(command(["mcp"])).toEqual({ type: "mcp" });
+  });
+
+  test("mcp add requires --for", () => {
+    expect(errorCode(["mcp", "add"])).toBe("invalid_input");
+  });
+
+  test("unknown mcp subcommand is invalid_input", () => {
+    expect(errorCode(["mcp", "frob"])).toBe("invalid_input");
+  });
+
+  test("skills add maps --for", () => {
+    expect(command(["skills", "add", "--for", "claude-code"])).toEqual({
+      type: "skills-add",
+      target: "claude-code",
+      global: true,
+    });
+  });
+
+  test("skills add maps --no-global", () => {
+    expect(command(["skills", "add", "--for", "pi", "--no-global"])).toEqual({
+      type: "skills-add",
+      target: "pi",
+      global: false,
+    });
+  });
+
+  test("skills add requires --for", () => {
+    expect(errorCode(["skills", "add"])).toBe("invalid_input");
+  });
+
+  test("skills with no subcommand is invalid_input", () => {
+    expect(errorCode(["skills"])).toBe("invalid_input");
+  });
+
+  test("help topics resolve for the new command forms", () => {
+    const mcpAdd = parseArgs(["mcp", "add", "--help"]);
+    expect(mcpAdd.kind).toBe("help");
+    if (mcpAdd.kind === "help") expect(mcpAdd.topic).toBe("mcp add");
+    const skills = parseArgs(["skills", "--help"]);
+    expect(skills.kind).toBe("help");
+    if (skills.kind === "help") expect(skills.topic).toBe("skills");
+    const skillsAdd = parseArgs(["skills", "add", "--help"]);
+    expect(skillsAdd.kind).toBe("help");
+    if (skillsAdd.kind === "help") expect(skillsAdd.topic).toBe("skills add");
+  });
+});
+
 describe("parseArgs doctor", () => {
   test("maps doctor with optional json", () => {
     expect(command(["doctor"])).toEqual({ type: "doctor", json: false });

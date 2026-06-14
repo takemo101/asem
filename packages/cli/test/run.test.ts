@@ -1,4 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  type InstallOptions,
+  integrationTargetError,
+} from "@asem/integrations";
 import { configPathFor } from "@asem/ops";
 import { FakeTemplateRunner } from "@asem/runtime";
 import {
@@ -1169,5 +1176,136 @@ describe("runCli report parent", () => {
     const { io, code } = await run(["report", "parent", "--body", "x"]);
     expect(code).toBe(EXIT_ERROR);
     expect(io.errText()).toContain("current_session_not_found");
+  });
+});
+
+describe("runCli integrations", () => {
+  const unreachableMcp = () => {
+    throw new Error("MCP installer must not run");
+  };
+  const unreachableSkill = () => {
+    throw new Error("Skill installer must not run");
+  };
+
+  test("mcp add installs MCP registration and renders target/path/scope", async () => {
+    const io = new BufferIo();
+    const calls: Array<{ target: string; options: InstallOptions }> = [];
+    const code = await runCli({
+      argv: ["mcp", "add", "--for", "pi"],
+      cwd: "/repo",
+      deps: makeCliFixture().deps,
+      io,
+      home: "/home/test",
+      integrations: {
+        installMcpServerForTarget: (target, options) => {
+          calls.push({ target, options });
+          return {
+            target: "pi",
+            path: `${options.home}/.config/mcp/mcp.json`,
+            scope: "global",
+            serverName: "asem",
+          };
+        },
+        installSkillForTarget: unreachableSkill,
+      },
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain(
+      "Registered MCP server 'asem' for pi (global): /home/test/.config/mcp/mcp.json",
+    );
+    expect(calls).toEqual([
+      {
+        target: "pi",
+        options: { cwd: "/repo", home: "/home/test", global: true },
+      },
+    ]);
+  });
+
+  test("skills add installs the Skill and forwards --no-global as workspace", async () => {
+    const io = new BufferIo();
+    const calls: Array<{ target: string; options: InstallOptions }> = [];
+    const code = await runCli({
+      argv: ["skills", "add", "--for", "pi", "--no-global"],
+      cwd: "/repo",
+      deps: makeCliFixture().deps,
+      io,
+      integrations: {
+        installMcpServerForTarget: unreachableMcp,
+        installSkillForTarget: (target, options) => {
+          calls.push({ target, options });
+          return {
+            target: "pi",
+            path: `${options.cwd}/.pi/skills/asem/SKILL.md`,
+            scope: "workspace",
+          };
+        },
+      },
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain(
+      "Installed asem Skill for pi (workspace): /repo/.pi/skills/asem/SKILL.md",
+    );
+    expect(calls[0]?.options.global).toBe(false);
+  });
+
+  test("an unsupported-scope error renders a usage error (exit 2)", async () => {
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["mcp", "add", "--for", "codex", "--no-global"],
+      cwd: "/repo",
+      deps: makeCliFixture().deps,
+      io,
+      integrations: {
+        installMcpServerForTarget: () => {
+          throw integrationTargetError(
+            "unsupported_scope",
+            "codex does not support workspace MCP scope",
+          );
+        },
+        installSkillForTarget: unreachableSkill,
+      },
+    });
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain(
+      "codex does not support workspace MCP scope",
+    );
+  });
+
+  test("a malformed existing config renders invalid_config (exit 1)", async () => {
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["mcp", "add", "--for", "pi"],
+      cwd: "/repo",
+      deps: makeCliFixture().deps,
+      io,
+      integrations: {
+        installMcpServerForTarget: () => {
+          throw integrationTargetError(
+            "invalid_config",
+            "Invalid JSON config at /home/test/.config/mcp/mcp.json",
+          );
+        },
+        installSkillForTarget: unreachableSkill,
+      },
+    });
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("invalid_config");
+  });
+
+  test("uses the production installers by default", async () => {
+    const home = join(tmpdir(), `asem-cli-${crypto.randomUUID()}`);
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["mcp", "add", "--for", "pi"],
+      cwd: join(home, "repo"),
+      deps: makeCliFixture().deps,
+      io,
+      home,
+    });
+    expect(code).toBe(EXIT_OK);
+    const path = join(home, ".config", "mcp", "mcp.json");
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+      mcpServers: { asem: { command: "asem", args: ["mcp"] } },
+    });
   });
 });

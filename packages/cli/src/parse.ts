@@ -74,7 +74,10 @@ export type CliCommand =
       body: string;
       json: boolean;
     }
-  | { type: "report-parent"; body: string; json: boolean };
+  | { type: "report-parent"; body: string; json: boolean }
+  | { type: "mcp" }
+  | { type: "mcp-add"; target: string; global: boolean }
+  | { type: "skills-add"; target: string; global: boolean };
 
 /** Outcome of parsing `argv`: a command, a help request, or a structured error. */
 export type ParseResult =
@@ -720,6 +723,58 @@ function parseReportParent(args: string[]): ParseResult {
   };
 }
 
+/**
+ * Shared parser for `mcp add` / `skills add` Integration Target setup commands.
+ *
+ * `--for <target>` names the Integration Target (it avoids `--agent`, which
+ * already means the Session Agent in `session create`). Scope defaults to global;
+ * `--no-global` requests workspace-local setup, which the installer rejects when
+ * the target does not support it. Target validity is the installer's call, so the
+ * surface forwards the raw `--for` value verbatim.
+ */
+function parseIntegrationAdd(
+  kind: "mcp-add" | "skills-add",
+  args: string[],
+): ParseResult {
+  const flags = parseFlags(args, { booleans: ["no-global"], values: ["for"] });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { values, booleans, positionals } = flags.value;
+
+  const group = kind === "mcp-add" ? "mcp" : "skills";
+  const target = values.get("for");
+  if (target === undefined || target.length === 0) {
+    return invalid(`${group} add requires --for <target>`);
+  }
+  if (positionals.length > 0) {
+    return invalid("unexpected extra arguments", { extra: positionals });
+  }
+  return {
+    kind: "command",
+    command: { type: kind, target, global: !booleans.has("no-global") },
+  };
+}
+
+/**
+ * `asem mcp` starts the stdio server (mapped to `{ type: "mcp" }`); `asem mcp
+ * add` installs an MCP registration into an Integration Target. The binary
+ * intercepts bare `mcp` before dispatch, so this branch mainly serves `mcp add`
+ * and keeps the command surface complete and testable.
+ */
+function parseMcp(args: string[]): ParseResult {
+  const [sub, ...rest] = args;
+  if (sub === undefined) return { kind: "command", command: { type: "mcp" } };
+  if (sub === "add") return parseIntegrationAdd("mcp-add", rest);
+  return invalid(`unknown mcp subcommand: ${sub}`, { expected: ["add"] });
+}
+
+/** `asem skills add --for <target>` installs the asem Skill into a target. */
+function parseSkills(args: string[]): ParseResult {
+  const [sub, ...rest] = args;
+  if (sub === undefined) return invalid("missing skills subcommand (add)");
+  if (sub === "add") return parseIntegrationAdd("skills-add", rest);
+  return invalid(`unknown skills subcommand: ${sub}`, { expected: ["add"] });
+}
+
 function parseReport(args: string[]): ParseResult {
   const [sub, ...rest] = args;
   switch (sub) {
@@ -744,10 +799,12 @@ const HELP_SUBCOMMANDS: Record<string, readonly string[]> = {
   profile: ["list", "get"],
   message: ["list", "wait", "send"],
   report: ["parent"],
+  mcp: ["add"],
+  skills: ["add"],
 };
 
 function helpResult(command: string, rest: readonly string[]): ParseResult {
-  const directCommands = ["doctor", "init", "init-session", "mcp", "tui"];
+  const directCommands = ["doctor", "init", "init-session", "tui"];
   if (directCommands.includes(command)) {
     const first = rest[0];
     if (first !== undefined && !first.startsWith("-") && !isHelpFlag(first)) {
@@ -767,6 +824,8 @@ function helpResult(command: string, rest: readonly string[]): ParseResult {
         "profile",
         "message",
         "report",
+        "mcp",
+        "skills",
       ],
     });
   }
@@ -812,6 +871,10 @@ export function parseArgs(argv: readonly string[]): ParseResult {
       return parseMessage(rest);
     case "report":
       return parseReport(rest);
+    case "mcp":
+      return parseMcp(rest);
+    case "skills":
+      return parseSkills(rest);
     default:
       return invalid(`unknown command: ${command}`, {
         expected: [
@@ -822,6 +885,8 @@ export function parseArgs(argv: readonly string[]): ParseResult {
           "profile",
           "message",
           "report",
+          "mcp",
+          "skills",
         ],
       });
   }

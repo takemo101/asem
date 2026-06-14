@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { BufferIo } from "../src/io.ts";
 import {
   createReadOnlyCliDeps,
+  isReadOnlyCommand,
   surfaceForArgv,
   wantsHelp,
 } from "../src/main.ts";
@@ -22,6 +26,50 @@ describe("surfaceForArgv", () => {
 
   test("a normal CLI command selects the cli surface", () => {
     expect(surfaceForArgv(["session", "list"])).toBe("cli");
+  });
+
+  test("mcp add is a cli command, not the mcp server surface", () => {
+    expect(surfaceForArgv(["mcp", "add", "--for", "pi"])).toBe("cli");
+  });
+});
+
+describe("isReadOnlyCommand", () => {
+  test("setup commands and doctor/help are read-only (no durable store)", () => {
+    expect(isReadOnlyCommand(["doctor"])).toBe(true);
+    expect(isReadOnlyCommand(["mcp", "add", "--for", "pi"])).toBe(true);
+    expect(isReadOnlyCommand(["skills", "add", "--for", "pi"])).toBe(true);
+    expect(isReadOnlyCommand(["session", "list", "--help"])).toBe(true);
+  });
+
+  test("the bare mcp server and normal commands need full deps", () => {
+    expect(isReadOnlyCommand(["mcp"])).toBe(false);
+    expect(isReadOnlyCommand(["session", "list"])).toBe(false);
+  });
+});
+
+describe("integration setup is store-free", () => {
+  test("mcp add runs against read-only deps and writes only target config", async () => {
+    const home = join(tmpdir(), `asem-main-${crypto.randomUUID()}`);
+    const deps = createReadOnlyCliDeps({ surface: "cli" });
+    const io = new BufferIo();
+
+    const code = await runCli({
+      argv: ["mcp", "add", "--for", "pi"],
+      cwd: join(home, "repo"),
+      deps,
+      io,
+      home,
+    });
+
+    expect(code).toBe(0);
+    expect(io.outText()).toContain("Registered MCP server 'asem' for pi");
+    expect(() => deps.store.listSessions).toThrow(
+      "store is unavailable in read-only CLI deps",
+    );
+    const path = join(home, ".config", "mcp", "mcp.json");
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+      mcpServers: { asem: { command: "asem", args: ["mcp"] } },
+    });
   });
 });
 

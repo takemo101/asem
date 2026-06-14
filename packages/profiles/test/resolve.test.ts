@@ -13,23 +13,36 @@ const DIRS: ProfileDirs = {
 };
 
 const BUILTIN_IDS = [
+  "context-builder",
   "debugger",
+  "delegate",
   "docs-writer",
+  "oracle",
   "planner",
+  "researcher",
   "reviewer",
   "scout",
   "worker",
 ];
 
 describe("builtin profiles", () => {
-  test("are exactly the six instruction-only ids", () => {
+  test("are exactly the ten instruction-only ids", () => {
     expect(BUILTIN_PROFILES.map((p) => p.id).sort()).toEqual(BUILTIN_IDS);
     for (const profile of BUILTIN_PROFILES) {
       expect(profile.source).toBe("builtin");
       expect(profile.agent).toBeNull();
       expect(profile.model).toBeNull();
-      expect(profile.instructions.length).toBeGreaterThan(0);
+      expect(profile.instructions).toContain("## Working rules");
+      expect(profile.instructions).toContain("## Final response");
     }
+  });
+
+  test("include pi-subagents-derived decision and research profiles", () => {
+    const byId = new Map(BUILTIN_PROFILES.map((p) => [p.id, p]));
+    expect(byId.get("oracle")?.instructions).toContain("decision-consistency");
+    expect(byId.get("context-builder")?.instructions).toContain("handoff");
+    expect(byId.get("researcher")?.instructions).toContain("sources");
+    expect(byId.get("delegate")?.instructions).toContain("bounded task");
   });
 });
 

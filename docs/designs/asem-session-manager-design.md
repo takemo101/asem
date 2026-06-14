@@ -229,6 +229,8 @@ create table sessions (
   agent text not null,
   mux text not null,
   model text,
+  profile text,
+  profile_source text,
   parent_session_id text,
   status text not null,
   mux_ref_json text not null,
@@ -250,6 +252,7 @@ Notes:
 
 - `mux_ref_json` stores multiplexer-specific coordinates such as herdr workspace/tab/pane or tmux session/window/pane.
 - `model` is the nullable model the Session was launched with (MIK-040). It is launch metadata only: asem does not validate model names, map aliases, select providers, or infer Agent capability from it. Existing rows migrate forward as `model = null`.
+- `profile` / `profile_source` record the optional Agent Profile id and resolved source (`project`, `user`, or `builtin`) selected for Session creation. Profile instructions are not duplicated into SQLite; the effective prompt remains in `prompt.md`. See [Agent Profiles Design](./agent-profiles-design.md).
 - `parent_session_id` must point to a Session in the same effective scope for normal operations.
 - There is no `role` or `metadata_json` in MVP.
 
@@ -416,6 +419,24 @@ Initial builtin agent templates:
 
 Exact command flags must be verified during implementation; do not assume every CLI accepts prompt files.
 
+### Agent Profiles
+
+Agent Profiles are explicit prompt-shaping bundles for new Sessions. They are not workflow roles and are applied only when a caller passes `profile` / `--profile`; there is no profile auto-selection or hidden config default in MVP. See [ADR 0007](../adr/0007-agent-profiles-are-explicit-prompt-shaping.md) and [Agent Profiles Design](./agent-profiles-design.md).
+
+Profile sources resolve as `project > user > builtin`:
+
+```text
+<worktree_root>/.asem/agents/*.md
+~/.asem/agents/*.md
+builtin profiles
+```
+
+User/project profile files are Markdown with frontmatter. `id` and body instructions are required; `description`, `agent`, and `model` are optional. Source-level duplicate ids are `invalid_config`; a requested unknown profile is `invalid_input`.
+
+When a profile is selected, `create_session` writes an effective `prompt.md` containing profile instructions first and the caller's original prompt second. This same effective prompt is used for normal prompt-file delivery and `paste_prompt` delivery.
+
+The initial builtin profiles are `scout`, `planner`, `worker`, `reviewer`, `debugger`, and `docs-writer`. They are instructions-only and intentionally exclude workflow-shaped names such as `coordinator`, `parent`, or `pr-finisher`.
+
 ### Launch script standard
 
 Use a Session-specific launch script as the standard way to inject env and start the agent.
@@ -441,9 +462,11 @@ AS_SESSION_NAME=...
 AS_AGENT=...
 AS_MUX=...
 AS_MODEL=...
+AS_PROFILE=...
+AS_PROFILE_SOURCE=...
 ```
 
-`AS_PROJECT_ROOT` is an optional alias for cwd or worktree root if useful. `AS_SESSION_DIR`, `AS_PROMPT_PATH`, `AS_SESSION_NAME`, `AS_AGENT`, and `AS_MUX` are exported so Agent launch hooks (`before_agent` / `after_agent`) can read them. During `after_agent`, the launch script additionally exposes `AS_AGENT_EXIT_CODE`, the Agent command's exit code — this is hook-local process context, not a durable Session outcome. The DB stores only `token_hash`.
+`AS_PROJECT_ROOT` is an optional alias for cwd or worktree root if useful. `AS_SESSION_DIR`, `AS_PROMPT_PATH`, `AS_SESSION_NAME`, `AS_AGENT`, `AS_MUX`, `AS_MODEL`, `AS_PROFILE`, and `AS_PROFILE_SOURCE` are exported so Agent launch hooks (`before_agent` / `after_agent`) can read them. During `after_agent`, the launch script additionally exposes `AS_AGENT_EXIT_CODE`, the Agent command's exit code — this is hook-local process context, not a durable Session outcome. The DB stores only `token_hash`.
 
 ## Operation model
 
@@ -456,6 +479,8 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 | Initialize project | `asem init` | — | human local trust | current worktree | creates `.asem.yaml`, updates `.gitignore` |
 | Register current Session | `asem init-session` | `init_session` | token generated | effective scope | inserts Session row, prints exports |
 | Create Session | `asem session create` | `create_session` | human or verified current Session | effective scope | creates pane, writes files, inserts Session row |
+| List Profiles | `asem profile list` | `list_profiles` | human local trust | current config/worktree | reads builtin/user/project Agent Profile definitions |
+| Get Profile | `asem profile get <id>` | `get_profile` | human local trust | current config/worktree | reads one resolved Agent Profile definition |
 | List Sessions | `asem session list` | `list_sessions` | human or verified current Session | effective scope | reads Session rows, may update liveness |
 | Get Session | `asem session get` | `get_session` | human or verified current Session | effective scope | reads one Session, may include `attach_hint` and `attach_command` |
 | Attach Session | `asem session attach` | — | human local trust | effective scope | attaches to external mux |
@@ -514,14 +539,17 @@ with mode `0600` when it contains token material. This path is covered by the `.
 1. Resolve config `.asem.yaml`.
 2. Resolve `workspace_id` and `worktree_root`.
 3. Resolve parent using the parent-resolution truth table unless `--root` / `--no-parent` is set.
-4. Create Session dir under `.asem/sessions/<id>/`.
-5. Write `prompt.md`.
-6. Execute mux `create` sequence and capture mux refs.
-7. Generate launch script with env and agent command.
-8. Execute mux `run_in_pane` sequence to start the launch script.
-9. For a `paste_prompt` Agent Template only: run the Agent's `before_paste` sequence, then the mux `send` sequence with `prompt.md`'s contents as the message to paste the prompt into the now-running Agent.
-10. Register Session in SQLite only after successful start (and successful paste, when applicable).
-11. If any step fails before DB registration, return a structured error, include the temp/session log path, and attempt mux cleanup.
+4. Resolve the requested Agent Profile, if any, from project/user/builtin sources.
+5. Resolve final Agent and model using `explicit input > selected profile default > config default`, suppressing the profile model default when an explicit Agent differs from the profile Agent default.
+6. Validate model support for the final Agent Template before side effects.
+7. Create Session dir under `.asem/sessions/<id>/`.
+8. Write effective `prompt.md` (profile instructions first when a profile is selected, then the original user prompt).
+9. Execute mux `create` sequence and capture mux refs.
+10. Generate launch script with env and agent command.
+11. Execute mux `run_in_pane` sequence to start the launch script.
+12. For a `paste_prompt` Agent Template only: run the Agent's `before_paste` sequence, then the mux `send` sequence with `prompt.md`'s contents as the message to paste the effective prompt into the now-running Agent.
+13. Register Session in SQLite only after successful start (and successful paste, when applicable).
+14. If any step fails before DB registration, return a structured error, include the temp/session log path, and attempt mux cleanup.
 
 This ordering avoids stale failed Session rows.
 
@@ -602,6 +630,7 @@ Initial monorepo packages:
 |---|---|---|
 | `@asem/core` | domain types, schemas, scope types, operation input/output contracts, port interfaces, pure shell escaping helper, token hash/verify | none |
 | `@asem/runtime` | template registry, template interpolation, sequence engine, capture handling, fake runner contract; uses core shell escaping helper | injected command/file/clock/logger ports |
+| `@asem/profiles` | builtin Agent Profile definitions, user/project profile discovery, Markdown/frontmatter parsing, source precedence, profile resolution, effective prompt rendering | filesystem through injected/rooted inputs |
 | `@asem/store` | SQLite migrations, row mapping, Session/Message CRUD, scoped transaction primitives | SQLite |
 | `@asem/ops` | shared operation handlers over injected ports, auth/scope checks, create/send/close/delete/list semantics | injected ports only |
 | `@asem/cli` | installed `asem` binary, command parsing, human rendering, starts MCP/TUI | shell/stdout/stderr |

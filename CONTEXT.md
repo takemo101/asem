@@ -40,6 +40,10 @@ _Avoid_: Agent runtime, session manager.
 The external AI CLI process launched inside a Session, such as Claude Code, Codex, pi, agy, or opencode.
 _Avoid_: Multiplexer, worker, role.
 
+**Agent Profile**:
+A named bundle of behavior instructions applied to a new Session's initial prompt. An Agent Profile may provide launch defaults such as Agent or model, but it is not a workflow role and does not decide task outcomes.
+_Avoid_: Role, position, strategy, workflow step.
+
 **Template**:
 A configured command sequence that tells asem how to use a Multiplexer or start an Agent.
 _Avoid_: Adapter, plugin, workflow.
@@ -59,7 +63,7 @@ _Avoid_: Dashboard when it implies analytics; orchestrator when it implies contr
 ## Flagged ambiguities
 
 - “Task” is intentionally not used. asem manages live agent Sessions, not units of work with outcomes.
-- “Role” is intentionally not part of the MVP. Session specialization should be expressed through Session names, prompts, and agent templates, not workflow roles.
+- “Role” is intentionally not part of the MVP. Session specialization should be expressed through Session names, prompts, Agent Profiles, and Agent Templates, not workflow roles.
 - “Workspace” does not mean herdr workspace. It is asem's logical grouping term.
 - “Inbox” is only a filtered view of Messages addressed to the current Session. It is not a durable unread queue.
 - “Report” does not close a Session and does not mean the work is done.

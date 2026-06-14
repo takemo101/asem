@@ -7,6 +7,7 @@ Use these notes for current product shape and implementation reference. Use `doc
 ## Designs
 
 - [`asem-session-manager-design.md`](./asem-session-manager-design.md) — MVP Session manager design covering Session / Message, scope, storage, command sequence templates, CLI/MCP/TUI, testing, and implementation order.
+- [`agent-profiles-design.md`](./agent-profiles-design.md) — explicit Agent Profile prompt-shaping design, source precedence, profile file format, Session metadata, and CLI/MCP discovery surfaces.
 - [`asem-tui-workspace-live-cockpit-design.md`](./asem-tui-workspace-live-cockpit-design.md) — refined TUI design for a workspace-wide OpenTUI live cockpit with auto-refresh and in-memory activity.
 - [`init-wizard-design.md`](./init-wizard-design.md) — opt-in interactive `asem init` setup flow for choosing default Agent/Multiplexer templates and materializing selected builtin Templates into `.asem.yaml`.
 

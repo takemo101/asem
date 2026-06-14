@@ -62,6 +62,20 @@ Develop in small, testable slices.
 
 Avoid opportunistic unrelated refactors.
 
+### Delegated implementation/review workflow
+
+For non-trivial implementation work, prefer dogfooding asem Sessions while keeping the parent Session responsible for final judgment.
+
+1. Parent/orchestrator Session prepares the plan, acceptance criteria, branch, and mikan Issue context when relevant.
+2. Launch a child Session with an appropriate Agent Profile, usually `worker`, to implement the bounded change.
+3. Wait for the child Report.
+4. Launch a separate child Session with the `reviewer` Agent Profile to review the implementation against the request, docs, tests, and repo standards.
+5. If review finds issues, send a Message back to the worker Session for repair and wait for another Report.
+6. Parent Session runs final validation, opens/merges the PR, updates mikan, and cleans GitButler state.
+7. Close child Sessions to preserve Message/Report history; do not delete them unless explicitly cleaning history.
+
+Do not treat this as task orchestration semantics inside asem. It is an agent workflow for using Sessions, Messages, and Reports during development.
+
 ## Testability rules
 
 Default tests must not require real multiplexers or real agent CLIs.

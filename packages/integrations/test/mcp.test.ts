@@ -209,6 +209,46 @@ describe("installMcpServerForTarget", () => {
     expect(toml).toContain("[mcp_servers.asem]");
   });
 
+  test("codex rejects a parent-table asem form rather than corrupting it", () => {
+    const home = mktemp();
+    const path = join(home, ".codex", "config.toml");
+    mkdirSync(dirname(path), { recursive: true });
+    const original = '[mcp_servers]\nasem = { command = "old" }\n';
+    writeFileSync(path, original);
+    expect(() => installMcpServerForTarget("codex", { home })).toThrow(
+      "cannot safely merge",
+    );
+    expect(readFileSync(path, "utf8")).toBe(original);
+  });
+
+  test("codex rejects a dotted asem key rather than corrupting it", () => {
+    const home = mktemp();
+    const path = join(home, ".codex", "config.toml");
+    mkdirSync(dirname(path), { recursive: true });
+    const original = 'mcp_servers.asem.command = "old"\n';
+    writeFileSync(path, original);
+    expect(() => installMcpServerForTarget("codex", { home })).toThrow(
+      "cannot safely merge",
+    );
+    expect(readFileSync(path, "utf8")).toBe(original);
+  });
+
+  test("codex still upserts when a canonical asem table coexists with a parent table", () => {
+    const home = mktemp();
+    const path = join(home, ".codex", "config.toml");
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(
+      path,
+      '[mcp_servers.other]\ncommand = "other"\n\n[mcp_servers.asem]\ncommand = "old"\n',
+    );
+    installMcpServerForTarget("codex", { home });
+    const toml = readFileSync(path, "utf8");
+    expect(toml).toContain("[mcp_servers.other]");
+    expect(toml).toContain("[mcp_servers.asem]");
+    expect(toml).toContain('command = "asem"');
+    expect(toml).not.toContain('command = "old"');
+  });
+
   test("codex rejects workspace scope", () => {
     expect(() =>
       installMcpServerForTarget("codex", { cwd: mktemp(), global: false }),

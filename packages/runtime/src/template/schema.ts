@@ -138,6 +138,15 @@ export const AGENT_PROMPT_PLACEHOLDERS = [
 ] as const;
 
 /**
+ * Model placeholder an Agent `command` may carry (MIK-040). `{{model_shell}}`
+ * expands to `<model_flag> <shell-escaped model>` when a model is supplied and
+ * to the empty string when it is omitted, so the same command works with or
+ * without a per-Session model. It is meaningful only paired with `model_flag`;
+ * the schema rejects either one appearing without the other.
+ */
+export const AGENT_MODEL_PLACEHOLDERS = ["model_shell"] as const;
+
+/**
  * Matches any `{{ … }}` placeholder; the capture group is the raw inner text.
  * Deliberately broad (not `\w+`) so malformed names like `prompt-shell`,
  * `prompt_shell | quote`, or an empty `{{}}` are still detected and rejected
@@ -170,6 +179,10 @@ export function agentCommandPlaceholders(command: string): string[] {
  * - `before_agent` / `after_agent` are literal shell command lines inserted into
  *   the generated `launch.sh` around the Agent process (MIK-034). They are not
  *   `{{…}}`-interpolated; hooks read launch env vars instead.
+ * - `model_flag` + `{{model_shell}}` add optional per-Session model selection
+ *   (MIK-040). They must appear together: a Template carrying only one of them is
+ *   invalid configuration. `model_shell` is independent of the prompt
+ *   placeholders, so a `paste_prompt` Agent may still support model selection.
  */
 export const agentTemplateSchema = z
   .object({
@@ -178,13 +191,20 @@ export const agentTemplateSchema = z
     before_paste: commandSequenceSchema.default([]),
     before_agent: z.array(nonEmptyString).default([]),
     after_agent: z.array(nonEmptyString).default([]),
+    /**
+     * One shell-token flag (e.g. `--model` or `-m`) emitted before the
+     * shell-escaped model value by `{{model_shell}}`. Its presence is what makes
+     * a Template model-supported.
+     */
+    model_flag: nonEmptyString.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
-    const allowed = new Set<string>(AGENT_PROMPT_PLACEHOLDERS);
+    const promptAllowed = new Set<string>(AGENT_PROMPT_PLACEHOLDERS);
+    const modelAllowed = new Set<string>(AGENT_MODEL_PLACEHOLDERS);
     const placeholders = agentCommandPlaceholders(value.command);
     for (const name of placeholders) {
-      if (!allowed.has(name)) {
+      if (!promptAllowed.has(name) && !modelAllowed.has(name)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["command"],
@@ -192,7 +212,9 @@ export const agentTemplateSchema = z
         });
       }
     }
-    const hasPromptPlaceholder = placeholders.some((name) => allowed.has(name));
+    const hasPromptPlaceholder = placeholders.some((name) =>
+      promptAllowed.has(name),
+    );
     if (value.paste_prompt && hasPromptPlaceholder) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -206,6 +228,25 @@ export const agentTemplateSchema = z
         code: z.ZodIssueCode.custom,
         path: ["before_paste"],
         message: "before_paste is only valid when paste_prompt is true",
+      });
+    }
+    // model_flag and {{model_shell}} must appear together: either alone is an
+    // invalid model-support declaration (MIK-040).
+    const hasModelPlaceholder = placeholders.some((name) =>
+      modelAllowed.has(name),
+    );
+    if (hasModelPlaceholder && value.model_flag === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["command"],
+        message: "{{model_shell}} requires model_flag to be set",
+      });
+    }
+    if (value.model_flag !== undefined && !hasModelPlaceholder) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["model_flag"],
+        message: "model_flag requires a {{model_shell}} placeholder in command",
       });
     }
   });

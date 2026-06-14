@@ -81,6 +81,28 @@ function rawSessionRow(
   ];
 }
 
+/** A valid raw `sessions` row object (pre-parse), for field-level parse tests. */
+function rawSessionRowObject(): SessionRow {
+  return {
+    id: "s_ok",
+    workspace_id: scopeA.workspaceId,
+    worktree_root: scopeA.worktreeRoot,
+    name: "ok",
+    cwd: scopeA.worktreeRoot,
+    agent: "claude",
+    mux: "herdr",
+    parent_session_id: null,
+    status: "running",
+    mux_ref_json: "{}",
+    session_dir: "/dir",
+    token_hash: "sha256:x",
+    created_at: "2026-06-05T12:00:00Z",
+    updated_at: "2026-06-05T12:00:00Z",
+    closed_at: null,
+    model: null,
+  };
+}
+
 describe("row parse failures — sessions", () => {
   test("invalid status value fails as row_parse_failed", async () => {
     const { store, db } = freshStore();
@@ -100,17 +122,27 @@ describe("row parse failures — sessions", () => {
     db.query(INSERT_RAW_SESSION).run(
       ...rawSessionRow({ mux_ref_json: "not json" }),
     );
-    await expect(store.getSessionById(scopeA, "s_bad")).rejects.toMatchObject({
-      code: "row_parse_failed",
-    });
+
+    let caught: unknown;
+    try {
+      await store.getSessionById(scopeA, "s_bad");
+    } catch (error) {
+      caught = error;
+    }
+    expect(isStoreError(caught, "row_parse_failed")).toBe(true);
   });
 
   test("listSessions surfaces a corrupt row", async () => {
     const { store, db } = freshStore();
     db.query(INSERT_RAW_SESSION).run(...rawSessionRow({ status: "weird" }));
-    await expect(store.listSessions(scopeA)).rejects.toMatchObject({
-      code: "row_parse_failed",
-    });
+
+    let caught: unknown;
+    try {
+      await store.listSessions(scopeA);
+    } catch (error) {
+      caught = error;
+    }
+    expect(isStoreError(caught, "row_parse_failed")).toBe(true);
   });
 
   test("parseSessionRow rejects a missing required field", () => {
@@ -145,9 +177,13 @@ describe("row parse failures — messages", () => {
       null,
       "2026-06-05T12:00:00Z",
     );
-    await expect(store.listMessages(scopeA)).rejects.toMatchObject({
-      code: "row_parse_failed",
-    });
+    let caught: unknown;
+    try {
+      await store.listMessages(scopeA);
+    } catch (error) {
+      caught = error;
+    }
+    expect(isStoreError(caught, "row_parse_failed")).toBe(true);
   });
 
   test("parseMessageRow rejects a bad timestamp", () => {
@@ -178,5 +214,35 @@ describe("round-trip parsing", () => {
     const message = makeMessage({ id: "m_ok" });
     await store.insertMessage(message);
     expect((await store.listMessages(scopeA))[0]).toEqual(message);
+  });
+});
+
+describe("Session model column", () => {
+  test("parseSessionRow maps a non-null model", () => {
+    const session = parseSessionRow({
+      ...rawSessionRowObject(),
+      model: "sonnet",
+    });
+    expect(session.model).toBe("sonnet");
+  });
+
+  test("parseSessionRow maps a missing/null model to null", () => {
+    expect(parseSessionRow(rawSessionRowObject()).model).toBeNull();
+    expect(
+      parseSessionRow({ ...rawSessionRowObject(), model: null }).model,
+    ).toBeNull();
+  });
+
+  test("a model is persisted and read back", async () => {
+    const { store } = freshStore();
+    const session = makeSession({ id: "s_model", model: "sonnet" });
+    await store.insertSession(session);
+    expect((await store.getSessionById(scopeA, "s_model"))?.model).toBe(
+      "sonnet",
+    );
+
+    const noModel = makeSession({ id: "s_none", model: null });
+    await store.insertSession(noModel);
+    expect((await store.getSessionById(scopeA, "s_none"))?.model).toBeNull();
   });
 });

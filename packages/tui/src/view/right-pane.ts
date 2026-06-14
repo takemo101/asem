@@ -32,6 +32,7 @@ export function rightLines(
         `status:        ${detail.status}`,
         `agent:         ${detail.agent}`,
         `mux:           ${detail.mux}`,
+        `model:         ${detail.model ?? "-"}`,
         `parent:        ${detail.parentLabel}`,
         `cwd:           ${detail.cwd}`,
         `worktree_root: ${detail.worktreeRoot}`,

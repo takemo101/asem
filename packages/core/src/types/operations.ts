@@ -76,6 +76,13 @@ export const createSessionInputSchema = z
     prompt: z.string(),
     agent: nonEmptyString.optional(),
     mux: nonEmptyString.optional(),
+    /**
+     * Optional model passed through the Agent Template `{{model_shell}}`
+     * placeholder (MIK-040). Omitting it preserves current behavior; a non-empty
+     * string is required when present. Whether the selected Agent Template
+     * supports a model is checked by `create_session` before any side effects.
+     */
+    model: nonEmptyString.optional(),
     cwd: nonEmptyString.optional(),
     parentSessionId: nonEmptyString.optional(),
     root: z.boolean().optional(),

@@ -131,6 +131,9 @@ const toolDefinitions = {
         prompt: stringSchema,
         agent: stringSchema,
         mux: stringSchema,
+        // Optional per-Session model; the shared createSessionInputSchema parses
+        // and enforces the real contract (non-empty, Template-supported).
+        model: stringSchema,
         cwd: stringSchema,
         parentSessionId: stringSchema,
         root: booleanSchema,

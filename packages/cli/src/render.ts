@@ -41,6 +41,9 @@ function sessionRow(session: Session): string {
     session.status,
     session.name,
     `${session.agent}/${session.mux}`,
+    // Model is shown only when set, to keep the compact row free of noise for
+    // the common no-model case (MIK-040).
+    ...(session.model !== null ? [`model=${session.model}`] : []),
     `parent=${parent}`,
   ].join("  ");
 }
@@ -63,6 +66,7 @@ export function renderSessionDetail(
     `status:        ${session.status}`,
     `agent:         ${session.agent}`,
     `mux:           ${session.mux}`,
+    `model:         ${session.model ?? "-"}`,
     `parent:        ${session.parentSessionId ?? "-"}`,
     `cwd:           ${session.cwd}`,
     `worktree_root: ${session.worktreeRoot}`,
@@ -110,6 +114,8 @@ export function renderCreatedSession(session: Session): string[] {
     `status: ${session.status}`,
     `agent:  ${session.agent}`,
     `mux:    ${session.mux}`,
+    // Only echo the model line when a model was selected (MIK-040).
+    ...(session.model !== null ? [`model:  ${session.model}`] : []),
     `parent: ${session.parentSessionId ?? "-"}`,
   ];
 }

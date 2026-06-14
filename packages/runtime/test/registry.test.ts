@@ -34,7 +34,8 @@ describe("createTemplateRegistry", () => {
     const registry = createTemplateRegistry();
     const claude = registry.getAgentTemplate("claude");
     expect(claude).toEqual({
-      command: "claude {{prompt_shell}}",
+      command: "claude {{model_shell}} {{prompt_shell}}",
+      model_flag: "--model",
       paste_prompt: false,
       before_paste: [],
       before_agent: [],
@@ -137,7 +138,7 @@ describe("createTemplateRegistryFactory", () => {
     const registry = factory.forConfig(configWith());
     expect(registry.getMuxTemplate("herdr")).toBeDefined();
     expect(agentCommand(registry.getAgentTemplate("claude"))).toBe(
-      "claude {{prompt_shell}}",
+      "claude {{model_shell}} {{prompt_shell}}",
     );
     expect(registry.getMuxTemplate("nope")).toBeUndefined();
   });

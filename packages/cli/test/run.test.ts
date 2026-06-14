@@ -198,7 +198,7 @@ describe("runCli init", () => {
     expect(config).toContain("default: pi");
     expect(config).toContain("tmux new-session");
     expect(config).toContain("attach_command");
-    expect(config).toContain('command: "pi {{prompt_shell}}"');
+    expect(config).toContain('command: "pi {{model_shell}} {{prompt_shell}}"');
   });
 
   test("interactive init in non-TTY exits with guidance", async () => {
@@ -277,8 +277,10 @@ describe("runCli init", () => {
     // both mux templates present
     expect(config).toContain("herdr:");
     expect(config).toContain("tmux:");
-    expect(config).toContain('command: "pi {{prompt_shell}}"');
-    expect(config).toContain('command: "claude {{prompt_shell}}"');
+    expect(config).toContain('command: "pi {{model_shell}} {{prompt_shell}}"');
+    expect(config).toContain(
+      'command: "claude {{model_shell}} {{prompt_shell}}"',
+    );
     // no duplicate template keys
     expect(config.split("\n").filter((l) => l.trim() === "pi:")).toHaveLength(
       1,
@@ -539,6 +541,49 @@ describe("runCli session create", () => {
     const session = requiredAt(store.sessions, 0, "session");
     expect(session.name).toBe("reviewer-1");
     expect(session.parentSessionId).toBeNull();
+  });
+
+  test("--model passes through to createSession and is rendered/persisted", async () => {
+    const { deps, store } = createDeps();
+    const { io, code } = await run(
+      [
+        "session",
+        "create",
+        "reviewer-1",
+        "--prompt",
+        "do it",
+        "--root",
+        "--model",
+        "sonnet",
+        "--json",
+      ],
+      deps,
+    );
+    expect(code).toBe(EXIT_OK);
+    expect(JSON.parse(io.outText())).toMatchObject({ model: "sonnet" });
+    expect(store.sessions[0]?.model).toBe("sonnet");
+  });
+
+  test("--model against a model-unsupported Agent Template fails as usage error", async () => {
+    const { deps, store } = createDeps();
+    const { io, code } = await run(
+      [
+        "session",
+        "create",
+        "reviewer-1",
+        "--prompt",
+        "do it",
+        "--root",
+        "--agent",
+        "agy",
+        "--model",
+        "sonnet",
+      ],
+      deps,
+    );
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("does not support");
+    expect(store.sessions).toHaveLength(0);
   });
 
   test("--parent <id> launches under an explicit in-scope parent", async () => {

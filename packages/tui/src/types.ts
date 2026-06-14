@@ -129,6 +129,8 @@ export interface DetailView {
   status: SessionStatus;
   agent: string;
   mux: string;
+  /** The model the Session was launched with, or null when none (MIK-040). */
+  model: string | null;
   /** Parent Session name if resolvable in scope, else its id, else `-`. */
   parentLabel: string;
   parentSessionId: string | null;

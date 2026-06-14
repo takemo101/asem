@@ -40,7 +40,10 @@ export {
   redactFields,
   withRedaction,
 } from "./redact/redact.ts";
-export { renderAgentCommand } from "./template/agent-command.ts";
+export {
+  type RenderAgentCommandInput,
+  renderAgentCommand,
+} from "./template/agent-command.ts";
 export {
   type RenderedAttachCommand,
   renderAttachCommand,
@@ -67,6 +70,7 @@ export {
 } from "./template/registry.ts";
 // Template schemas & types
 export {
+  AGENT_MODEL_PLACEHOLDERS,
   AGENT_PROMPT_PLACEHOLDERS,
   type AgentTemplate,
   type AttachCommandTemplate,

@@ -269,31 +269,41 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
  *   boot delay.
  */
 export const builtinAgentTemplates: Readonly<Record<string, unknown>> = {
-  // Positional prompt seeds the interactive session.
+  // Positional prompt seeds the interactive session. `--model` selects the model
+  // when one is requested (MIK-040); omitting it preserves the bare command.
   claude: {
-    command: "claude {{prompt_shell}}",
+    command: "claude {{model_shell}} {{prompt_shell}}",
+    model_flag: "--model",
   },
   // Positional PROMPT forwarded to the interactive CLI.
   codex: {
-    command: "codex {{prompt_shell}}",
+    command: "codex {{model_shell}} {{prompt_shell}}",
+    model_flag: "--model",
   },
   // Positional message seeds the interactive session.
   pi: {
-    command: "pi {{prompt_shell}}",
+    command: "pi {{model_shell}} {{prompt_shell}}",
+    model_flag: "--model",
   },
   // Positional query is the initial interactive prompt.
   gemini: {
-    command: "gemini {{prompt_shell}}",
+    command: "gemini {{model_shell}} {{prompt_shell}}",
+    model_flag: "--model",
   },
   // The interactive-prompt flag is baked into the command; `{{prompt_shell}}`
-  // becomes the value of `agy --prompt-interactive`.
+  // becomes the value of `agy --prompt-interactive`. agy is intentionally
+  // model-unsupported, so it declares neither model_flag nor {{model_shell}};
+  // creating a Session with --model against agy fails before side effects.
   agy: {
     command: "agy -i {{prompt_shell}}",
   },
   // Paste flow: the TUI has no initial-prompt argument, so start bare and let
-  // the mux `send` sequence paste the prompt after a short boot delay.
+  // the mux `send` sequence paste the prompt after a short boot delay. Model
+  // selection still works through the startup command (paste only affects the
+  // prompt, not the model flag).
   opencode: {
-    command: "opencode",
+    command: "opencode {{model_shell}}",
+    model_flag: "--model",
     paste_prompt: true,
     before_paste: [{ type: "wait_ms", ms: 750 }],
   },

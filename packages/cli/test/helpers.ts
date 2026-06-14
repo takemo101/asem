@@ -51,6 +51,7 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
     cwd: SCOPE.worktreeRoot,
     agent: "claude",
     mux: "herdr",
+    model: null,
     parentSessionId: null,
     status: "running",
     muxRef: { pane: "p1" },

@@ -23,11 +23,17 @@ describe("detailView", () => {
     expect(view.status).toBe("running");
     expect(view.agent).toBe("claude");
     expect(view.mux).toBe("herdr");
+    expect(view.model).toBeNull();
     expect(view.cwd).toBe("/repo/a/sub");
     expect(view.sessionDir).toBe("/repo/a/.asem/sessions/s1");
     expect(view.updatedAt).toBe("2026-06-05T12:30:00.000Z");
     expect(view.closedAt).toBeNull();
     expect(view.attachHint).toBe("herdr attach w1:t1:p1");
+  });
+
+  test("surfaces the launched model when present", () => {
+    const session = makeSession({ id: "s1", model: "sonnet" });
+    expect(detailView(session, [session]).model).toBe("sonnet");
   });
 
   test("resolves the parent label to the parent name when in scope", () => {

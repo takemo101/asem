@@ -161,6 +161,9 @@ const SESSION_CREATE_USAGE = [
   "options:",
   "  --agent <name>     Agent Template to launch (defaults to config)",
   "  --mux <name>       Multiplexer Template to host the pane (defaults to config)",
+  "  --model <model>    model value passed through the Agent Template",
+  "                     {{model_shell}} (fails if the selected Agent Template",
+  "                     does not support models)",
   "  --cwd <dir>        working directory for the child (defaults to current)",
   "  --root             create as a root Session (no parent)",
   "  --parent <id>      create under an explicit parent Session",
@@ -169,10 +172,12 @@ const SESSION_CREATE_USAGE = [
   "examples:",
   "  asem session create reviewer-1 --prompt 'review PR #42'",
   "  asem session create build --prompt 'run CI' --agent codex --mux tmux",
+  "  asem session create reviewer-2 --prompt 'review' --agent claude --model sonnet",
   "",
   "notes:",
   "  Without --root or --parent, the child is parented to the current Session.",
   "  --root and --parent are mutually exclusive.",
+  "  Model support is Agent-Template-dependent; builtin agy is model-unsupported.",
 ];
 
 const SESSION_LIST_USAGE = [

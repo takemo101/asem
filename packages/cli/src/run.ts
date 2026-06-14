@@ -308,6 +308,7 @@ async function runSessionCreate(
       prompt: command.prompt,
       ...(command.agent !== undefined ? { agent: command.agent } : {}),
       ...(command.mux !== undefined ? { mux: command.mux } : {}),
+      ...(command.model !== undefined ? { model: command.model } : {}),
       ...(command.cwd !== undefined ? { cwd: command.cwd } : {}),
       ...(command.parentSessionId !== undefined
         ? { parentSessionId: command.parentSessionId }

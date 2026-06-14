@@ -71,6 +71,12 @@ const MIGRATIONS: readonly Migration[] = [
         on messages(workspace_id, worktree_root, delivery_error);
     `,
   },
+  {
+    // MIK-040: optional per-Session model selection. Nullable so existing rows
+    // migrate forward as `model = null` (no model was selected).
+    version: 2,
+    up: `alter table sessions add column model text;`,
+  },
 ];
 
 /** The latest schema version this build of the store knows how to produce. */

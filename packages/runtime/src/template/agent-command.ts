@@ -40,22 +40,41 @@ const PLACEHOLDER_RE = /\{\{([^}]*)\}\}/g;
  * - `{{prompt_path_shell}}` — expands to the shell-escaped `prompt.md` path, for
  *   CLIs that take a prompt-file argument or for stdin redirection.
  *
- * When `paste_prompt` is set the command is returned verbatim (it carries no
- * prompt placeholders); the prompt is pasted afterwards by the mux `send`
- * sequence. A command with neither placeholder nor `paste_prompt` is also
- * returned verbatim — the prompt stays in `prompt.md` unread by the agent.
+ * `{{model_shell}}` (MIK-040) expands to `<model_flag> <model>` when a model is
+ * supplied and to the empty string when it is omitted. Both the `model_flag` and
+ * the user-supplied model value flow through the centralized {@link shellEscape}
+ * (spec contract), so neither a metacharacter-bearing flag nor a model with
+ * spaces or shell metacharacters can break out of the launch command. The schema
+ * guarantees `{{model_shell}}` only appears alongside `model_flag`, so the flag
+ * is always present when a model is rendered here.
  *
- * The schema validates the placeholder set before this runs, so only the two
- * known placeholders can reach here.
+ * For a `paste_prompt` Agent the command carries no prompt placeholders (the
+ * schema forbids that combination) but may still carry `{{model_shell}}`, so the
+ * model fragment is rendered while the prompt is pasted afterwards by the mux
+ * `send` sequence. A command with no placeholder is returned verbatim — the
+ * prompt stays in `prompt.md` unread by the agent.
+ *
+ * The schema validates the placeholder set before this runs, so only the known
+ * placeholders can reach here.
  */
+export interface RenderAgentCommandInput {
+  /** Absolute path to the Session's `prompt.md`. */
+  promptPath: string;
+  /** Per-Session model, or null/undefined when none was selected. */
+  model?: string | null;
+}
+
 export function renderAgentCommand(
   template: AgentTemplate,
-  promptPath: string,
+  input: RenderAgentCommandInput,
 ): string {
-  if (template.paste_prompt) {
-    return template.command;
-  }
-  const escapedPath = shellEscape(promptPath);
+  const escapedPath = shellEscape(input.promptPath);
+  const modelShell =
+    input.model === undefined || input.model === null
+      ? ""
+      : // model_flag is guaranteed present when a {{model_shell}} placeholder
+        // exists (schema rule); shell-escape both the flag and the model value.
+        `${shellEscape(template.model_flag ?? "")} ${shellEscape(input.model)}`;
   return template.command.replace(PLACEHOLDER_RE, (_match, inner: string) => {
     const name = inner.trim();
     switch (name) {
@@ -63,6 +82,8 @@ export function renderAgentCommand(
         return `"$(cat ${escapedPath})"`;
       case "prompt_path_shell":
         return escapedPath;
+      case "model_shell":
+        return modelShell;
       default:
         // Unreachable: agentTemplateSchema rejects unknown placeholders.
         throw new Error(`unknown Agent command placeholder {{${name}}}`);

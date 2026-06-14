@@ -37,6 +37,12 @@ export const sessionSchema = z
     cwd: nonEmptyString,
     agent: nonEmptyString,
     mux: nonEmptyString,
+    /**
+     * The model the Session was launched with, or null when none was selected
+     * (MIK-040). This is launch metadata only — asem does not validate model
+     * names, map aliases, or infer anything about the Agent's behavior from it.
+     */
+    model: nonEmptyString.nullable(),
     parentSessionId: nonEmptyString.nullable(),
     status: sessionStatusSchema,
     muxRef: muxRefSchema,

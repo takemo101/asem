@@ -262,6 +262,21 @@ export async function createSession(
   }
   const agentTemplate: AgentTemplate = agentResult.value;
 
+  // Model support is a Template capability: a Template declares it by carrying a
+  // `model_flag` (paired with `{{model_shell}}`, enforced by the runtime schema).
+  // Requesting a model for a Template that cannot use it must fail before any
+  // filesystem/mux/store side effects rather than silently launching without it
+  // (MIK-040). asem does not validate the model name itself.
+  if (input.model !== undefined && agentTemplate.model_flag === undefined) {
+    return err(
+      operationError(
+        "invalid_input",
+        "agent template does not support --model",
+        { agent, model: input.model },
+      ),
+    );
+  }
+
   // --- Identity, token, and runtime layout --------------------------------
   const id = deps.idGenerator.nextId();
   const token = deps.tokenGenerator.generate();
@@ -289,6 +304,7 @@ export async function createSession(
     name: input.name,
     agent,
     mux,
+    model: input.model ?? "",
     session_dir: sessionDir,
     prompt_path: promptPath,
     launch_script: launchScriptPath,
@@ -355,9 +371,13 @@ export async function createSession(
       AS_SESSION_NAME: input.name,
       AS_AGENT: agent,
       AS_MUX: mux,
+      AS_MODEL: input.model ?? "",
     },
     cwd,
-    agentCommand: renderAgentCommand(agentTemplate, promptPath),
+    agentCommand: renderAgentCommand(agentTemplate, {
+      promptPath,
+      model: input.model ?? null,
+    }),
     beforeAgent: agentTemplate.before_agent,
     afterAgent: agentTemplate.after_agent,
   });
@@ -421,6 +441,7 @@ export async function createSession(
     cwd,
     agent,
     mux,
+    model: input.model ?? null,
     parentSessionId,
     status: "running",
     muxRef,

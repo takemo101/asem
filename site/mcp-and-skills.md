@@ -1,0 +1,66 @@
+# MCP & Skills
+
+asem integrates with AI clients through two separate setup surfaces:
+
+1. MCP registration gives an Integration Target tools to operate on local Sessions and Messages.
+2. Skill installation gives an Integration Target written guidance for using asem well.
+
+These are independent. Installing a Skill never edits MCP config, and registering MCP never writes Skill files.
+
+## Stdio MCP server
+
+Start the server directly:
+
+```sh
+asem mcp
+```
+
+asem remains stdio-only. It does not start an HTTP server, expose a port, add a remote auth layer, or become a scheduler.
+
+## Register MCP with an Integration Target
+
+```sh
+asem mcp add --for pi
+asem mcp add --for antigravity
+asem mcp add --for jcode
+asem mcp add --for claude-code
+asem mcp add --for opencode
+asem mcp add --for codex
+asem mcp add --for copilot-vscode
+asem mcp add --for copilot-cli
+```
+
+Some targets support workspace-local config through `--no-global`:
+
+```sh
+asem mcp add --for claude-code --no-global
+asem mcp add --for opencode --no-global
+asem mcp add --for copilot-vscode --no-global
+```
+
+Unsupported scopes fail clearly instead of silently falling back.
+
+## MCP tools
+
+The MCP server exposes primitive Session and Message operations. It does not expose Integration Target setup commands.
+
+Use the MCP surface for AI-facing local operations such as listing Sessions, reading Message history, sending Messages, and reporting to a parent Session.
+
+## Install Skills
+
+```sh
+asem skills add --for pi
+asem skills add --for antigravity
+asem skills add --for jcode
+asem skills add --for claude-code
+asem skills add --for opencode
+asem skills add --for codex
+asem skills add --for copilot-vscode
+asem skills add --for copilot-cli
+```
+
+Skill guidance explains asem vocabulary, scope, safety rules, and the intended MCP tool usage for that Integration Target.
+
+## Scope reminder
+
+An Integration Target is an external AI client whose local config can be updated. It is not the Session Agent, and it does not add teams, task lifecycle, worker pools, or workflow state to asem.

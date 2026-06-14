@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@asem/core": "workspace:*",
+    "@asem/integrations": "workspace:*",
     "@asem/ops": "workspace:*",
     "@asem/store": "workspace:*",
     "@asem/runtime": "workspace:*",

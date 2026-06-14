@@ -8,6 +8,14 @@
  * here — every command delegates to the operation that owns it.
  */
 import { type AttachCommand, type Message, operationError } from "@asem/core";
+import {
+  type InstallOptions,
+  type InstallResult,
+  IntegrationTargetError,
+  installMcpServerForTarget,
+  installSkillForTarget,
+  type McpInstallResult,
+} from "@asem/integrations";
 import type { OperationError, OperationResult, OpsDeps } from "@asem/ops";
 import {
   closeSession,
@@ -57,6 +65,22 @@ import { usageFor } from "./usage.ts";
 /** Inputs for one CLI invocation. `deps` is the injected operation bundle. */
 export type AttachRunner = (command: AttachCommand) => Promise<number>;
 
+/**
+ * Test seam for the Integration Target installers. Defaults to the production
+ * `@asem/integrations` installers. These run no `@asem/ops` deps and never open
+ * the durable store, keeping `mcp add` / `skills add` local-config operations.
+ */
+export interface IntegrationInstallers {
+  installMcpServerForTarget?: (
+    target: string,
+    options: InstallOptions,
+  ) => McpInstallResult;
+  installSkillForTarget?: (
+    target: string,
+    options: InstallOptions,
+  ) => InstallResult;
+}
+
 export interface RunCliOptions {
   argv: readonly string[];
   cwd: string;
@@ -70,6 +94,10 @@ export interface RunCliOptions {
   prompts?: InitWizardPrompts;
   /** Test seam for polling commands; defaults to setTimeout. */
   sleepMs?: (ms: number) => Promise<void>;
+  /** Test seam for Integration Target installers; defaults to production. */
+  integrations?: IntegrationInstallers;
+  /** Home directory for global Integration Target installs (defaults to OS home). */
+  home?: string;
 }
 
 /** Process-style exit codes the CLI returns (0 ok, 2 usage, 1 operation error). */
@@ -120,6 +148,8 @@ export async function runCli(opts: RunCliOptions): Promise<number> {
     sleepMs:
       opts.sleepMs ??
       ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+    integrations: opts.integrations,
+    ...(opts.home !== undefined ? { home: opts.home } : {}),
   });
 }
 
@@ -131,6 +161,8 @@ type DispatchEnv = {
   attachRunner?: AttachRunner;
   prompts?: InitWizardPrompts;
   sleepMs: (ms: number) => Promise<void>;
+  integrations?: IntegrationInstallers;
+  home?: string;
 };
 
 async function dispatch(
@@ -168,6 +200,12 @@ async function dispatch(
       return runMessageSend(command, env);
     case "report-parent":
       return runReportParent(command, env);
+    case "mcp":
+      return runMcpServer(env);
+    case "mcp-add":
+      return runMcpAdd(command, env);
+    case "skills-add":
+      return runSkillsAdd(command, env);
   }
 }
 
@@ -542,4 +580,97 @@ async function runReportParent(
     if (command.json) emitJson(io, value.message);
     else emit(io, renderSentMessage(value.message));
   });
+}
+
+/**
+ * Map an Integration Target install failure to a structured CLI error. Unknown
+ * targets and unsupported scopes are user-input errors (usage exit code);
+ * malformed existing config is `invalid_config` (operation error). Anything else
+ * (e.g. a filesystem write error) is surfaced rather than crashing the binary.
+ */
+function integrationFailure(error: unknown): OperationError {
+  if (error instanceof IntegrationTargetError) {
+    const code =
+      error.code === "invalid_config" || error.code === "io_error"
+        ? "invalid_config"
+        : "invalid_input";
+    return operationError(
+      code,
+      error.message,
+      error.path !== undefined ? { path: error.path } : undefined,
+    );
+  }
+  return operationError(
+    "invalid_input",
+    error instanceof Error ? error.message : String(error),
+  );
+}
+
+function integrationInstallOptions(
+  env: DispatchEnv,
+  global: boolean,
+): InstallOptions {
+  return {
+    cwd: env.cwd,
+    global,
+    ...(env.home !== undefined ? { home: env.home } : {}),
+  };
+}
+
+/**
+ * `asem mcp` (no subcommand) starts the stdio server, which the binary
+ * composition root owns (it needs a real terminal/process host). Reaching this
+ * dispatch branch means the server path was not intercepted, so surface a clear
+ * error instead of silently doing nothing.
+ */
+function runMcpServer({ io }: DispatchEnv): number {
+  return fail(
+    io,
+    operationError(
+      "invalid_input",
+      "`asem mcp` starts the MCP server and is launched by the asem binary; use `asem mcp add --for <target>` to register asem with an Integration Target",
+    ),
+  );
+}
+
+/** `asem mcp add --for <target>`: register the fixed asem MCP server entry. */
+function runMcpAdd(
+  command: Extract<CliCommand, { type: "mcp-add" }>,
+  env: DispatchEnv,
+): number {
+  const install =
+    env.integrations?.installMcpServerForTarget ?? installMcpServerForTarget;
+  try {
+    const result = install(
+      command.target,
+      integrationInstallOptions(env, command.global),
+    );
+    emit(env.io, [
+      `Registered MCP server '${result.serverName}' for ${result.target} (${result.scope}): ${result.path}`,
+    ]);
+    return EXIT_OK;
+  } catch (error) {
+    return fail(env.io, integrationFailure(error));
+  }
+}
+
+/** `asem skills add --for <target>`: install the shared asem Skill document. */
+function runSkillsAdd(
+  command: Extract<CliCommand, { type: "skills-add" }>,
+  env: DispatchEnv,
+): number {
+  const install =
+    env.integrations?.installSkillForTarget ?? installSkillForTarget;
+  try {
+    const result = install(
+      command.target,
+      integrationInstallOptions(env, command.global),
+    );
+    emit(env.io, [
+      `Installed asem Skill for ${result.target} (${result.scope}): ${result.path}`,
+    ]);
+    return EXIT_OK;
+  } catch (error) {
+    return fail(env.io, integrationFailure(error));
+  }
 }

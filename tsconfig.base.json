@@ -21,6 +21,7 @@
     "baseUrl": ".",
     "paths": {
       "@asem/core": ["packages/core/src/index.ts"],
+      "@asem/integrations": ["packages/integrations/src/index.ts"],
       "@asem/runtime": ["packages/runtime/src/index.ts"],
       "@asem/profiles": ["packages/profiles/src/index.ts"],
       "@asem/store": ["packages/store/src/index.ts"],

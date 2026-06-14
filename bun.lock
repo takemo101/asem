@@ -19,6 +19,7 @@
       },
       "dependencies": {
         "@asem/core": "workspace:*",
+        "@asem/integrations": "workspace:*",
         "@asem/mcp": "workspace:*",
         "@asem/ops": "workspace:*",
         "@asem/runtime": "workspace:*",
@@ -33,6 +34,10 @@
       "dependencies": {
         "zod": "^3.23.8",
       },
+    },
+    "packages/integrations": {
+      "name": "@asem/integrations",
+      "version": "0.0.0",
     },
     "packages/mcp": {
       "name": "@asem/mcp",
@@ -98,6 +103,8 @@
     "@asem/cli": ["@asem/cli@workspace:packages/cli"],
 
     "@asem/core": ["@asem/core@workspace:packages/core"],
+
+    "@asem/integrations": ["@asem/integrations@workspace:packages/integrations"],
 
     "@asem/mcp": ["@asem/mcp@workspace:packages/mcp"],
 

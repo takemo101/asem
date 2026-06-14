@@ -53,6 +53,10 @@ const ROOT_USAGE = [
   "  tui             open the human Cockpit",
   "  mcp             start the AI-facing MCP server",
   "",
+  "Integrations:",
+  "  mcp add         register the asem MCP server with an Integration Target",
+  "  skills add      install the asem Skill for an Integration Target",
+  "",
   "Global options:",
   "  -h, --help      show this help",
   "",
@@ -422,14 +426,77 @@ const REPORT_PARENT_USAGE = [
 ];
 
 const MCP_USAGE = [
-  "asem mcp — start the AI-facing MCP server",
+  "asem mcp — start the AI-facing MCP server or register asem with a client",
   "",
   "usage:",
   "  asem mcp",
+  "  asem mcp add --for <target> [--no-global]",
+  "",
+  "options:",
+  "  --for <target>  Integration Target such as pi, claude-code, codex, or opencode",
+  "  --no-global     register workspace-local config when the target supports it",
   "",
   "notes:",
-  "  Serves the asem tools over stdio for an MCP client; it runs until the",
-  "  client disconnects. Operations stay scoped to the current Worktree Root.",
+  "  Without a subcommand, serves the asem tools over stdio for an MCP client;",
+  "  it runs until the client disconnects, scoped to the current Worktree Root.",
+  "  With add, registers the fixed asem MCP server entry (command `asem mcp`) in",
+  "  an Integration Target's local config. Re-running repairs that entry only.",
+];
+
+const MCP_ADD_USAGE = [
+  "asem mcp add — register the asem MCP server with an Integration Target",
+  "",
+  "usage:",
+  "  asem mcp add --for <target> [--no-global]",
+  "",
+  "required:",
+  "  --for <target>  Integration Target (pi, antigravity, jcode, claude-code,",
+  "                  opencode, codex, copilot-vscode, copilot-cli)",
+  "",
+  "options:",
+  "  --no-global     register workspace-local config when the target supports it",
+  "",
+  "examples:",
+  "  asem mcp add --for pi",
+  "  asem mcp add --for claude-code --no-global",
+  "",
+  "notes:",
+  "  Registers the fixed asem entry (command `asem`, args `mcp`); other servers",
+  "  in the target config are preserved. Some targets are global- or",
+  "  workspace-only and fail clearly when the requested scope is unsupported.",
+];
+
+const SKILLS_GROUP_USAGE = [
+  "asem skills — install asem Skill instructions for an Integration Target",
+  "",
+  "usage: asem skills <subcommand> [options]",
+  "",
+  "subcommands:",
+  "  add    install the asem Skill document for an Integration Target",
+  "",
+  "Run `asem skills add --help` for usage, options, and examples.",
+];
+
+const SKILLS_ADD_USAGE = [
+  "asem skills add — install the asem Skill for an Integration Target",
+  "",
+  "usage:",
+  "  asem skills add --for <target> [--no-global]",
+  "",
+  "required:",
+  "  --for <target>  Integration Target (pi, antigravity, jcode, claude-code,",
+  "                  opencode, codex, copilot-vscode, copilot-cli)",
+  "",
+  "options:",
+  "  --no-global     install workspace-local config when the target supports it",
+  "",
+  "examples:",
+  "  asem skills add --for pi",
+  "  asem skills add --for codex",
+  "",
+  "notes:",
+  "  Installs one shared asem SKILL.md teaching the client to use asem as a",
+  "  local Session manager. Re-running replaces the asem-owned Skill file only.",
 ];
 
 const TUI_USAGE = [
@@ -473,6 +540,9 @@ const PAGES: Record<string, string[]> = {
   "message send": MESSAGE_SEND_USAGE,
   "report parent": REPORT_PARENT_USAGE,
   mcp: MCP_USAGE,
+  "mcp add": MCP_ADD_USAGE,
+  skills: SKILLS_GROUP_USAGE,
+  "skills add": SKILLS_ADD_USAGE,
   tui: TUI_USAGE,
 };
 

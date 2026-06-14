@@ -11,7 +11,7 @@ import {
 /**
  * Builtin mux template tests (MIK-007).
  *
- * These exercise the herdr / tmux / zellij builtin mux templates entirely
+ * These exercise the herdr / tmux / rmux / zellij builtin mux templates entirely
  * through the FakeTemplateRunner — no real multiplexer binary is required.
  */
 
@@ -243,6 +243,83 @@ describe("builtin mux: tmux", () => {
   });
 });
 
+// --- rmux -----------------------------------------------------------------
+
+describe("builtin mux: rmux", () => {
+  const RMUX_LIST_PANES_OUT = "%7\n";
+
+  test("create: starts a detached session, captures the pane id via list-panes, and declares the session name as a ref", async () => {
+    const template = muxTemplate("rmux");
+    const runner = new FakeTemplateRunner({
+      commands: [{}, { stdout: RMUX_LIST_PANES_OUT }],
+    });
+    const refs = await runCreate(template, runner, {
+      cwd: "/repo",
+      env: { AS_X: "1" },
+    });
+
+    expect(runner.commands).toHaveLength(2);
+    expect(runner.commands[0]!.command).toBe(
+      "rmux new-session -d -s 's_0001' -c '/repo'",
+    );
+    expect(runner.commands[1]!.command).toBe(
+      "rmux list-panes -t 's_0001' -F '#{pane_id}'",
+    );
+    expect(runner.commands[0]!.cwd).toBe("/repo");
+    expect(runner.commands[0]!.env).toEqual({ AS_X: "1" });
+    expect(refs).toEqual({ rmux_session_name: "s_0001", pane_id: "%7" });
+  });
+
+  test("run_in_pane sends the launch command then Enter", async () => {
+    const template = muxTemplate("rmux");
+    const runner = new FakeTemplateRunner();
+    await runWithRefsOnly(template.run_in_pane, runner, {
+      rmux_session_name: "s_0001",
+    });
+    expect(commandsOf(runner)).toHaveLength(2);
+    expect(commandsOf(runner)[0]).toContain("rmux send-keys -t 's_0001' -l");
+    expect(commandsOf(runner)[0]).toContain(
+      "/repo/.asem/sessions/s_0001/launch.sh",
+    );
+    expect(commandsOf(runner)[1]).toBe("rmux send-keys -t 's_0001' Enter");
+    expect(runner.events.map((event) => event.type)).toEqual([
+      "run",
+      "wait_ms",
+      "run",
+    ]);
+  });
+
+  test("send sends literal text then Enter", async () => {
+    const template = muxTemplate("rmux");
+    const runner = new FakeTemplateRunner();
+    await runWithRefsOnly(template.send, runner, {
+      rmux_session_name: "s_0001",
+    });
+    expect(commandsOf(runner)).toEqual([
+      "rmux send-keys -t 's_0001' -l 'hi; there'",
+      "rmux send-keys -t 's_0001' Enter",
+    ]);
+  });
+
+  test("attach attaches by rmux session name", async () => {
+    const template = muxTemplate("rmux");
+    const runner = new FakeTemplateRunner();
+    await runWithRefsOnly(template.attach, runner, {
+      rmux_session_name: "main",
+    });
+    expect(commandsOf(runner)).toEqual(["rmux attach-session -t 'main'"]);
+  });
+
+  test("close kills the rmux session", async () => {
+    const template = muxTemplate("rmux");
+    const runner = new FakeTemplateRunner();
+    await runWithRefsOnly(template.close, runner, {
+      rmux_session_name: "main",
+    });
+    expect(commandsOf(runner)).toEqual(["rmux kill-session -t 'main'"]);
+  });
+});
+
 // --- zellij ---------------------------------------------------------------
 
 describe("builtin mux: zellij", () => {
@@ -366,10 +443,15 @@ describe("builtin mux: a created pane is addressed by the same template", () => 
       addressedBy: "w",
     },
     {
-      // tmux/zellij address later sequences by the declared session-name ref
+      // tmux/rmux/zellij address later sequences by the declared session-name ref
       // (derived from the session id), not a captured value.
       name: "tmux",
       createScript: [{ stdout: "%12\n" }],
+      addressedBy: "s_0001",
+    },
+    {
+      name: "rmux",
+      createScript: [{}, { stdout: "%13\n" }],
       addressedBy: "s_0001",
     },
     {

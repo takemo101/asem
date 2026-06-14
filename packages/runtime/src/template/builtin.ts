@@ -6,7 +6,7 @@
  * builtins and project-local definitions through the identical typed path, so
  * builtins enjoy no special trust and no separate schema.
  *
- * ## Mux templates (herdr / tmux / zellij)
+ * ## Mux templates (herdr / tmux / rmux / zellij)
  *
  * Each mux template owns only multiplexer pane/session control. It never encodes
  * agent prompt semantics or Session outcome interpretation — those belong to the
@@ -155,6 +155,65 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
       {
         type: "run",
         command: "tmux kill-session -t {{tmux_session_name_shell}}",
+      },
+    ],
+  },
+
+  /**
+   * rmux — a Rust multiplexer with tmux-like command names. The session name is
+   * the Session id and is declared as a ref. Creation uses a conservative
+   * two-step capture (`new-session` then `list-panes`) rather than relying on
+   * tmux's `new-session -P -F` flags, which are not documented in RMUX's
+   * quickstart.
+   */
+  rmux: {
+    refs: { rmux_session_name: "{{session_id}}" },
+    create: [
+      {
+        type: "run",
+        command: "rmux new-session -d -s {{session_id_shell}} -c {{cwd_shell}}",
+      },
+      {
+        type: "run",
+        command: "rmux list-panes -t {{session_id_shell}} -F '#{pane_id}'",
+        capture: [{ name: "pane_id", regex: "^(\\S+)\\s*$", group: 1 }],
+      },
+    ],
+    run_in_pane: [
+      {
+        type: "run",
+        command:
+          "rmux send-keys -t {{rmux_session_name_shell}} -l {{launch_cmd_shell}}",
+      },
+      { type: "wait_ms", ms: 200 },
+      {
+        type: "run",
+        command: "rmux send-keys -t {{rmux_session_name_shell}} Enter",
+      },
+    ],
+    send: [
+      {
+        type: "run",
+        command:
+          "rmux send-keys -t {{rmux_session_name_shell}} -l {{message_shell}}",
+      },
+      { type: "wait_ms", ms: 200 },
+      {
+        type: "run",
+        command: "rmux send-keys -t {{rmux_session_name_shell}} Enter",
+      },
+    ],
+    attach: [
+      {
+        type: "run",
+        command: "rmux attach-session -t {{rmux_session_name_shell}}",
+      },
+    ],
+    attach_command: ["rmux", "attach-session", "-t", "{{rmux_session_name}}"],
+    close: [
+      {
+        type: "run",
+        command: "rmux kill-session -t {{rmux_session_name_shell}}",
       },
     ],
   },

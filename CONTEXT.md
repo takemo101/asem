@@ -33,7 +33,7 @@ The boundary inside which Sessions can normally see and message each other: Work
 _Avoid_: Global workspace, project scope when worktree isolation matters.
 
 **Multiplexer**:
-The terminal environment that owns the live pane for a Session, such as herdr, tmux, or zellij.
+The terminal environment that owns the live pane for a Session, such as herdr, tmux, rmux, or zellij.
 _Avoid_: Agent runtime, session manager.
 
 **Agent**:

@@ -26,6 +26,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     parentSessionId: null,
     agent: "claude",
     mux: "herdr",
+    model: null,
     muxRef: { pane_id: "pane-1" },
     sessionDir: `${scope.worktreeRoot}/.asem/sessions/s_1`,
     cwd: scope.worktreeRoot,
@@ -103,6 +104,18 @@ describe("MCP tool registry", () => {
     for (const tool of listMcpTools()) {
       expect(tool.inputSchema).toMatchObject({ type: "object" });
     }
+  });
+
+  test("create_session input schema exposes an optional model", () => {
+    const tool = listMcpTools().find((t) => t.name === "create_session");
+    const schema = tool?.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.properties).toHaveProperty("model");
+    expect(schema.properties.model).toMatchObject({ type: "string" });
+    // model is optional: it is not in the required list.
+    expect(schema.required).not.toContain("model");
   });
 });
 

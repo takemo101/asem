@@ -104,6 +104,9 @@ export async function initSession(
     cwd: ctx.cwd,
     agent: input.agent ?? config.agent.default,
     mux: input.mux ?? config.mux.default,
+    // init-session registers an already-running Session; model selection is a
+    // create-time launch concern, so a registered Session has no model (MIK-040).
+    model: null,
     parentSessionId,
     status: "running",
     // `init-session` registers an already-existing pane/workspace. asem did

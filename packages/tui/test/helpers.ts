@@ -70,6 +70,7 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
     cwd: WORKTREE_A,
     agent: "claude",
     mux: "herdr",
+    model: null,
     parentSessionId: null,
     status: "running",
     muxRef: {

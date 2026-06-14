@@ -36,10 +36,10 @@ import {
 
 const INSERT_SESSION = `
   insert into sessions (
-    id, workspace_id, worktree_root, name, cwd, agent, mux,
+    id, workspace_id, worktree_root, name, cwd, agent, mux, model,
     parent_session_id, status, mux_ref_json, session_dir, token_hash,
     created_at, updated_at, closed_at
-  ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `;
 
 const INSERT_MESSAGE = `

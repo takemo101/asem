@@ -17,6 +17,7 @@ const baseSession: Session = {
   cwd: "/repo/.worktrees/a",
   agent: "claude",
   mux: "herdr",
+  model: null,
   parentSessionId: null,
   status: "running",
   muxRef: { workspace: "w1", tab: "t1", pane: "p1" },

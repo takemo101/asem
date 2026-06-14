@@ -435,7 +435,7 @@ User/project profile files are Markdown with frontmatter. `id` and body instruct
 
 When a profile is selected, `create_session` writes an effective `prompt.md` containing profile instructions first and the caller's original prompt second. This same effective prompt is used for normal prompt-file delivery and `paste_prompt` delivery.
 
-The initial builtin profiles are `scout`, `planner`, `worker`, `reviewer`, `debugger`, and `docs-writer`. They are instructions-only and intentionally exclude workflow-shaped names such as `coordinator`, `parent`, or `pr-finisher`.
+The builtin profiles are `context-builder`, `debugger`, `delegate`, `docs-writer`, `oracle`, `planner`, `researcher`, `reviewer`, `scout`, and `worker`. They are instructions-only, use strong prompt contracts inspired by `pi-subagents`, and intentionally exclude workflow-shaped names such as `coordinator`, `parent`, or `pr-finisher`.
 
 ### Launch script standard
 

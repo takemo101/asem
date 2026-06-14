@@ -38,7 +38,7 @@ import {
   type SessionStatus,
   type Store,
 } from "@asem/core";
-import { authenticateCurrentSession, resolveContext } from "../context.ts";
+import { resolveContext, resolveMutationActor } from "../context.ts";
 import type { OpContext } from "../deps.ts";
 
 type DeleteSessionDeps = {
@@ -75,19 +75,15 @@ export async function deleteSession(
   }
   const { scope } = contextResult.value;
 
-  // Auth: MCP/agent-origin calls must verify the current Session. Human
-  // local-trust calls keep the previous behavior: if a pointer is present,
-  // verify it; if none is present, delete under local trust. An explicit
-  // operator surface (TUI) forces local trust and must not be blocked by a
-  // stale current-session pointer in the target scope.
-  if (ctx.origin !== "operator") {
-    const ref = await deps.currentSessionResolver.resolve(scope);
-    if (ctx.origin === "agent" || ref !== null) {
-      const auth = await authenticateCurrentSession(deps, scope);
-      if (!auth.ok) {
-        return auth;
-      }
-    }
+  // Auth: the actor ladder (ADR 0003) lives in resolveMutationActor. Agent
+  // origin verifies the current Session; an operator surface (TUI) forces local
+  // trust so a stale current-session pointer in the target scope cannot block
+  // the delete; unset origin verifies a present pointer or deletes under
+  // anonymous local trust. Delete needs only the auth side effect, not the
+  // resolved actor's Session or token.
+  const actorResult = await resolveMutationActor(deps, scope, ctx);
+  if (!actorResult.ok) {
+    return actorResult;
   }
 
   // Explicit confirmation is required before any destructive lookup or write.

@@ -131,6 +131,7 @@ describe("tabs and right pane", () => {
       "status:",
       "agent:",
       "mux:",
+      "model:",
       "parent:",
       "cwd:",
       "worktree_root:",
@@ -142,6 +143,16 @@ describe("tabs and right pane", () => {
     ]) {
       expect(text).toContain(field);
     }
+    // No model selected → rendered as a dash.
+    expect(text).toContain("model:         -");
+  });
+
+  test("Detail tab shows the launched model when present", () => {
+    const s = makeSession({ id: "s1", name: "one", model: "sonnet" });
+    let state = createCockpitState(makeEnv(), snapshot([s]));
+    state = dispatchCockpit(state, { type: "setTab", tab: "detail" }).state;
+    const text = renderCockpitView(state).right.join("\n");
+    expect(text).toContain("model:         sonnet");
   });
 
   test("Context tab lists scope, config path, and defaults", () => {

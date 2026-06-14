@@ -228,6 +228,7 @@ create table sessions (
   cwd text not null,
   agent text not null,
   mux text not null,
+  model text,
   parent_session_id text,
   status text not null,
   mux_ref_json text not null,
@@ -248,6 +249,7 @@ create index idx_sessions_workspace_status
 Notes:
 
 - `mux_ref_json` stores multiplexer-specific coordinates such as herdr workspace/tab/pane or tmux session/window/pane.
+- `model` is the nullable model the Session was launched with (MIK-040). It is launch metadata only: asem does not validate model names, map aliases, select providers, or infer Agent capability from it. Existing rows migrate forward as `model = null`.
 - `parent_session_id` must point to a Session in the same effective scope for normal operations.
 - There is no `role` or `metadata_json` in MVP.
 
@@ -363,7 +365,8 @@ Builtin mux lifecycle follows the cuekit-proven model where possible: tmux and z
 Agent templates contain:
 
 ```yaml
-command: "... {{prompt_shell}} ..."
+command: "... {{model_shell}} {{prompt_shell}} ..."
+model_flag: "--model"  # optional; required iff command carries {{model_shell}}
 paste_prompt: false
 before_paste: []  # optional; only valid when paste_prompt is true
 before_agent: []  # optional launch.sh hook lines run before the Agent command
@@ -383,6 +386,14 @@ Prompt handling:
 - `paste_prompt: true` is mutually exclusive with prompt placeholders in `command`.
 - A command with no prompt placeholder and no `paste_prompt` is allowed. In that case the prompt is still saved to `prompt.md`, but asem does not pass it to the Agent unless the command/wrapper reads it itself.
 - The previous `prompt_delivery` field is removed; see [ADR 0005](../adr/0005-agent-prompt-delivery-uses-command-templates.md).
+
+Optional model selection (MIK-040):
+
+- `{{model_shell}}` expands to `<model_flag> <shell-escaped model>` when `create_session` receives a `model`, and to the empty string when it is omitted. The `model_flag` is template-authored config emitted literally (like the rest of `command`); only the user-supplied model value is shell-escaped.
+- `model_flag` and `{{model_shell}}` must appear together. A Template carrying only one of them is `invalid_template`. A Template carrying neither is model-unsupported.
+- `{{model_shell}}` is independent of the prompt placeholders, so a `paste_prompt` Agent (e.g. `opencode`) may still support model selection in its startup command.
+- Builtins `claude` / `codex` / `pi` / `gemini` / `opencode` declare `model_flag: "--model"`; builtin `agy` is intentionally model-unsupported. Requesting a model for a model-unsupported Template fails with `invalid_input` before any filesystem, mux, or store side effects — asem never silently launches an Agent without the requested model.
+- The launch script also exports `AS_MODEL` (empty when no model was selected).
 
 Agent launch hooks (`before_agent` / `after_agent`):
 
@@ -428,6 +439,7 @@ AS_PROMPT_PATH=...
 AS_SESSION_NAME=...
 AS_AGENT=...
 AS_MUX=...
+AS_MODEL=...
 ```
 
 `AS_PROJECT_ROOT` is an optional alias for cwd or worktree root if useful. `AS_SESSION_DIR`, `AS_PROMPT_PATH`, `AS_SESSION_NAME`, `AS_AGENT`, and `AS_MUX` are exported so Agent launch hooks (`before_agent` / `after_agent`) can read them. During `after_agent`, the launch script additionally exposes `AS_AGENT_EXIT_CODE`, the Agent command's exit code — this is hook-local process context, not a durable Session outcome. The DB stores only `token_hash`.

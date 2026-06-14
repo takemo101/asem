@@ -40,6 +40,10 @@ _Avoid_: Agent runtime, session manager.
 The external AI CLI process launched inside a Session, such as Claude Code, Codex, pi, agy, or opencode.
 _Avoid_: Multiplexer, worker, role.
 
+**Integration Target**:
+An external AI client or tool whose local configuration can be updated so it knows how to use asem, such as MCP server registration or Skill installation. An Integration Target is not the Agent launched inside a Session.
+_Avoid_: Agent when the meaning is configuration target, Session Agent, worker.
+
 **Agent Profile**:
 A named bundle of behavior instructions applied to a new Session's initial prompt. An Agent Profile may provide launch defaults such as Agent or model, but it is not a workflow role and does not decide task outcomes.
 _Avoid_: Role, position, strategy, workflow step.

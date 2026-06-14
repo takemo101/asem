@@ -496,6 +496,8 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 
 MCP intentionally does not expose attach. `get_session` may return legacy `attach_hint` plus structured `attach_command` for human/operator surfaces; CLI/TUI execute the structured argv form when present.
 
+Integration Target setup commands (`asem mcp add --for <target>` and `asem skills add --for <target>`) are CLI-only local toolchain configuration helpers, not shared Session/Message operations. They do not create Sessions, mutate `.asem.yaml`, or appear as AI-facing MCP tools. See [Integration Targets Design](./integration-targets-design.md).
+
 ### Current Session registration
 
 Two entry points are required:

@@ -19,7 +19,6 @@ const BUILTIN_AGENT_EXECUTABLES = [
   ["agy", "agy"],
   ["claude", "claude"],
   ["codex", "codex"],
-  ["gemini", "gemini"],
   ["opencode", "opencode"],
   ["pi", "pi"],
 ] as const;

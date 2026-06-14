@@ -28,9 +28,13 @@ describe("listProfiles", () => {
     const d = depsWithProfiles();
     const { profiles } = expectOk(await listProfiles(d, {}, CTX));
     expect(profiles.map((p) => p.id)).toEqual([
+      "context-builder",
       "debugger",
+      "delegate",
       "docs-writer",
+      "oracle",
       "planner",
+      "researcher",
       "reviewer",
       "scout",
       "worker",

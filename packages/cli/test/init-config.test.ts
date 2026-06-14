@@ -17,7 +17,8 @@ describe("materializeInitConfig", () => {
     expect(Object.keys(result.value.agent.templates)).toEqual(["pi"]);
     // Empty hook/sequence fields and the default paste_prompt are omitted.
     expect(result.value.agent.templates.pi).toEqual({
-      command: "pi {{prompt_shell}}",
+      command: "pi {{model_shell}} {{prompt_shell}}",
+      model_flag: "--model",
     });
 
     expect(result.value.mux.default).toBe("tmux");
@@ -74,7 +75,8 @@ describe("materializeInitConfig", () => {
     if (!result.ok) throw new Error(JSON.stringify(result.error));
 
     expect(result.value.agent.templates.opencode).toEqual({
-      command: "opencode",
+      command: "opencode {{model_shell}}",
+      model_flag: "--model",
       paste_prompt: true,
       before_paste: [{ type: "wait_ms", ms: 750 }],
     });
@@ -159,13 +161,15 @@ describe("materializeInitConfig", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.error));
 
-    // claude stays minimal (no empty hooks emitted)...
+    // claude stays minimal (no empty hooks emitted) but carries its model_flag...
     expect(result.value.agent.templates.claude).toEqual({
-      command: "claude {{prompt_shell}}",
+      command: "claude {{model_shell}} {{prompt_shell}}",
+      model_flag: "--model",
     });
-    // ...while opencode keeps its meaningful paste fields.
+    // ...while opencode keeps its meaningful paste fields plus model support.
     expect(result.value.agent.templates.opencode).toEqual({
-      command: "opencode",
+      command: "opencode {{model_shell}}",
+      model_flag: "--model",
       paste_prompt: true,
       before_paste: [{ type: "wait_ms", ms: 750 }],
     });

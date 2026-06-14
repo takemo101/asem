@@ -304,6 +304,32 @@ describe("parseArgs session create", () => {
     ).toBe("invalid_input");
   });
 
+  test("--model maps to model", () => {
+    expect(
+      command([
+        "session",
+        "create",
+        "reviewer-1",
+        "--prompt",
+        "do it",
+        "--model",
+        "sonnet",
+      ]),
+    ).toMatchObject({ type: "session-create", model: "sonnet" });
+  });
+
+  test("omitting --model leaves model unset", () => {
+    expect(
+      command(["session", "create", "reviewer-1", "--prompt", "do it"]),
+    ).not.toHaveProperty("model");
+  });
+
+  test("--model with no value is invalid_input", () => {
+    expect(
+      errorCode(["session", "create", "x", "--prompt", "p", "--model"]),
+    ).toBe("invalid_input");
+  });
+
   test("missing name is invalid_input", () => {
     expect(errorCode(["session", "create", "--prompt", "p"])).toBe(
       "invalid_input",

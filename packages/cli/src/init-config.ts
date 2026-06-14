@@ -29,6 +29,12 @@ import {
  */
 function cleanAgentTemplate(template: AgentTemplate): Record<string, unknown> {
   const result: Record<string, unknown> = { command: template.command };
+  // model_flag must travel with the command's {{model_shell}} placeholder: a
+  // materialized template carrying one without the other is invalid on reload
+  // (MIK-040). Builtins that support a model always set both.
+  if (template.model_flag !== undefined) {
+    result.model_flag = template.model_flag;
+  }
   if (template.paste_prompt) {
     result.paste_prompt = true;
   }

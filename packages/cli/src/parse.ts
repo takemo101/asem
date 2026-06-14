@@ -38,6 +38,7 @@ export type CliCommand =
       prompt: string;
       agent?: string;
       mux?: string;
+      model?: string;
       cwd?: string;
       parentSessionId?: string;
       root?: boolean;
@@ -271,7 +272,7 @@ function parseInitSession(args: string[]): ParseResult {
 function parseSessionCreate(args: string[]): ParseResult {
   const flags = parseFlags(args, {
     booleans: ["root", "json"],
-    values: ["name", "prompt", "agent", "mux", "cwd", "parent"],
+    values: ["name", "prompt", "agent", "mux", "model", "cwd", "parent"],
   });
   if (!flags.ok) return { kind: "error", error: flags.error };
   const { values, booleans, positionals } = flags.value;
@@ -302,6 +303,7 @@ function parseSessionCreate(args: string[]): ParseResult {
   }
   const agent = values.get("agent");
   const mux = values.get("mux");
+  const model = values.get("model");
   const cwd = values.get("cwd");
 
   const command: CliCommand = {
@@ -311,6 +313,7 @@ function parseSessionCreate(args: string[]): ParseResult {
     json: booleans.has("json"),
     ...(agent !== undefined ? { agent } : {}),
     ...(mux !== undefined ? { mux } : {}),
+    ...(model !== undefined ? { model } : {}),
     ...(cwd !== undefined ? { cwd } : {}),
     ...(parent !== undefined ? { parentSessionId: parent } : {}),
     ...(isRoot ? { root: true } : {}),

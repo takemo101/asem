@@ -12,7 +12,7 @@
  * Every dependency is a fake from the `@asem/ops` test fakes — Store, FileSystem,
  * ConfigLoader, ScopeResolver, CurrentSessionResolver, Clock, Id/Token generators,
  * Logger — plus the runtime `FakeTemplateRunner`. Nothing here requires herdr,
- * tmux, zellij, or any agent binary. The opt-in real-mux/agent checks live in
+ * tmux, rmux, zellij, or any agent binary. The opt-in real-mux/agent checks live in
  * `@asem/runtime` (`ASEM_MUX_INTEGRATION=1` / `ASEM_AGENT_INTEGRATION=1`) and skip
  * when the binary is absent.
  *

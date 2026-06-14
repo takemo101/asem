@@ -11,11 +11,11 @@ import { createTemplateRegistry, type MuxTemplate } from "../src/index.ts";
  * binary is unavailable.
  *
  * They deliberately stay non-destructive: they confirm the real binary is
- * present and invocable and that the subcommand verbs the builtin template uses
- * exist, without creating/destroying panes in the operator's live multiplexer
- * sessions and without launching any real agent CLI. Deeper pane-lifecycle
- * integration is left to the fake-runner tests, which fully cover command
- * construction and captured refs.
+ * present and invocable, and that the builtin template targets that CLI, without
+ * creating/destroying panes in the operator's live multiplexer sessions and
+ * without launching any real agent CLI. Deeper pane-lifecycle integration is
+ * left to the fake-runner tests, which fully cover command construction and
+ * captured refs.
  */
 
 const INTEGRATION = process.env.ASEM_MUX_INTEGRATION === "1";

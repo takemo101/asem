@@ -14,6 +14,7 @@ import type {
   CurrentSessionRef,
   CurrentSessionResolver,
   EffectiveScope,
+  ExecutableResolver,
   FileSystem,
   HostPaths,
   IdGenerator,
@@ -485,6 +486,22 @@ export class FakeHostPaths implements HostPaths {
   }
 }
 
+/** Configurable {@link ExecutableResolver} for command availability tests. */
+export class FakeExecutableResolver implements ExecutableResolver {
+  readonly paths = new Map<string, string>();
+  readonly requests: string[] = [];
+
+  set(name: string, path: string): this {
+    this.paths.set(name, path);
+    return this;
+  }
+
+  async which(name: string): Promise<string | null> {
+    this.requests.push(name);
+    return this.paths.get(name) ?? null;
+  }
+}
+
 // --- Bundle ---------------------------------------------------------------
 
 /**
@@ -514,6 +531,7 @@ export function makeOpsDeps(overrides: Partial<OpsDeps> = {}): OpsDeps {
     templateRegistryFactory: makeTemplateRegistryFactory(),
     templateRunner: makeTemplateRunner(),
     hostPaths: new FakeHostPaths(),
+    executableResolver: new FakeExecutableResolver(),
     livenessProbe: new FakeLivenessProbe(),
     clock: new FakeClock(),
     idGenerator: new FakeIdGenerator(),

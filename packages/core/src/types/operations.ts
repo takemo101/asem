@@ -115,6 +115,37 @@ export const getProfileInputSchema = z
   .strict();
 export type GetProfileInput = z.infer<typeof getProfileInputSchema>;
 
+// --- doctor ---------------------------------------------------------------
+
+export const doctorInputSchema = z.object({}).strict();
+export type DoctorInput = z.infer<typeof doctorInputSchema>;
+
+export type DoctorConfigStatus =
+  | {
+      kind: "found";
+      configPath: string;
+      workspaceId: string;
+      defaultAgent: string;
+      defaultMux: string;
+    }
+  | { kind: "not_found" }
+  | { kind: "invalid"; configPath: string; issues: readonly string[] };
+
+export interface DoctorExecutableCheck {
+  kind: "agent" | "mux";
+  template: string;
+  executable: string;
+  status: "ok" | "missing";
+  path: string | null;
+  isDefault: boolean;
+}
+
+export interface DoctorOutput {
+  config: DoctorConfigStatus;
+  agents: DoctorExecutableCheck[];
+  multiplexers: DoctorExecutableCheck[];
+}
+
 // --- list / get -----------------------------------------------------------
 
 export const listSessionsInputSchema = z

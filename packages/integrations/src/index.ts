@@ -6,4 +6,6 @@
  * exposed through `@asem/mcp`: Integration Target setup mutates local human
  * toolchain configuration and stays a human-triggered CLI operation.
  */
+
+export * from "./mcp/index.ts";
 export * from "./shared.ts";

@@ -23,7 +23,7 @@
 - Create `site/agent-profiles.md`: builtin/project/user Agent Profiles and `--profile` usage.
 - Create `site/mcp-and-skills.md`: stdio MCP server plus Integration Target MCP/Skill setup.
 - Create `site/config.md`: `.asem.yaml`, templates, scope, runtime files, and generated config guidance.
-- Create `site/developer-docs.md`: links into `docs/`, `CONTEXT.md`, architecture, design docs, and ADRs.
+- Create `site/developer-docs.md`: links to repository developer docs on GitHub so VitePress does not need to resolve pages outside `site/`.
 - Modify `package.json`: add docs scripts and VitePress dev dependency.
 - Modify `bun.lock`: update through `bun install` after adding VitePress.
 
@@ -937,20 +937,20 @@ The public manual is user-centered. Maintainer and agent-facing design material 
 
 ## Start here
 
-- Documentation map: `../docs/README.md`
-- Domain vocabulary: `../CONTEXT.md`
-- Session manager design: `../docs/designs/asem-session-manager-design.md`
-- Architecture overview: `../docs/architecture/overview.md`
-- Design principles: `../docs/architecture/design-principles.md`
-- Implementation principles: `../docs/architecture/implementation-principles.md`
-- ADRs: `../docs/adr/README.md`
+- [Documentation map](https://github.com/takemo101/asem/blob/main/docs/README.md)
+- [Domain vocabulary](https://github.com/takemo101/asem/blob/main/CONTEXT.md)
+- [Session manager design](https://github.com/takemo101/asem/blob/main/docs/designs/asem-session-manager-design.md)
+- [Architecture overview](https://github.com/takemo101/asem/blob/main/docs/architecture/overview.md)
+- [Design principles](https://github.com/takemo101/asem/blob/main/docs/architecture/design-principles.md)
+- [Implementation principles](https://github.com/takemo101/asem/blob/main/docs/architecture/implementation-principles.md)
+- [ADRs](https://github.com/takemo101/asem/blob/main/docs/adr/README.md)
 
 ## Feature designs
 
-- Init Wizard: `../docs/designs/init-wizard-design.md`
-- TUI Workspace Live Cockpit: `../docs/designs/asem-tui-workspace-live-cockpit-design.md`
-- Agent Profiles: `../docs/designs/agent-profiles-design.md`
-- Integration Targets: `../docs/designs/integration-targets-design.md`
+- [Init Wizard](https://github.com/takemo101/asem/blob/main/docs/designs/init-wizard-design.md)
+- [TUI Workspace Live Cockpit](https://github.com/takemo101/asem/blob/main/docs/designs/asem-tui-workspace-live-cockpit-design.md)
+- [Agent Profiles](https://github.com/takemo101/asem/blob/main/docs/designs/agent-profiles-design.md)
+- [Integration Targets](https://github.com/takemo101/asem/blob/main/docs/designs/integration-targets-design.md)
 
 ## Contribution baseline
 
@@ -1116,7 +1116,7 @@ but status -fv
 
 ## Self-Review
 
-- Spec coverage: README, VitePress pages, package scripts, dependency, validation, and no-deploy boundary are each covered by tasks.
+- Spec coverage: README, VitePress pages, package scripts, dependency, validation, external developer-doc links, and no-deploy boundary are each covered by tasks.
 - Red-flag scan: The plan avoids unfinished-marker text and contains exact file paths and commands.
 - Type consistency: VitePress config uses `defineConfig` from `vitepress`, package scripts match the spec, and Integration Target commands use `--for`, not `--agent`.
 - Scope check: The plan is one documentation/manual-site slice and does not change CLI behavior, MCP tools, Session semantics, or deployment automation.

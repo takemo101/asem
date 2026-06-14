@@ -23,6 +23,7 @@ export type CliCommand =
       mux?: string;
       interactive: boolean;
     }
+  | { type: "doctor"; json: boolean }
   | {
       type: "init-session";
       name: string;
@@ -216,6 +217,19 @@ function parseMuxRef(raw: string): Parsed<Record<string, unknown>> {
     return fail("--mux-ref must be a JSON object");
   }
   return { ok: true, value: parsed as Record<string, unknown> };
+}
+
+function parseDoctor(args: string[]): ParseResult {
+  const flags = parseFlags(args, { booleans: ["json"], values: [] });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { positionals, booleans } = flags.value;
+  if (positionals.length > 0) {
+    return invalid("unexpected extra arguments", { extra: positionals });
+  }
+  return {
+    kind: "command",
+    command: { type: "doctor", json: booleans.has("json") },
+  };
 }
 
 function parseInitSession(args: string[]): ParseResult {
@@ -733,7 +747,7 @@ const HELP_SUBCOMMANDS: Record<string, readonly string[]> = {
 };
 
 function helpResult(command: string, rest: readonly string[]): ParseResult {
-  const directCommands = ["init", "init-session", "mcp", "tui"];
+  const directCommands = ["doctor", "init", "init-session", "mcp", "tui"];
   if (directCommands.includes(command)) {
     const first = rest[0];
     if (first !== undefined && !first.startsWith("-") && !isHelpFlag(first)) {
@@ -746,6 +760,7 @@ function helpResult(command: string, rest: readonly string[]): ParseResult {
   if (subcommands === undefined) {
     return invalid(`unknown command: ${command}`, {
       expected: [
+        "doctor",
         "init",
         "init-session",
         "session",
@@ -787,6 +802,8 @@ export function parseArgs(argv: readonly string[]): ParseResult {
       return parseInit(rest);
     case "init-session":
       return parseInitSession(rest);
+    case "doctor":
+      return parseDoctor(rest);
     case "session":
       return parseSession(rest);
     case "profile":
@@ -798,6 +815,7 @@ export function parseArgs(argv: readonly string[]): ParseResult {
     default:
       return invalid(`unknown command: ${command}`, {
         expected: [
+          "doctor",
           "init",
           "init-session",
           "session",

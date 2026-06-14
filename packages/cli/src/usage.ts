@@ -22,6 +22,7 @@ const ROOT_USAGE = [
   "",
   "Common workflows:",
   "  asem init --interactive",
+  "  asem doctor",
   "  asem init-session --name <name> --mux-ref '<json>'",
   "  asem session create <name> --prompt <text>",
   "  asem tui",
@@ -122,6 +123,24 @@ const INIT_USAGE = [
   "  Re-running init on an existing config leaves it unchanged.",
   "  --interactive needs a TTY; otherwise pass --workspace/--agent/--mux.",
   "  --agent and --mux must be provided together for non-interactive setup.",
+];
+
+const DOCTOR_USAGE = [
+  "asem doctor — check local Agent and Multiplexer command availability",
+  "",
+  "usage:",
+  "  asem doctor [--json]",
+  "",
+  "options:",
+  "  --json    print machine-readable JSON",
+  "",
+  "examples:",
+  "  asem doctor",
+  "  asem doctor --json",
+  "",
+  "notes:",
+  "  Missing executables are diagnostics, not command failures; exit code stays 0.",
+  "  The first version checks builtin Agent and Multiplexer Template commands only.",
 ];
 
 const INIT_SESSION_USAGE = [
@@ -439,6 +458,7 @@ const PAGES: Record<string, string[]> = {
   message: MESSAGE_GROUP_USAGE,
   report: REPORT_GROUP_USAGE,
   init: INIT_USAGE,
+  doctor: DOCTOR_USAGE,
   "init-session": INIT_SESSION_USAGE,
   "session create": SESSION_CREATE_USAGE,
   "session list": SESSION_LIST_USAGE,

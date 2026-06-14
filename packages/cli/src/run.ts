@@ -14,6 +14,7 @@ import {
   configPathFor,
   createSession,
   deleteSession,
+  doctor,
   getProfile,
   getSession,
   initProject,
@@ -40,6 +41,7 @@ import {
   renderClosedSession,
   renderCreatedSession,
   renderDeletedSession,
+  renderDoctor,
   renderError,
   renderInit,
   renderInitSessionExports,
@@ -140,6 +142,8 @@ async function dispatch(
       return runInit(command, env);
     case "init-session":
       return runInitSession(command, env);
+    case "doctor":
+      return runDoctor(command, env);
     case "session-create":
       return runSessionCreate(command, env);
     case "session-list":
@@ -178,6 +182,17 @@ function render<T>(
   }
   onOk(result.value);
   return EXIT_OK;
+}
+
+async function runDoctor(
+  command: Extract<CliCommand, { type: "doctor" }>,
+  { cwd, deps, io }: DispatchEnv,
+): Promise<number> {
+  const result = await doctor({}, { cwd }, deps);
+  return render(io, result, (value) => {
+    if (command.json) emitJson(io, value);
+    else emit(io, renderDoctor(value));
+  });
 }
 
 async function runInit(

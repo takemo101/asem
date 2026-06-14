@@ -9,9 +9,11 @@
 import {
   createSessionInputSchema,
   deleteSessionInputSchema,
+  getProfileInputSchema,
   getSessionInputSchema,
   initSessionInputSchema,
   listMessagesInputSchema,
+  listProfilesInputSchema,
   listSessionsInputSchema,
   type OperationError,
   type OperationResult,
@@ -22,9 +24,11 @@ import {
   closeSession,
   createSession,
   deleteSession,
+  getProfile,
   getSession,
   initSession,
   listMessages,
+  listProfiles,
   listSessions,
   type OpsDeps,
   reportParent,
@@ -134,12 +138,25 @@ const toolDefinitions = {
         // Optional per-Session model; the shared createSessionInputSchema parses
         // and enforces the real contract (non-empty, Template-supported).
         model: stringSchema,
+        // Optional Agent Profile id; the shared schema/op resolve and apply it.
+        profile: stringSchema,
         cwd: stringSchema,
         parentSessionId: stringSchema,
         root: booleanSchema,
       },
       ["name", "prompt"],
     ),
+  },
+  list_profiles: {
+    name: "list_profiles",
+    description:
+      "List Agent Profiles (project, user, builtin) available in scope.",
+    inputSchema: objectSchema({}),
+  },
+  get_profile: {
+    name: "get_profile",
+    description: "Get one Agent Profile's metadata and full instructions.",
+    inputSchema: objectSchema({ id: stringSchema }, ["id"]),
   },
   list_sessions: {
     name: "list_sessions",
@@ -260,6 +277,24 @@ const tools = {
       parsed(listSessionsInputSchema, args, async (input) =>
         operationResult(
           await listSessions(deps, input, { cwd, origin: "agent" }),
+        ),
+      ),
+  },
+  list_profiles: {
+    definition: toolDefinitions.list_profiles,
+    handler: (args, { cwd, deps }) =>
+      parsed(listProfilesInputSchema, args, async (input) =>
+        operationResult(
+          await listProfiles(deps, input, { cwd, origin: "agent" }),
+        ),
+      ),
+  },
+  get_profile: {
+    definition: toolDefinitions.get_profile,
+    handler: (args, { cwd, deps }) =>
+      parsed(getProfileInputSchema, args, async (input) =>
+        operationResult(
+          await getProfile(deps, input, { cwd, origin: "agent" }),
         ),
       ),
   },

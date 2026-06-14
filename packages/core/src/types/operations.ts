@@ -83,6 +83,14 @@ export const createSessionInputSchema = z
      * supports a model is checked by `create_session` before any side effects.
      */
     model: nonEmptyString.optional(),
+    /**
+     * Optional Agent Profile id (MIK-041). When present, `create_session`
+     * resolves it (project > user > builtin), renders the profile instructions
+     * before the user prompt into `prompt.md`, and may apply the profile's
+     * `agent`/`model` launch defaults. An unknown id fails with `invalid_input`
+     * before any side effects.
+     */
+    profile: nonEmptyString.optional(),
     cwd: nonEmptyString.optional(),
     parentSessionId: nonEmptyString.optional(),
     root: z.boolean().optional(),
@@ -92,6 +100,20 @@ export type CreateSessionInput = z.infer<typeof createSessionInputSchema>;
 export interface CreateSessionOutput {
   session: Session;
 }
+
+// --- profiles -------------------------------------------------------------
+
+/** Input for listing Agent Profiles; no parameters in MVP. */
+export const listProfilesInputSchema = z.object({}).strict();
+export type ListProfilesInput = z.infer<typeof listProfilesInputSchema>;
+
+/** Input for fetching one Agent Profile by id. */
+export const getProfileInputSchema = z
+  .object({
+    id: nonEmptyString,
+  })
+  .strict();
+export type GetProfileInput = z.infer<typeof getProfileInputSchema>;
 
 // --- list / get -----------------------------------------------------------
 

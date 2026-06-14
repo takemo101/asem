@@ -160,6 +160,25 @@ export interface FileSystem {
   mkdirp(path: string): Promise<void>;
   chmod(path: string, mode: number): Promise<void>;
   realpath(path: string): Promise<string>;
+  /**
+   * List the immediate entry names (basenames) of a directory. Used by Agent
+   * Profile discovery to enumerate `<root>/.asem/agents/*.md` (MIK-041).
+   * Implementations return `[]` for a missing directory rather than throwing, so
+   * callers can probe an optional profile directory without a prior `exists`.
+   */
+  readDir(path: string): Promise<string[]>;
+}
+
+/**
+ * Host path provider for roots that are not derivable from an Effective Scope.
+ *
+ * The only such root in MVP is the user's home directory, which Agent Profile
+ * discovery reads as `~/.asem/agents/` (MIK-041). Kept a port so operation tests
+ * inject a fake home instead of touching the real `$HOME`.
+ */
+export interface HostPaths {
+  /** Absolute path to the user's home directory. */
+  homeDir(): string;
 }
 
 /**

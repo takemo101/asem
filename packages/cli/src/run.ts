@@ -14,10 +14,12 @@ import {
   configPathFor,
   createSession,
   deleteSession,
+  getProfile,
   getSession,
   initProject,
   initSession,
   listMessages,
+  listProfiles,
   listSessions,
   reportParent,
   sendMessage,
@@ -42,6 +44,8 @@ import {
   renderInit,
   renderInitSessionExports,
   renderMessageList,
+  renderProfileGet,
+  renderProfileList,
   renderSentMessage,
   renderSessionDetail,
   renderSessionList,
@@ -148,6 +152,10 @@ async function dispatch(
       return runSessionClose(command, env);
     case "session-delete":
       return runSessionDelete(command, env);
+    case "profile-list":
+      return runProfileList(command, env);
+    case "profile-get":
+      return runProfileGet(command, env);
     case "message-list":
       return runMessageList(command, env);
     case "message-wait":
@@ -309,6 +317,7 @@ async function runSessionCreate(
       ...(command.agent !== undefined ? { agent: command.agent } : {}),
       ...(command.mux !== undefined ? { mux: command.mux } : {}),
       ...(command.model !== undefined ? { model: command.model } : {}),
+      ...(command.profile !== undefined ? { profile: command.profile } : {}),
       ...(command.cwd !== undefined ? { cwd: command.cwd } : {}),
       ...(command.parentSessionId !== undefined
         ? { parentSessionId: command.parentSessionId }
@@ -403,6 +412,28 @@ async function runSessionDelete(
   return render(io, result, (value) => {
     if (command.json) emitJson(io, value);
     else emit(io, renderDeletedSession(value));
+  });
+}
+
+async function runProfileList(
+  command: Extract<CliCommand, { type: "profile-list" }>,
+  { cwd, deps, io }: DispatchEnv,
+): Promise<number> {
+  const result = await listProfiles(deps, {}, { cwd });
+  return render(io, result, (value) => {
+    if (command.json) emitJson(io, value.profiles);
+    else emit(io, renderProfileList(value.profiles));
+  });
+}
+
+async function runProfileGet(
+  command: Extract<CliCommand, { type: "profile-get" }>,
+  { cwd, deps, io }: DispatchEnv,
+): Promise<number> {
+  const result = await getProfile(deps, { id: command.id }, { cwd });
+  return render(io, result, (value) => {
+    if (command.json) emitJson(io, value.profile);
+    else emit(io, renderProfileGet(value.profile));
   });
 }
 

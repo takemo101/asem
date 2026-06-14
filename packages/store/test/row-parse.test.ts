@@ -100,6 +100,8 @@ function rawSessionRowObject(): SessionRow {
     updated_at: "2026-06-05T12:00:00Z",
     closed_at: null,
     model: null,
+    profile: null,
+    profile_source: null,
   };
 }
 

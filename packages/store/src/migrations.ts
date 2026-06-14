@@ -77,6 +77,15 @@ const MIGRATIONS: readonly Migration[] = [
     version: 2,
     up: `alter table sessions add column model text;`,
   },
+  {
+    // MIK-041: the selected Agent Profile id and its resolved source. Both
+    // nullable so existing rows migrate forward as null (no profile selected).
+    version: 3,
+    up: `
+      alter table sessions add column profile text;
+      alter table sessions add column profile_source text;
+    `,
+  },
 ];
 
 /** The latest schema version this build of the store knows how to produce. */

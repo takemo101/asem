@@ -24,6 +24,16 @@ export const muxRefSchema = z.record(z.string(), z.unknown());
 export type MuxRef = z.infer<typeof muxRefSchema>;
 
 /**
+ * Resolved source of the Agent Profile a Session was created with (MIK-041).
+ * `project` and `user` come from `<worktree_root>/.asem/agents/` and
+ * `~/.asem/agents/`; `builtin` is packaged with asem. The Session stores only
+ * the selected id and this source — never a copy of the profile instructions.
+ */
+export const profileSourceSchema = z.enum(["project", "user", "builtin"]);
+
+export type ProfileSource = z.infer<typeof profileSourceSchema>;
+
+/**
  * A Session is one registered agent CLI process running in a multiplexer pane.
  * This is the canonical domain shape; `@asem/store` is responsible for mapping
  * SQLite rows to and from this type.
@@ -43,6 +53,14 @@ export const sessionSchema = z
      * names, map aliases, or infer anything about the Agent's behavior from it.
      */
     model: nonEmptyString.nullable(),
+    /**
+     * The Agent Profile selected at create time, or null when none (MIK-041).
+     * This is prompt-shaping launch metadata only; the profile instructions live
+     * in the Session's `prompt.md`, never in the Store.
+     */
+    profile: nonEmptyString.nullable(),
+    /** Resolved source of {@link profile}, or null when no profile was selected. */
+    profileSource: profileSourceSchema.nullable(),
     parentSessionId: nonEmptyString.nullable(),
     status: sessionStatusSchema,
     muxRef: muxRefSchema,

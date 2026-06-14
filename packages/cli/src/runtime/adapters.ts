@@ -13,12 +13,14 @@ import { randomBytes, randomUUID } from "node:crypto";
 import {
   access,
   chmod as fsChmod,
+  readdir as fsReaddir,
   readFile as fsReadFile,
   realpath as fsRealpath,
   mkdir,
   rename,
   writeFile,
 } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
@@ -33,6 +35,7 @@ import {
   configSchema,
   type EffectiveScope,
   type FileSystem,
+  type HostPaths,
   type IdGenerator,
   type LivenessProbe,
   type LogFields,
@@ -97,9 +100,29 @@ export class NodeFileSystem implements FileSystem {
       return path;
     }
   }
+
+  async readDir(path: string): Promise<string[]> {
+    try {
+      return await fsReaddir(path);
+    } catch (error) {
+      // A missing directory is not an error — profile discovery treats an absent
+      // source as empty (MIK-041). Any other failure (permissions, not-a-dir, I/O)
+      // must surface so it can become a structured `invalid_config`, not be
+      // silently swallowed.
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    }
+  }
 }
 
 // --- Clock / id / token ---------------------------------------------------
+
+/** Real {@link HostPaths}: the user's home directory for `~/.asem/agents`. */
+export const systemHostPaths: HostPaths = {
+  homeDir: () => homedir(),
+};
 
 export const systemClock: Clock = {
   now: () => new Date(),

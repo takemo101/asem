@@ -416,8 +416,10 @@ describe("createSession — paste_prompt delivery (MIK-030)", () => {
     expect(commands).toHaveLength(5);
     expect(commands[2]).toContain("launch.sh");
     expect(commands[3]).toContain("wait agent-status 'pane-1'");
+    // Paste delivery sends the exact bytes written to prompt.md — the effective
+    // prompt with the file's trailing newline — so file and paste never drift.
     expect(commands[4]).toBe(
-      "herdr --session 'asem' pane run 'pane-1' 'do the thing'",
+      "herdr --session 'asem' pane run 'pane-1' 'do the thing\n'",
     );
     expect(session.status).toBe("running");
     // The row is persisted only after a successful paste.
@@ -461,6 +463,235 @@ describe("createSession — paste_prompt delivery (MIK-030)", () => {
     expect(closed).toBe(true);
     // No stale Session row left after the failed paste.
     expect(d.store.sessions).toHaveLength(0);
+  });
+});
+
+describe("createSession — Agent Profiles (MIK-041)", () => {
+  const PROJECT_AGENTS = `${scopeA.worktreeRoot}/.asem/agents`;
+  const USER_AGENTS = "/home/.asem/agents";
+
+  /** Seed a profile file into the fake fs and register its directory. */
+  function seedProfile(
+    fs: FakeFileSystem,
+    dir: string,
+    name: string,
+    contents: string,
+  ): void {
+    fs.dirs.add(dir);
+    fs.files.set(`${dir}/${name}`, { contents });
+  }
+
+  function profileFile(
+    frontmatter: Record<string, string>,
+    body = "Custom profile instructions.",
+  ): string {
+    const lines = Object.entries(frontmatter).map(([k, v]) => `${k}: ${v}`);
+    return `---\n${lines.join("\n")}\n---\n\n${body}\n`;
+  }
+
+  test("a builtin profile shapes prompt.md and persists profile/profileSource", async () => {
+    const d = deps();
+    const { session } = expectOk(
+      await createSession(d, { ...ROOT_INPUT, profile: "reviewer" }, CTX),
+    );
+
+    expect(session.profile).toBe("reviewer");
+    expect(session.profileSource).toBe("builtin");
+    expect(d.store.sessions[0]!.profile).toBe("reviewer");
+    expect(d.store.sessions[0]!.profileSource).toBe("builtin");
+
+    const prompt = d.fs.files.get(PROMPT_PATH)!.contents;
+    expect(prompt).toContain("# Agent Profile");
+    expect(prompt).toContain("Profile: reviewer");
+    expect(prompt).toContain("Source: builtin");
+    // The original user prompt is preserved under # User Prompt.
+    const marker = "# User Prompt\n\n";
+    expect(prompt.slice(prompt.indexOf(marker) + marker.length)).toBe(
+      "do the thing\n",
+    );
+    // Profile-first ordering.
+    expect(prompt.indexOf("# Agent Profile")).toBeLessThan(
+      prompt.indexOf("# User Prompt"),
+    );
+  });
+
+  test("exports AS_PROFILE/AS_PROFILE_SOURCE in launch.sh", async () => {
+    const d = deps();
+    expectOk(await createSession(d, { ...ROOT_INPUT, profile: "scout" }, CTX));
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+    expect(script).toContain("export AS_PROFILE='scout'");
+    expect(script).toContain("export AS_PROFILE_SOURCE='builtin'");
+  });
+
+  test("with no profile, AS_PROFILE/AS_PROFILE_SOURCE are empty and columns null", async () => {
+    const d = deps();
+    const { session } = expectOk(await createSession(d, ROOT_INPUT, CTX));
+    expect(session.profile).toBeNull();
+    expect(session.profileSource).toBeNull();
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+    expect(script).toContain("export AS_PROFILE=''");
+    expect(script).toContain("export AS_PROFILE_SOURCE=''");
+  });
+
+  test("an unknown profile fails with invalid_input before any side effects", async () => {
+    const d = deps();
+    const result = await createSession(
+      d,
+      { ...ROOT_INPUT, profile: "does-not-exist" },
+      CTX,
+    );
+    const error = expectErr(result, "invalid_input");
+    expect(error.details?.profile).toBe("does-not-exist");
+    expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
+    expect(d.fs.files.has(PROMPT_PATH)).toBe(false);
+    expect(d.runner.commands).toHaveLength(0);
+    expect(d.store.sessions).toHaveLength(0);
+  });
+
+  test("a malformed profile file fails with invalid_config before side effects", async () => {
+    const d = deps();
+    seedProfile(d.fs, PROJECT_AGENTS, "bad.md", "no frontmatter here");
+    const result = await createSession(
+      d,
+      { ...ROOT_INPUT, profile: "reviewer" },
+      CTX,
+    );
+    expectErr(result, "invalid_config");
+    expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
+    expect(d.store.sessions).toHaveLength(0);
+  });
+
+  test("project profiles override user and builtin (whole-profile replacement)", async () => {
+    const d = deps();
+    seedProfile(
+      d.fs,
+      USER_AGENTS,
+      "reviewer.md",
+      profileFile({ id: "reviewer" }, "user reviewer"),
+    );
+    seedProfile(
+      d.fs,
+      PROJECT_AGENTS,
+      "reviewer.md",
+      profileFile({ id: "reviewer" }, "project reviewer"),
+    );
+    const { session } = expectOk(
+      await createSession(d, { ...ROOT_INPUT, profile: "reviewer" }, CTX),
+    );
+    expect(session.profileSource).toBe("project");
+    expect(d.fs.files.get(PROMPT_PATH)!.contents).toContain("project reviewer");
+  });
+
+  test("profile agent/model defaults apply when no explicit input is given", async () => {
+    const d = deps();
+    seedProfile(
+      d.fs,
+      PROJECT_AGENTS,
+      "claude-rev.md",
+      profileFile({ id: "claude-rev", agent: "claude", model: "sonnet" }),
+    );
+    const { session } = expectOk(
+      await createSession(d, { ...ROOT_INPUT, profile: "claude-rev" }, CTX),
+    );
+    expect(session.agent).toBe("claude");
+    expect(session.model).toBe("sonnet");
+    const script = d.fs.files.get(LAUNCH_PATH)!.contents;
+    expect(script).toContain("export AS_MODEL='sonnet'");
+  });
+
+  test("explicit input wins over profile defaults", async () => {
+    const d = deps();
+    seedProfile(
+      d.fs,
+      PROJECT_AGENTS,
+      "claude-rev.md",
+      profileFile({ id: "claude-rev", agent: "claude", model: "sonnet" }),
+    );
+    const { session } = expectOk(
+      await createSession(
+        d,
+        { ...ROOT_INPUT, profile: "claude-rev", model: "opus" },
+        CTX,
+      ),
+    );
+    expect(session.model).toBe("opus");
+  });
+
+  test("profile default model is suppressed when explicit agent differs from profile agent", async () => {
+    // claude-oriented profile model must not apply to agy (a different Agent).
+    const d = deps();
+    seedProfile(
+      d.fs,
+      PROJECT_AGENTS,
+      "claude-rev.md",
+      profileFile({ id: "claude-rev", agent: "claude", model: "sonnet" }),
+    );
+    const { session } = expectOk(
+      await createSession(
+        d,
+        { ...ROOT_INPUT, profile: "claude-rev", agent: "agy" },
+        CTX,
+      ),
+    );
+    expect(session.agent).toBe("agy");
+    // agy is model-unsupported; the suppressed profile model means create still
+    // succeeds with no model, and the profile instructions still apply.
+    expect(session.model).toBeNull();
+    expect(d.fs.files.get(PROMPT_PATH)!.contents).toContain("# Agent Profile");
+  });
+
+  test("profile default model on a model-unsupported resolved agent fails before side effects", async () => {
+    // No explicit agent: the resolved agent is the profile's agy default, which
+    // does not support models, so the profile model is invalid_input up front.
+    const d = deps();
+    seedProfile(
+      d.fs,
+      PROJECT_AGENTS,
+      "agy-rev.md",
+      profileFile({ id: "agy-rev", agent: "agy", model: "sonnet" }),
+    );
+    const result = await createSession(
+      d,
+      { ...ROOT_INPUT, profile: "agy-rev" },
+      CTX,
+    );
+    const error = expectErr(result, "invalid_input");
+    expect(error.message).toContain("does not support");
+    expect(d.fs.dirs.has(SESSION_DIR)).toBe(false);
+    expect(d.store.sessions).toHaveLength(0);
+  });
+
+  test("paste_prompt delivery sends the effective (profile-shaped) prompt", async () => {
+    const config = makeConfig({
+      agent: {
+        default: "opencode",
+        templates: {
+          opencode: {
+            command: "opencode",
+            paste_prompt: true,
+            before_paste: [{ type: "wait_ms", ms: 750 }],
+          },
+        },
+      },
+    });
+    const d = {
+      ...deps(),
+      configLoader: new FakeConfigLoader({
+        kind: "found",
+        config,
+        configPath: `${scopeA.worktreeRoot}/.asem.yaml`,
+      } satisfies ConfigDiscovery),
+    };
+    expectOk(await createSession(d, { ...ROOT_INPUT, profile: "scout" }, CTX));
+    // The final mux send carries the effective prompt, which includes the
+    // profile header — not the bare user prompt.
+    const sent = d.runner.commands.at(-1)!.command;
+    expect(sent).toContain("# Agent Profile");
+    expect(sent).toContain("Profile: scout");
+    // Paste delivery uses the exact bytes written to prompt.md (single derived
+    // promptContents): the full file content appears verbatim in the send.
+    const promptContents = d.fs.files.get(PROMPT_PATH)!.contents;
+    expect(sent).toContain(promptContents);
   });
 });
 

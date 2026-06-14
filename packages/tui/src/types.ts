@@ -131,6 +131,10 @@ export interface DetailView {
   mux: string;
   /** The model the Session was launched with, or null when none (MIK-040). */
   model: string | null;
+  /** The Agent Profile id the Session was created with, or null (MIK-041). */
+  profile: string | null;
+  /** The resolved source of {@link profile}, or null when none (MIK-041). */
+  profileSource: string | null;
   /** Parent Session name if resolvable in scope, else its id, else `-`. */
   parentLabel: string;
   parentSessionId: string | null;

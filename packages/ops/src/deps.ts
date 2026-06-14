@@ -11,6 +11,7 @@ import type {
   ConfigLoader,
   CurrentSessionResolver,
   FileSystem,
+  HostPaths,
   IdGenerator,
   LivenessProbe,
   Logger,
@@ -38,6 +39,8 @@ export interface OpsDeps {
   templateRegistryFactory: TemplateRegistryFactory;
   /** Executes command-sequence side effects (run/write/wait) for the runtime. */
   templateRunner: TemplateRunner;
+  /** Host paths not derivable from scope; used for `~/.asem/agents` (MIK-041). */
+  hostPaths: HostPaths;
   livenessProbe: LivenessProbe;
   clock: Clock;
   idGenerator: IdGenerator;

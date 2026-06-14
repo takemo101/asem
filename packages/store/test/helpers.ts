@@ -37,6 +37,8 @@ export function makeSession(overrides: Partial<Session> = {}): Session {
     agent: "claude",
     mux: "herdr",
     model: null,
+    profile: null,
+    profileSource: null,
     parentSessionId: null,
     status: "running",
     muxRef: { workspace: "w1", tab: "t1", pane: "p1" },

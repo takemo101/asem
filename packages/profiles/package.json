@@ -1,9 +1,9 @@
 {
-  "name": "@asem/ops",
+  "name": "@asem/profiles",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "asem shared operation handlers over injected ports (scaffold)",
+  "description": "asem Agent Profile definitions, discovery, parsing, resolution, and effective prompt rendering",
   "main": "src/index.ts",
   "module": "src/index.ts",
   "types": "src/index.ts",
@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@asem/core": "workspace:*",
-    "@asem/profiles": "workspace:*",
-    "@asem/runtime": "workspace:*"
+    "zod": "^3.23.8"
   }
 }

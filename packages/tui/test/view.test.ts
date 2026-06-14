@@ -155,6 +155,26 @@ describe("tabs and right pane", () => {
     expect(text).toContain("model:         sonnet");
   });
 
+  test("Detail tab shows profile metadata only when a profile is present", () => {
+    const withProfile = makeSession({
+      id: "s1",
+      name: "one",
+      profile: "reviewer",
+      profileSource: "builtin",
+    });
+    let state = createCockpitState(makeEnv(), snapshot([withProfile]));
+    state = dispatchCockpit(state, { type: "setTab", tab: "detail" }).state;
+    const text = renderCockpitView(state).right.join("\n");
+    expect(text).toContain("profile:       reviewer");
+    expect(text).toContain("profile_src:   builtin");
+
+    // No profile → the profile lines are omitted entirely.
+    const noProfile = makeSession({ id: "s2", name: "two" });
+    let bare = createCockpitState(makeEnv(), snapshot([noProfile]));
+    bare = dispatchCockpit(bare, { type: "setTab", tab: "detail" }).state;
+    expect(renderCockpitView(bare).right.join("\n")).not.toContain("profile:");
+  });
+
   test("Context tab lists scope, config path, and defaults", () => {
     const s = makeSession({ id: "s1", muxRef: { pane: "p9" } });
     let state = createCockpitState(makeEnv(), snapshot([s]));

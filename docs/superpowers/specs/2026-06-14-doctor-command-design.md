@@ -20,7 +20,7 @@ Add `asem doctor` as a read-only CLI command that reports whether the builtin Ag
 
 `asem doctor` prints a human-readable diagnostic report.
 
-The first version checks builtin template command availability only:
+The first version checks command availability for supported builtin templates. `gemini` remains a builtin Agent Template for compatibility, but it is intentionally omitted from doctor because that integration is deprecated.
 
 - Multiplexer Templates:
   - `herdr` requires `herdr`
@@ -31,7 +31,6 @@ The first version checks builtin template command availability only:
   - `claude` requires `claude`
   - `codex` requires `codex`
   - `pi` requires `pi`
-  - `gemini` requires `gemini`
   - `agy` requires `agy`
   - `opencode` requires `opencode`
 
@@ -82,7 +81,6 @@ Agents:
   ok       claude   claude    /opt/homebrew/bin/claude  default
   ok       pi       pi        /Users/example/.bun/bin/pi
   missing  codex    codex     -
-  missing  gemini   gemini    -
   missing  agy      agy       -
   missing  opencode opencode  -
 ```

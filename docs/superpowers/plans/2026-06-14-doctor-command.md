@@ -175,7 +175,6 @@ describe("doctor", () => {
       "agy",
       "claude",
       "codex",
-      "gemini",
       "opencode",
       "pi",
     ]);
@@ -198,7 +197,6 @@ describe("doctor", () => {
       "agy",
       "claude",
       "codex",
-      "gemini",
       "herdr",
       "opencode",
       "pi",
@@ -307,7 +305,6 @@ const BUILTIN_AGENT_EXECUTABLES = [
   ["agy", "agy"],
   ["claude", "claude"],
   ["codex", "codex"],
-  ["gemini", "gemini"],
   ["opencode", "opencode"],
   ["pi", "pi"],
 ] as const;

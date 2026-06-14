@@ -38,7 +38,6 @@ describe("doctor", () => {
       "agy",
       "claude",
       "codex",
-      "gemini",
       "opencode",
       "pi",
     ]);
@@ -65,7 +64,6 @@ describe("doctor", () => {
       "agy",
       "claude",
       "codex",
-      "gemini",
       "herdr",
       "opencode",
       "pi",
@@ -143,7 +141,7 @@ describe("doctor", () => {
       configPath: "/repo/.asem.yaml",
       issues: ["workspace.id is required"],
     });
-    expect(output.agents).toHaveLength(6);
+    expect(output.agents).toHaveLength(5);
     expect(output.multiplexers).toHaveLength(4);
   });
 });

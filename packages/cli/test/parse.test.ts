@@ -56,7 +56,8 @@ describe("parseArgs help", () => {
     expect(helpTopic(["report", "parent", "--help"])).toBe("report parent");
   });
 
-  test("tui and mcp --help carry their command as the topic", () => {
+  test("direct command help carries the command topic", () => {
+    expect(helpTopic(["doctor", "--help"])).toBe("doctor");
     expect(helpTopic(["tui", "--help"])).toBe("tui");
     expect(helpTopic(["mcp", "--help"])).toBe("mcp");
   });
@@ -86,6 +87,21 @@ describe("parseArgs help", () => {
 
   test("an unknown option is still invalid_input, not masked as help", () => {
     expect(errorCode(["session", "list", "--bogus"])).toBe("invalid_input");
+  });
+});
+
+describe("parseArgs doctor", () => {
+  test("maps doctor with optional json", () => {
+    expect(command(["doctor"])).toEqual({ type: "doctor", json: false });
+    expect(command(["doctor", "--json"])).toEqual({
+      type: "doctor",
+      json: true,
+    });
+  });
+
+  test("rejects unknown flags and extra args", () => {
+    expect(errorCode(["doctor", "--strict"])).toBe("invalid_input");
+    expect(errorCode(["doctor", "extra"])).toBe("invalid_input");
   });
 });
 

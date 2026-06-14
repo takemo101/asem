@@ -181,6 +181,11 @@ export interface HostPaths {
   homeDir(): string;
 }
 
+/** Resolves executable names from the host PATH without running them. */
+export interface ExecutableResolver {
+  which(name: string): Promise<string | null>;
+}
+
 /**
  * Outcome of discovering and parsing `.asem.yaml`.
  *

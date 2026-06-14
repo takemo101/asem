@@ -27,6 +27,7 @@ export type { OpContext, OpsDeps } from "./deps.ts";
 export { closeSession } from "./operations/close-session.ts";
 export { createSession } from "./operations/create-session.ts";
 export { deleteSession } from "./operations/delete-session.ts";
+export { doctor } from "./operations/doctor.ts";
 export { getSession } from "./operations/get-session.ts";
 // Operation handlers
 export { initProject } from "./operations/init-project.ts";

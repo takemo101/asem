@@ -4,6 +4,7 @@ import { FakeTemplateRunner } from "@asem/runtime";
 import {
   FakeConfigLoader,
   FakeCurrentSessionResolver,
+  FakeExecutableResolver,
   FakeLivenessProbe,
   FakeScopeResolver,
   FakeStore,
@@ -81,6 +82,7 @@ describe("runCli help & usage", () => {
     }
     // The workflow block names the first-run sequence.
     expect(out).toContain("asem init --interactive");
+    expect(out).toContain("asem doctor");
     expect(out).toContain("asem init-session");
     expect(out).toContain("asem session create");
     expect(out).toContain("asem tui");
@@ -127,6 +129,15 @@ describe("runCli help & usage", () => {
     expect(out).toContain("--kind");
   });
 
+  test("doctor renders focused help", async () => {
+    const { io, code } = await run(["doctor", "--help"]);
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain(
+      "asem doctor — check local Agent and Multiplexer command availability",
+    );
+    expect(io.outText()).toContain("Missing executables are diagnostics");
+  });
+
   test("init and init-session each render their own focused page", async () => {
     const init = await run(["init", "--help"]);
     expect(init.code).toBe(EXIT_OK);
@@ -157,6 +168,60 @@ describe("runCli help & usage", () => {
     const { io, code } = await run(["session", "list", "--bogus"]);
     expect(code).toBe(EXIT_USAGE);
     expect(io.errText()).toContain("invalid_input");
+  });
+});
+
+describe("runCli doctor", () => {
+  test("renders availability and exits 0 even with missing executables", async () => {
+    const { deps } = makeCliFixture();
+    const executableResolver = new FakeExecutableResolver()
+      .set("herdr", "/bin/herdr")
+      .set("claude", "/bin/claude");
+    deps.executableResolver = executableResolver;
+
+    const io = new BufferIo();
+    const code = await runCli({ argv: ["doctor"], cwd: CWD, deps, io });
+
+    expect(code).toBe(EXIT_OK);
+    const out = io.outText();
+    expect(out).toContain("asem doctor");
+    expect(out).toContain("Config: /repo/.asem.yaml");
+    expect(out).toContain("Workspace: ws_1");
+    expect(out).toContain("Multiplexers:");
+    expect(out).toContain("ok       herdr");
+    expect(out).toContain("missing  rmux");
+    expect(out).toContain("Agents:");
+    expect(out).toContain("ok       claude");
+    expect(out).toContain("missing  codex");
+  });
+
+  test("renders json availability", async () => {
+    const { deps } = makeCliFixture();
+    const executableResolver = new FakeExecutableResolver().set(
+      "rmux",
+      "/bin/rmux",
+    );
+    deps.executableResolver = executableResolver;
+
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["doctor", "--json"],
+      cwd: CWD,
+      deps,
+      io,
+    });
+
+    expect(code).toBe(EXIT_OK);
+    const parsed = JSON.parse(io.outText());
+    expect(parsed.config.kind).toBe("found");
+    expect(
+      parsed.multiplexers.find(
+        (c: { template: string }) => c.template === "rmux",
+      ),
+    ).toMatchObject({
+      status: "ok",
+      path: "/bin/rmux",
+    });
   });
 });
 

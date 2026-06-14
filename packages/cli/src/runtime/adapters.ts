@@ -34,6 +34,7 @@ import {
   type CurrentSessionResolver,
   configSchema,
   type EffectiveScope,
+  type ExecutableResolver,
   type FileSystem,
   type HostPaths,
   type IdGenerator,
@@ -122,6 +123,10 @@ export class NodeFileSystem implements FileSystem {
 /** Real {@link HostPaths}: the user's home directory for `~/.asem/agents`. */
 export const systemHostPaths: HostPaths = {
   homeDir: () => homedir(),
+};
+
+export const bunExecutableResolver: ExecutableResolver = {
+  which: (name) => Promise.resolve(Bun.which(name)),
 };
 
 export const systemClock: Clock = {

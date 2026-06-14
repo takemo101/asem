@@ -7,6 +7,8 @@
  */
 import {
   type DeleteSessionOutput,
+  type DoctorExecutableCheck,
+  type DoctorOutput,
   type InitProjectOutput,
   type InitSessionOutput,
   type Message,
@@ -30,6 +32,55 @@ export function renderError(error: OperationError): string[] {
 function formatDetail(value: unknown): string {
   if (typeof value === "string") return value;
   return JSON.stringify(value);
+}
+
+// --- doctor ---------------------------------------------------------------
+
+export function renderDoctor(output: DoctorOutput): string[] {
+  const lines = ["asem doctor", ""];
+
+  switch (output.config.kind) {
+    case "found":
+      lines.push(
+        `Config: ${output.config.configPath}`,
+        `Workspace: ${output.config.workspaceId}`,
+        `Default agent: ${output.config.defaultAgent}`,
+        `Default mux: ${output.config.defaultMux}`,
+      );
+      break;
+    case "not_found":
+      lines.push(
+        "Config: not found",
+        "Workspace: -",
+        "Default agent: -",
+        "Default mux: -",
+      );
+      break;
+    case "invalid":
+      lines.push(
+        `Config: invalid (${output.config.configPath})`,
+        `Issue: invalid_config: ${output.config.issues.join("; ")}`,
+        "Workspace: -",
+        "Default agent: -",
+        "Default mux: -",
+      );
+      break;
+  }
+
+  lines.push("", "Multiplexers:");
+  lines.push(...output.multiplexers.map(renderDoctorCheck));
+  lines.push("", "Agents:");
+  lines.push(...output.agents.map(renderDoctorCheck));
+  return lines;
+}
+
+function renderDoctorCheck(check: DoctorExecutableCheck): string {
+  const status = check.status.padEnd(8);
+  const template = check.template.padEnd(8);
+  const executable = check.executable.padEnd(8);
+  const path = (check.path ?? "-").padEnd(28);
+  const suffix = check.isDefault ? "default" : "";
+  return `  ${status} ${template} ${executable} ${path} ${suffix}`.trimEnd();
 }
 
 // --- sessions --------------------------------------------------------------

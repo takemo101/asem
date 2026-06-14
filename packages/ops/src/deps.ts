@@ -10,6 +10,7 @@ import type {
   Clock,
   ConfigLoader,
   CurrentSessionResolver,
+  ExecutableResolver,
   FileSystem,
   HostPaths,
   IdGenerator,
@@ -41,6 +42,8 @@ export interface OpsDeps {
   templateRunner: TemplateRunner;
   /** Host paths not derivable from scope; used for `~/.asem/agents` (MIK-041). */
   hostPaths: HostPaths;
+  /** Resolves supported executable names from PATH for diagnostics. */
+  executableResolver: ExecutableResolver;
   livenessProbe: LivenessProbe;
   clock: Clock;
   idGenerator: IdGenerator;

@@ -18,6 +18,7 @@ import { openSqliteStore } from "@asem/store";
 import { processIo } from "./io.ts";
 import { runCli } from "./run.ts";
 import {
+  bunExecutableResolver,
   createSurfaceLogger,
   FileConfigLoader,
   FileCurrentSessionResolver,
@@ -59,10 +60,56 @@ export async function createRuntimeDeps(
     templateRegistryFactory: createTemplateRegistryFactory(),
     templateRunner: new NodeTemplateRunner(fs),
     hostPaths: systemHostPaths,
+    executableResolver: bunExecutableResolver,
     livenessProbe: storedStatusLivenessProbe,
     clock: systemClock,
     idGenerator: uuidIdGenerator,
     tokenGenerator: randomTokenGenerator,
+    logger: createSurfaceLogger(options.surface, {
+      redactor: passthroughRedactor,
+    }),
+    redactor: passthroughRedactor,
+  };
+}
+
+function unavailablePort<T extends object>(label: string): T {
+  return new Proxy(
+    {},
+    {
+      get() {
+        throw new Error(`${label} is unavailable in read-only CLI deps`);
+      },
+    },
+  ) as T;
+}
+
+/**
+ * Assemble deps for commands that do not need durable state. This keeps
+ * `asem doctor` and help requests read-only: they do not create ~/.asem or open
+ * the SQLite store just to render diagnostics/help.
+ */
+export function createReadOnlyCliDeps(options: RuntimeDepsOptions): OpsDeps {
+  const fs = new NodeFileSystem();
+  return {
+    store: unavailablePort<OpsDeps["store"]>("store"),
+    fs,
+    configLoader: new FileConfigLoader(fs),
+    scopeResolver: unavailablePort<OpsDeps["scopeResolver"]>("scopeResolver"),
+    currentSessionResolver: unavailablePort<OpsDeps["currentSessionResolver"]>(
+      "currentSessionResolver",
+    ),
+    templateRegistryFactory: unavailablePort<
+      OpsDeps["templateRegistryFactory"]
+    >("templateRegistryFactory"),
+    templateRunner:
+      unavailablePort<OpsDeps["templateRunner"]>("templateRunner"),
+    hostPaths: unavailablePort<OpsDeps["hostPaths"]>("hostPaths"),
+    executableResolver: bunExecutableResolver,
+    livenessProbe: unavailablePort<OpsDeps["livenessProbe"]>("livenessProbe"),
+    clock: unavailablePort<OpsDeps["clock"]>("clock"),
+    idGenerator: unavailablePort<OpsDeps["idGenerator"]>("idGenerator"),
+    tokenGenerator:
+      unavailablePort<OpsDeps["tokenGenerator"]>("tokenGenerator"),
     logger: createSurfaceLogger(options.surface, {
       redactor: passthroughRedactor,
     }),
@@ -110,7 +157,11 @@ export function wantsHelp(argv: readonly string[]): boolean {
 
 /** Entry point for the installed binary. Returns the process exit code. */
 export async function main(argv: string[]): Promise<number> {
-  const deps = await createRuntimeDeps({ surface: surfaceForArgv(argv) });
+  const surface = surfaceForArgv(argv);
+  const readOnly = wantsHelp(argv) || argv[0] === "doctor";
+  const deps = readOnly
+    ? createReadOnlyCliDeps({ surface })
+    : await createRuntimeDeps({ surface });
   // `asem mcp --help` / `asem tui --help` fall through to the pure help path
   // below so they print focused help instead of starting the server or cockpit.
   if (argv[0] === "mcp" && !wantsHelp(argv)) {

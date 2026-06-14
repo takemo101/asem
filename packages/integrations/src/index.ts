@@ -9,3 +9,4 @@
 
 export * from "./mcp/index.ts";
 export * from "./shared.ts";
+export * from "./skills/index.ts";

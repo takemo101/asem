@@ -161,7 +161,7 @@ describe("createSession — model selection (MIK-040)", () => {
     // The launch command carries the shell-escaped model via {{model_shell}}.
     const script = d.fs.files.get(LAUNCH_PATH)!.contents;
     expect(script).toContain(
-      `claude --model 'sonnet' "$(cat '${PROMPT_PATH}')"`,
+      `claude '--model' 'sonnet' "$(cat '${PROMPT_PATH}')"`,
     );
     expect(script).toContain("export AS_MODEL='sonnet'");
     // Persisted on the stored row too.

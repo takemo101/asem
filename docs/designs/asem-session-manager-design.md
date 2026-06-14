@@ -389,7 +389,8 @@ Prompt handling:
 
 Optional model selection (MIK-040):
 
-- `{{model_shell}}` expands to `<model_flag> <shell-escaped model>` when `create_session` receives a `model`, and to the empty string when it is omitted. The `model_flag` is template-authored config emitted literally (like the rest of `command`); only the user-supplied model value is shell-escaped.
+- `{{model_shell}}` expands to `<model_flag> <model>` when `create_session` receives a `model`, and to the empty string when it is omitted. Both the `model_flag` and the user-supplied model value are shell-escaped, so neither a metacharacter-bearing flag nor a model with spaces/metacharacters can break out of the launch command.
+- `model_flag` is one shell-token flag such as `--model` or `-m`.
 - `model_flag` and `{{model_shell}}` must appear together. A Template carrying only one of them is `invalid_template`. A Template carrying neither is model-unsupported.
 - `{{model_shell}}` is independent of the prompt placeholders, so a `paste_prompt` Agent (e.g. `opencode`) may still support model selection in its startup command.
 - Builtins `claude` / `codex` / `pi` / `gemini` / `opencode` declare `model_flag: "--model"`; builtin `agy` is intentionally model-unsupported. Requesting a model for a model-unsupported Template fails with `invalid_input` before any filesystem, mux, or store side effects — asem never silently launches an Agent without the requested model.

@@ -40,14 +40,13 @@ const PLACEHOLDER_RE = /\{\{([^}]*)\}\}/g;
  * - `{{prompt_path_shell}}` — expands to the shell-escaped `prompt.md` path, for
  *   CLIs that take a prompt-file argument or for stdin redirection.
  *
- * `{{model_shell}}` (MIK-040) expands to `<model_flag> <shell-escaped model>`
- * when a model is supplied and to the empty string when it is omitted. The
- * `model_flag` is template-authored config and emitted literally — exactly like
- * the rest of the `command` string — while the user-supplied model value flows
- * through the centralized {@link shellEscape}, so a model with spaces or shell
- * metacharacters cannot break out. The schema guarantees `{{model_shell}}` only
- * appears alongside `model_flag`, so the flag is always present when a model is
- * rendered here.
+ * `{{model_shell}}` (MIK-040) expands to `<model_flag> <model>` when a model is
+ * supplied and to the empty string when it is omitted. Both the `model_flag` and
+ * the user-supplied model value flow through the centralized {@link shellEscape}
+ * (spec contract), so neither a metacharacter-bearing flag nor a model with
+ * spaces or shell metacharacters can break out of the launch command. The schema
+ * guarantees `{{model_shell}}` only appears alongside `model_flag`, so the flag
+ * is always present when a model is rendered here.
  *
  * For a `paste_prompt` Agent the command carries no prompt placeholders (the
  * schema forbids that combination) but may still carry `{{model_shell}}`, so the
@@ -74,8 +73,8 @@ export function renderAgentCommand(
     input.model === undefined || input.model === null
       ? ""
       : // model_flag is guaranteed present when a {{model_shell}} placeholder
-        // exists (schema rule); emit it literally, escape the model value.
-        `${template.model_flag ?? ""} ${shellEscape(input.model)}`;
+        // exists (schema rule); shell-escape both the flag and the model value.
+        `${shellEscape(template.model_flag ?? "")} ${shellEscape(input.model)}`;
   return template.command.replace(PLACEHOLDER_RE, (_match, inner: string) => {
     const name = inner.trim();
     switch (name) {

@@ -156,7 +156,7 @@ describe("builtin agent templates: rendered launch command", () => {
         promptPath: PROMPT_PATH,
         model: "sonnet",
       }),
-    ).toBe(`claude --model 'sonnet' "$(cat ${PROMPT_SHELL})"`);
+    ).toBe(`claude '--model' 'sonnet' "$(cat ${PROMPT_SHELL})"`);
   });
 
   test("paste builtin renders the bare command (prompt pasted later)", () => {
@@ -173,7 +173,7 @@ describe("builtin agent templates: rendered launch command", () => {
         promptPath: PROMPT_PATH,
         model: "grok",
       }),
-    ).toBe("opencode --model 'grok'");
+    ).toBe("opencode '--model' 'grok'");
   });
 });
 
@@ -190,7 +190,7 @@ describe("Agent command model placeholder", () => {
         promptPath: PROMPT_PATH,
         model: "sonnet",
       }),
-    ).toBe(`agent --model 'sonnet' "$(cat ${PROMPT_SHELL})"`);
+    ).toBe(`agent '--model' 'sonnet' "$(cat ${PROMPT_SHELL})"`);
   });
 
   test("{{model_shell}} renders empty when model is omitted", () => {
@@ -217,7 +217,23 @@ describe("Agent command model placeholder", () => {
         promptPath: PROMPT_PATH,
         model: "claude's model",
       }),
-    ).toBe("agent -m 'claude'\\''s model'");
+    ).toBe("agent '-m' 'claude'\\''s model'");
+  });
+
+  test("{{model_shell}} escapes a metacharacter-bearing flag so it cannot break out", () => {
+    // A flag carrying shell metacharacters is template-authored config, but the
+    // spec contract still shell-escapes it (defence in depth), so it cannot be
+    // interpreted by the shell — it stays a single literal argument.
+    const template = agentTemplateSchema.parse({
+      command: "agent {{model_shell}}",
+      model_flag: "--model; rm -rf /",
+    });
+    expect(
+      renderAgentCommand(template, {
+        promptPath: PROMPT_PATH,
+        model: "sonnet",
+      }),
+    ).toBe("agent '--model; rm -rf /' 'sonnet'");
   });
 
   test("rejects {{model_shell}} without model_flag", () => {

@@ -25,6 +25,22 @@ const BUILTIN_IDS = [
   "worker",
 ];
 
+const MAX_WORDS_PER_BUILTIN_PROFILE = 140;
+
+function wordCount(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
+const FORBIDDEN_BUILTIN_PROFILE_TERMS = [
+  /\bcoordinator\b/i,
+  /\bworker pool\b/i,
+  /\btask lifecycle\b/i,
+  /\bcompleted\/failed\/blocked\b/i,
+  /\bauto[- ]?select/i,
+  /\bscheduler\b/i,
+  /\bsuccess\/failure\b/i,
+];
+
 describe("builtin profiles", () => {
   test("are exactly the ten instruction-only ids", () => {
     expect(BUILTIN_PROFILES.map((p) => p.id).sort()).toEqual(BUILTIN_IDS);
@@ -32,8 +48,10 @@ describe("builtin profiles", () => {
       expect(profile.source).toBe("builtin");
       expect(profile.agent).toBeNull();
       expect(profile.model).toBeNull();
-      expect(profile.instructions).toContain("## Working rules");
-      expect(profile.instructions).toContain("## Final response");
+      expect(profile.instructions).toContain("Mission:");
+      expect(profile.instructions).toContain("Do:");
+      expect(profile.instructions).toContain("Do not:");
+      expect(profile.instructions).toContain("Output:");
     }
   });
 
@@ -43,6 +61,22 @@ describe("builtin profiles", () => {
     expect(byId.get("context-builder")?.instructions).toContain("handoff");
     expect(byId.get("researcher")?.instructions).toContain("sources");
     expect(byId.get("delegate")?.instructions).toContain("bounded task");
+  });
+
+  test("stay within the selected prompt budget", () => {
+    for (const profile of BUILTIN_PROFILES) {
+      expect(wordCount(profile.instructions), profile.id).toBeLessThanOrEqual(
+        MAX_WORDS_PER_BUILTIN_PROFILE,
+      );
+    }
+  });
+
+  test("avoid workflow and lifecycle semantics", () => {
+    for (const profile of BUILTIN_PROFILES) {
+      for (const forbidden of FORBIDDEN_BUILTIN_PROFILE_TERMS) {
+        expect(profile.instructions, profile.id).not.toMatch(forbidden);
+      }
+    }
   });
 });
 

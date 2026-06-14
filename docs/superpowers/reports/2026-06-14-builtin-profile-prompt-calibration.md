@@ -117,3 +117,124 @@ Compare current, medium, and short builtin Agent Profile prompts before changing
 ## Decision
 
 Pending evaluation.
+
+## Variant metrics
+
+```json
+[
+  {
+    "variant": "medium",
+    "totalWords": 1144,
+    "averageWords": 114,
+    "rows": [
+      {
+        "id": "context-builder",
+        "words": 119,
+        "chars": 818
+      },
+      {
+        "id": "debugger",
+        "words": 122,
+        "chars": 798
+      },
+      {
+        "id": "delegate",
+        "words": 112,
+        "chars": 731
+      },
+      {
+        "id": "docs-writer",
+        "words": 118,
+        "chars": 811
+      },
+      {
+        "id": "oracle",
+        "words": 116,
+        "chars": 783
+      },
+      {
+        "id": "planner",
+        "words": 110,
+        "chars": 728
+      },
+      {
+        "id": "researcher",
+        "words": 107,
+        "chars": 746
+      },
+      {
+        "id": "reviewer",
+        "words": 111,
+        "chars": 749
+      },
+      {
+        "id": "scout",
+        "words": 115,
+        "chars": 723
+      },
+      {
+        "id": "worker",
+        "words": 114,
+        "chars": 749
+      }
+    ]
+  },
+  {
+    "variant": "short",
+    "totalWords": 686,
+    "averageWords": 69,
+    "rows": [
+      {
+        "id": "context-builder",
+        "words": 75,
+        "chars": 565
+      },
+      {
+        "id": "debugger",
+        "words": 69,
+        "chars": 501
+      },
+      {
+        "id": "delegate",
+        "words": 65,
+        "chars": 487
+      },
+      {
+        "id": "docs-writer",
+        "words": 71,
+        "chars": 531
+      },
+      {
+        "id": "oracle",
+        "words": 70,
+        "chars": 527
+      },
+      {
+        "id": "planner",
+        "words": 66,
+        "chars": 500
+      },
+      {
+        "id": "researcher",
+        "words": 63,
+        "chars": 495
+      },
+      {
+        "id": "reviewer",
+        "words": 71,
+        "chars": 540
+      },
+      {
+        "id": "scout",
+        "words": 69,
+        "chars": 504
+      },
+      {
+        "id": "worker",
+        "words": 67,
+        "chars": 514
+      }
+    ]
+  }
+]
+```

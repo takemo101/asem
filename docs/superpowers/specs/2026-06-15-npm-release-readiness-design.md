@@ -20,7 +20,7 @@ A local probe showed that `bun build ./packages/cli/src/index.ts --target=bun` c
 
 - Publish only the CLI package, not every internal workspace package.
 - Publish package name is `@takemo101/asem`.
-- Initial release version is `0.1.0`.
+- Initial release version is `0.0.1`.
 - The package installs an `asem` binary backed by `dist/bin.js`.
 - The package includes `dist` and `README.md` only.
 - Internal `@asem/*` workspace packages remain private source packages and are bundled into the CLI artifact.
@@ -32,7 +32,7 @@ A local probe showed that `bun build ./packages/cli/src/index.ts --target=bun` c
 Modify `packages/cli/package.json`:
 
 - `name`: `@takemo101/asem`
-- `version`: `0.1.0`
+- `version`: `0.0.1`
 - `private`: `false`
 - `bin.asem`: `dist/bin.js`
 - `repository.type`: `git`
@@ -61,8 +61,8 @@ The publish verification should install the packed tarball in a temporary direct
 
 Add top-level version flags before publishing:
 
-- `asem --version` prints `0.1.0` and exits 0.
-- `asem -v` prints `0.1.0` and exits 0.
+- `asem --version` prints `0.0.1` and exits 0.
+- `asem -v` prints `0.0.1` and exits 0.
 - Version requests are read-only and must not open SQLite, load runtime deps, or require `.asem.yaml`.
 - The value should come from `packages/cli/package.json` so it stays coupled to the publish package version.
 - `asem --help` remains help, and command-specific help behavior remains unchanged.
@@ -102,20 +102,20 @@ Create `.github/workflows/publish.yml` matching mikan's Trusted Publishing shape
   - `bun run docs:build`
   - `bun run build`
 - Verify CLI version behavior before packing:
-  - `bun packages/cli/src/index.ts --version` prints `0.1.0`.
-  - `bun packages/cli/src/index.ts -v` prints `0.1.0`.
+  - `bun packages/cli/src/index.ts --version` prints `0.0.1`.
+  - `bun packages/cli/src/index.ts -v` prints `0.0.1`.
 - Verify package contents:
   - `packages/cli/dist/bin.js` exists.
   - `packages/cli/README.md` exists.
   - `npm pack --dry-run --json ./packages/cli` contains `dist/bin.js`, `README.md`, `package.json`, and emitted dist assets.
   - packed contents do not include `src/index.ts`.
-  - package name is `@takemo101/asem` and version is `0.1.0`.
+  - package name is `@takemo101/asem` and version is `0.0.1`.
 - Verify installed package:
   - `npm pack ./packages/cli` to a temp directory.
   - `npm install <tarball>`.
   - import the current platform `@opentui/core-${process.platform}-${process.arch}` native package.
   - run `./node_modules/.bin/asem --help`.
-  - run `./node_modules/.bin/asem --version` and assert it prints `0.1.0`.
+  - run `./node_modules/.bin/asem --version` and assert it prints `0.0.1`.
 - Publish:
   - `cd packages/cli`
   - `npm publish --provenance --access public`
@@ -134,7 +134,7 @@ If `npm pack` shows `workspace:*` dependencies in the publish manifest, stop and
 
 ## Release Gate
 
-After the PR is merged, do not create a release tag or trigger publication until the user explicitly confirms the final package name and version. The expected first release tag is `v0.1.0`.
+After the PR is merged, do not create a release tag or trigger publication until the user explicitly confirms the final package name and version. The expected first release tag is `v0.0.1`.
 
 ## Boundaries
 

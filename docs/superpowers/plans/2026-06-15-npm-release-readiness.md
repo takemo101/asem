@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Prepare asem for npm publication as `@takemo101/asem@0.1.0` without publishing until the final release gate.
+**Goal:** Prepare asem for npm publication as `@takemo101/asem@0.0.1` without publishing until the final release gate.
 
 **Architecture:** Publish only the CLI package as a bundled Bun artifact. Internal `@asem/*` workspace packages remain private source packages and are bundled into `packages/cli/dist/bin.js`; the packed npm manifest must not contain `workspace:*` runtime dependencies. Add a top-level version display and a Trusted Publishing workflow that verifies the packed tarball before publishing.
 
@@ -63,14 +63,14 @@ In `packages/cli/test/run.test.ts`, inside `describe("runCli help & usage", ...)
 test("--version prints the package version and exits 0", async () => {
   const { io, code } = await run(["--version"]);
   expect(code).toBe(EXIT_OK);
-  expect(io.outText()).toBe("0.1.0\n");
+  expect(io.outText()).toBe("0.0.1\n");
   expect(io.errText()).toBe("");
 });
 
 test("-v prints the package version and exits 0", async () => {
   const { io, code } = await run(["-v"]);
   expect(code).toBe(EXIT_OK);
-  expect(io.outText()).toBe("0.1.0\n");
+  expect(io.outText()).toBe("0.0.1\n");
   expect(io.errText()).toBe("");
 });
 ```
@@ -209,7 +209,7 @@ Modify `packages/cli/package.json` to use this publish-ready shape:
 ```json
 {
   "name": "@takemo101/asem",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": false,
   "type": "module",
   "description": "Local agent Session manager CLI",
@@ -295,7 +295,7 @@ bun packages/cli/src/index.ts --version
 bun packages/cli/src/index.ts -v
 ```
 
-Expected: each command prints exactly `0.1.0`.
+Expected: each command prints exactly `0.0.1`.
 
 - [ ] **Step 7: Commit package metadata**
 
@@ -441,8 +441,8 @@ jobs:
 
       - name: Verify CLI version
         run: |
-          test "$(bun packages/cli/src/index.ts --version)" = "0.1.0"
-          test "$(bun packages/cli/src/index.ts -v)" = "0.1.0"
+          test "$(bun packages/cli/src/index.ts --version)" = "0.0.1"
+          test "$(bun packages/cli/src/index.ts -v)" = "0.0.1"
 
       - name: Verify publish package contents
         run: |
@@ -452,7 +452,7 @@ jobs:
           const { execFileSync } = require('node:child_process');
           const cliPackage = require('./packages/cli/package.json');
           if (cliPackage.name !== '@takemo101/asem') throw new Error(`Unexpected package name ${cliPackage.name}`);
-          if (cliPackage.version !== '0.1.0') throw new Error(`Unexpected package version ${cliPackage.version}`);
+          if (cliPackage.version !== '0.0.1') throw new Error(`Unexpected package version ${cliPackage.version}`);
           const deps = { ...cliPackage.dependencies, ...cliPackage.optionalDependencies };
           for (const [name, version] of Object.entries(deps)) {
             if (String(version).startsWith('workspace:')) throw new Error(`Publish manifest contains workspace dependency ${name}`);
@@ -482,7 +482,7 @@ jobs:
           npm install "$tarball"
           bun -e 'const native = `@opentui/core-${process.platform}-${process.arch}`; await import(native); console.log(`loaded ${native}`);'
           ./node_modules/.bin/asem --help
-          test "$(./node_modules/.bin/asem --version)" = "0.1.0"
+          test "$(./node_modules/.bin/asem --version)" = "0.0.1"
 
       - name: Publish to npm with Trusted Publishing
         run: |
@@ -503,7 +503,7 @@ required = [
     'bun run docs:build',
     'bun run build',
     '@takemo101/asem',
-    '0.1.0',
+    '0.0.1',
     './node_modules/.bin/asem --version',
 ]
 missing = [item for item in required if item not in text]
@@ -553,7 +553,7 @@ const { execFileSync } = require('node:child_process');
 const pack = execFileSync('npm', ['pack', '--dry-run', '--json', './packages/cli'], { encoding: 'utf8' });
 const [packed] = JSON.parse(pack);
 if (packed.name !== '@takemo101/asem') throw new Error(`Unexpected package ${packed.name}`);
-if (packed.version !== '0.1.0') throw new Error(`Unexpected version ${packed.version}`);
+if (packed.version !== '0.0.1') throw new Error(`Unexpected version ${packed.version}`);
 const pkg = require('./packages/cli/package.json');
 const deps = { ...pkg.dependencies, ...pkg.optionalDependencies };
 for (const [name, version] of Object.entries(deps)) {
@@ -581,11 +581,11 @@ tarball="$(find "$tmpdir" -name '*.tgz' -print -quit)"
 cd "$tmpdir"
 npm install "$tarball"
 ./node_modules/.bin/asem --help >/tmp/asem-help.txt
-test "$(./node_modules/.bin/asem --version)" = "0.1.0"
+test "$(./node_modules/.bin/asem --version)" = "0.0.1"
 bun -e 'const native = `@opentui/core-${process.platform}-${process.arch}`; await import(native); console.log(`loaded ${native}`);'
 ```
 
-Expected: install succeeds, help runs, version is `0.1.0`, and native OpenTUI package imports.
+Expected: install succeeds, help runs, version is `0.0.1`, and native OpenTUI package imports.
 
 - [ ] **Step 4: Run docs and full checks**
 
@@ -633,7 +633,7 @@ Write `/tmp/pr-npm-release-readiness.md`:
 ```md
 ## Summary
 
-- Prepare `packages/cli` for npm publication as `@takemo101/asem@0.1.0`.
+- Prepare `packages/cli` for npm publication as `@takemo101/asem@0.0.1`.
 - Add `asem --version` / `asem -v` for install verification.
 - Add npm package README and Trusted Publishing workflow.
 - Add local and CI checks for packed package contents and installed tarball behavior.
@@ -648,7 +648,7 @@ Write `/tmp/pr-npm-release-readiness.md`:
 
 ## Release Gate
 
-This PR does not publish to npm. After merge, confirm before creating `v0.1.0` or triggering the publish workflow.
+This PR does not publish to npm. After merge, confirm before creating `v0.0.1` or triggering the publish workflow.
 ```
 
 - [ ] **Step 3: Open PR**
@@ -682,7 +682,7 @@ but status -fv
 Ask the user to confirm final publication:
 
 ```txt
-Ready to publish @takemo101/asem@0.1.0. Confirm creating tag v0.1.0 and triggering npm Trusted Publishing?
+Ready to publish @takemo101/asem@0.0.1. Confirm creating tag v0.0.1 and triggering npm Trusted Publishing?
 ```
 
 Do not create tags or run publish before that confirmation.
@@ -693,5 +693,5 @@ Do not create tags or run publish before that confirmation.
 
 - Spec coverage: package metadata, version flags, root build script, npm README, publish workflow, packed package validation, and release gate are each covered.
 - Red-flag scan: no unfinished markers or vague implementation steps remain.
-- Type consistency: version parse result is named `version` in parser and run dispatch; package version is consistently `0.1.0`; package name is consistently `@takemo101/asem`.
+- Type consistency: version parse result is named `version` in parser and run dispatch; package version is consistently `0.0.1`; package name is consistently `@takemo101/asem`.
 - Scope check: plan does not publish, does not make internal packages public, and changes CLI behavior only for top-level version display.

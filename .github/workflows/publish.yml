@@ -45,8 +45,8 @@ jobs:
 
       - name: Verify CLI version
         run: |
-          test "$(bun packages/cli/src/index.ts --version)" = "0.1.0"
-          test "$(bun packages/cli/src/index.ts -v)" = "0.1.0"
+          test "$(bun packages/cli/src/index.ts --version)" = "0.0.1"
+          test "$(bun packages/cli/src/index.ts -v)" = "0.0.1"
 
       - name: Verify publish package contents
         run: |
@@ -56,7 +56,7 @@ jobs:
           const { execFileSync } = require('node:child_process');
           const cliPackage = require('./packages/cli/package.json');
           if (cliPackage.name !== '@takemo101/asem') throw new Error(`Unexpected package name ${cliPackage.name}`);
-          if (cliPackage.version !== '0.1.0') throw new Error(`Unexpected package version ${cliPackage.version}`);
+          if (cliPackage.version !== '0.0.1') throw new Error(`Unexpected package version ${cliPackage.version}`);
           const deps = { ...cliPackage.dependencies, ...cliPackage.optionalDependencies };
           for (const [name, version] of Object.entries(deps)) {
             if (String(version).startsWith('workspace:')) throw new Error(`Publish manifest contains workspace dependency ${name}`);
@@ -86,7 +86,7 @@ jobs:
           npm install "$tarball"
           bun -e 'const native = `@opentui/core-${process.platform}-${process.arch}`; await import(native); console.log(`loaded ${native}`);'
           ./node_modules/.bin/asem --help
-          test "$(./node_modules/.bin/asem --version)" = "0.1.0"
+          test "$(./node_modules/.bin/asem --version)" = "0.0.1"
 
       - name: Publish to npm with Trusted Publishing
         run: |

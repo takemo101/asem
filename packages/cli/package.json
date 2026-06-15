@@ -1,6 +1,6 @@
 {
   "name": "@takemo101/asem",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": false,
   "type": "module",
   "description": "Local agent Session manager CLI",

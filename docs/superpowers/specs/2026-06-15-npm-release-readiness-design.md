@@ -14,7 +14,7 @@ The repository is now public, has a release README, has a VitePress manual, and 
 - `packages/cli/README.md` does not exist.
 - There is no npm publish workflow.
 
-A local probe showed that `bun build ./packages/cli/src/index.ts --target=bun` can produce a standalone `dist/bin.js` and that the bundled binary can render `asem --help` and `asem doctor --json` from an isolated directory.
+A local probe showed that `bun build ./packages/cli/src/index.ts --target=bun` can produce a standalone `dist/bin.js` and that the bundled binary can render `asem --help` and `asem doctor --json` from an isolated directory. mikan also exposes `-v, --version`, so asem should add the same install-verification affordance before publishing.
 
 ## Decisions
 
@@ -57,6 +57,16 @@ The TUI depends on OpenTUI native platform packages through `@opentui/core`. The
 
 The publish verification should install the packed tarball in a temporary directory and confirm the current platform native package can be imported.
 
+## CLI Version Flag
+
+Add top-level version flags before publishing:
+
+- `asem --version` prints `0.1.0` and exits 0.
+- `asem -v` prints `0.1.0` and exits 0.
+- Version requests are read-only and must not open SQLite, load runtime deps, or require `.asem.yaml`.
+- The value should come from `packages/cli/package.json` so it stays coupled to the publish package version.
+- `asem --help` remains help, and command-specific help behavior remains unchanged.
+
 ## Root Scripts
 
 Modify root `package.json`:
@@ -91,6 +101,9 @@ Create `.github/workflows/publish.yml` matching mikan's Trusted Publishing shape
   - `bun run check`
   - `bun run docs:build`
   - `bun run build`
+- Verify CLI version behavior before packing:
+  - `bun packages/cli/src/index.ts --version` prints `0.1.0`.
+  - `bun packages/cli/src/index.ts -v` prints `0.1.0`.
 - Verify package contents:
   - `packages/cli/dist/bin.js` exists.
   - `packages/cli/README.md` exists.
@@ -102,6 +115,7 @@ Create `.github/workflows/publish.yml` matching mikan's Trusted Publishing shape
   - `npm install <tarball>`.
   - import the current platform `@opentui/core-${process.platform}-${process.arch}` native package.
   - run `./node_modules/.bin/asem --help`.
+  - run `./node_modules/.bin/asem --version` and assert it prints `0.1.0`.
 - Publish:
   - `cd packages/cli`
   - `npm publish --provenance --access public`
@@ -112,7 +126,7 @@ Required local checks:
 
 1. `bun run build`
 2. `npm pack --dry-run --json ./packages/cli`
-3. install the packed tarball in a temporary directory and run `asem --help`
+3. install the packed tarball in a temporary directory and run `asem --help` and `asem --version`
 4. `bun run docs:build`
 5. `bun run check`
 
@@ -128,6 +142,6 @@ This work must not:
 
 - publish during implementation;
 - make internal `@asem/*` packages public;
-- change CLI behavior, Session semantics, store schema, MCP tools, or TUI behavior;
+- change CLI behavior except for the top-level `-v, --version` version display;
 - add release automation beyond the npm publish workflow;
 - change GitHub Pages workflow or manual content except for links needed by package docs.

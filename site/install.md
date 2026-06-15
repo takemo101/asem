@@ -1,6 +1,12 @@
 # Install
 
-Install the release package globally:
+Install the release package globally with Bun:
+
+```sh
+bun install -g @takemo101/asem
+```
+
+npm also works when `bun` is available on your `PATH`:
 
 ```sh
 npm install -g @takemo101/asem
@@ -9,9 +15,9 @@ npm install -g @takemo101/asem
 One-off use:
 
 ```sh
-npx @takemo101/asem init
-# or
 bunx @takemo101/asem init
+# or, with Bun available on PATH
+npx @takemo101/asem init
 ```
 
 The installed binary is `asem`.

@@ -7,6 +7,14 @@ Repository: <https://github.com/takemo101/asem>
 
 ## Install
 
+Recommended with Bun:
+
+```sh
+bun install -g @takemo101/asem
+```
+
+npm also works when `bun` is available on your `PATH`:
+
 ```sh
 npm install -g @takemo101/asem
 ```

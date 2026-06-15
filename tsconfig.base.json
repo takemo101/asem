@@ -28,7 +28,8 @@
       "@asem/ops": ["packages/ops/src/index.ts"],
       "@asem/cli": ["packages/cli/src/index.ts"],
       "@asem/mcp": ["packages/mcp/src/index.ts"],
-      "@asem/tui": ["packages/tui/src/index.ts"]
+      "@asem/tui": ["packages/tui/src/index.ts"],
+      "@asem/tui/opentui": ["packages/tui/src/opentui/index.ts"]
     }
   }
 }

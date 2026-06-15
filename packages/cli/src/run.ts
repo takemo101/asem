@@ -8,7 +8,6 @@
  * here — every command delegates to the operation that owns it.
  */
 import { type AttachCommand, type Message, operationError } from "@asem/core";
-import packageJson from "../package.json" with { type: "json" };
 import {
   type InstallOptions,
   type InstallResult,
@@ -34,6 +33,7 @@ import {
   reportParent,
   sendMessage,
 } from "@asem/ops";
+import packageJson from "../package.json" with { type: "json" };
 import {
   materializeInitConfig,
   validateInitAgentName,

@@ -8,6 +8,7 @@
  * here — every command delegates to the operation that owns it.
  */
 import { type AttachCommand, type Message, operationError } from "@asem/core";
+import packageJson from "../package.json" with { type: "json" };
 import {
   type InstallOptions,
   type InstallResult,
@@ -133,6 +134,10 @@ export async function runCli(opts: RunCliOptions): Promise<number> {
 
   if (parsed.kind === "help") {
     emit(io, usageFor(parsed.topic));
+    return EXIT_OK;
+  }
+  if (parsed.kind === "version") {
+    io.out(`${packageJson.version}\n`);
     return EXIT_OK;
   }
   if (parsed.kind === "error") {

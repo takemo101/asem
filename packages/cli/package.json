@@ -1,6 +1,6 @@
 {
   "name": "@asem/cli",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "asem command-line surface; parses input and renders shared operations",

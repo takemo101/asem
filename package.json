@@ -13,6 +13,7 @@
     "lint": "biome check .",
     "fix": "biome check --write .",
     "check": "bun run lint && bun run typecheck && bun run test",
+    "build": "cd packages/cli && bun run build",
     "docs:dev": "vitepress dev site",
     "docs:build": "vitepress build site",
     "docs:preview": "vitepress preview site",

@@ -34,8 +34,12 @@ describe("surfaceForArgv", () => {
 });
 
 describe("isReadOnlyCommand", () => {
-  test("setup commands and doctor/help are read-only (no durable store)", () => {
+  test("setup commands, version, and doctor/help are read-only (no durable store)", () => {
     expect(isReadOnlyCommand(["doctor"])).toBe(true);
+    expect(isReadOnlyCommand(["--version"])).toBe(true);
+    expect(isReadOnlyCommand(["-v"])).toBe(true);
+    expect(isReadOnlyCommand(["--version", "--json"])).toBe(true);
+    expect(isReadOnlyCommand(["-v", "extra"])).toBe(true);
     expect(isReadOnlyCommand(["mcp", "add", "--for", "pi"])).toBe(true);
     expect(isReadOnlyCommand(["skills", "add", "--for", "pi"])).toBe(true);
     expect(isReadOnlyCommand(["session", "list", "--help"])).toBe(true);

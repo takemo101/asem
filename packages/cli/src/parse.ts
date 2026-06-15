@@ -83,6 +83,7 @@ export type CliCommand =
 export type ParseResult =
   | { kind: "command"; command: CliCommand }
   | { kind: "help"; topic?: string }
+  | { kind: "version" }
   | { kind: "error"; error: OperationError };
 
 function invalid(
@@ -794,6 +795,10 @@ function isHelpFlag(arg: string | undefined): boolean {
   return arg === "--help" || arg === "-h" || arg === "help";
 }
 
+function isVersionFlag(arg: string | undefined): boolean {
+  return arg === "--version" || arg === "-v";
+}
+
 const HELP_SUBCOMMANDS: Record<string, readonly string[]> = {
   session: ["create", "list", "get", "attach", "close", "delete"],
   profile: ["list", "get"],
@@ -848,6 +853,12 @@ export function parseArgs(argv: readonly string[]): ParseResult {
 
   if (command === undefined || isHelpFlag(command)) {
     return { kind: "help" };
+  }
+  if (isVersionFlag(command)) {
+    if (rest.length > 0) {
+      return invalid("version accepts no extra arguments", { extra: rest });
+    }
+    return { kind: "version" };
   }
   // `asem <command> --help` shows focused help only for known commands and
   // subcommands; unknown command paths still report `invalid_input` instead of

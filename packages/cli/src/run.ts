@@ -33,6 +33,7 @@ import {
   reportParent,
   sendMessage,
 } from "@asem/ops";
+import packageJson from "../package.json" with { type: "json" };
 import {
   materializeInitConfig,
   validateInitAgentName,
@@ -133,6 +134,10 @@ export async function runCli(opts: RunCliOptions): Promise<number> {
 
   if (parsed.kind === "help") {
     emit(io, usageFor(parsed.topic));
+    return EXIT_OK;
+  }
+  if (parsed.kind === "version") {
+    io.out(packageJson.version);
     return EXIT_OK;
   }
   if (parsed.kind === "error") {

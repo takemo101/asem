@@ -30,6 +30,11 @@ describe("parseArgs help", () => {
     expect(parseArgs(["-h"]).kind).toBe("help");
   });
 
+  test("--version and -v request the package version", () => {
+    expect(parseArgs(["--version"])).toEqual({ kind: "version" });
+    expect(parseArgs(["-v"])).toEqual({ kind: "version" });
+  });
+
   test("group help carries the topic", () => {
     const result = parseArgs(["init-session", "--help"]);
     expect(result.kind).toBe("help");

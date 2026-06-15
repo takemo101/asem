@@ -157,6 +157,7 @@ export function surfaceForArgv(argv: readonly string[]): RuntimeSurface {
  */
 export function isReadOnlyCommand(argv: readonly string[]): boolean {
   if (wantsHelp(argv)) return true;
+  if (isVersionRequest(argv)) return true;
   if (argv[0] === "doctor") return true;
   if (argv[0] === "skills") return true;
   if (argv[0] === "mcp" && argv[1] === "add") return true;
@@ -170,6 +171,10 @@ export function isReadOnlyCommand(argv: readonly string[]): boolean {
  */
 export function wantsHelp(argv: readonly string[]): boolean {
   return argv.some((arg) => arg === "--help" || arg === "-h" || arg === "help");
+}
+
+function isVersionRequest(argv: readonly string[]): boolean {
+  return argv[0] === "--version" || argv[0] === "-v";
 }
 
 /** Entry point for the installed binary. Returns the process exit code. */

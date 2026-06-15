@@ -57,6 +57,20 @@ describe("runCli help & usage", () => {
     expect(io.outText()).toContain("usage: asem");
   });
 
+  test("--version prints the package version and exits 0", async () => {
+    const { io, code } = await run(["--version"]);
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toBe("0.1.0");
+    expect(io.errText()).toBe("");
+  });
+
+  test("-v prints the package version and exits 0", async () => {
+    const { io, code } = await run(["-v"]);
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toBe("0.1.0");
+    expect(io.errText()).toBe("");
+  });
+
   test("unknown command exits with usage code and structured error", async () => {
     const { io, code } = await run(["frob"]);
     expect(code).toBe(EXIT_USAGE);

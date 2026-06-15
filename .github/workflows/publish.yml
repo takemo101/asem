@@ -1,0 +1,94 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Ensure npm supports Trusted Publishing
+        run: |
+          npm install -g npm@latest
+          node --version
+          npm --version
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.13"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run checks and build dist
+        run: |
+          bun run typecheck
+          bun run test
+          bun run check
+          bun run docs:build
+          bun run build
+
+      - name: Verify CLI version
+        run: |
+          test "$(bun packages/cli/src/index.ts --version)" = "0.1.0"
+          test "$(bun packages/cli/src/index.ts -v)" = "0.1.0"
+
+      - name: Verify publish package contents
+        run: |
+          test -f packages/cli/dist/bin.js || (echo "dist/bin.js not found" && exit 1)
+          test -f packages/cli/README.md || (echo "packages/cli/README.md not found" && exit 1)
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const cliPackage = require('./packages/cli/package.json');
+          if (cliPackage.name !== '@takemo101/asem') throw new Error(`Unexpected package name ${cliPackage.name}`);
+          if (cliPackage.version !== '0.1.0') throw new Error(`Unexpected package version ${cliPackage.version}`);
+          const deps = { ...cliPackage.dependencies, ...cliPackage.optionalDependencies };
+          for (const [name, version] of Object.entries(deps)) {
+            if (String(version).startsWith('workspace:')) throw new Error(`Publish manifest contains workspace dependency ${name}`);
+          }
+          const platform = process.platform;
+          const arch = process.arch;
+          const nativePackage = `@opentui/core-${platform}-${arch}`;
+          if (cliPackage.optionalDependencies?.[nativePackage] !== '0.2.1') {
+            throw new Error(`Missing optional dependency ${nativePackage}@0.2.1`);
+          }
+          const pack = execFileSync('npm', ['pack', '--dry-run', '--json', './packages/cli'], { encoding: 'utf8' });
+          const [packed] = JSON.parse(pack);
+          const files = new Set(packed.files.map((file) => file.path));
+          for (const required of ['dist/bin.js', 'README.md', 'package.json']) {
+            if (!files.has(required)) throw new Error(`Packed package missing ${required}`);
+          }
+          if (files.has('src/index.ts')) throw new Error('Packed package must not include src/index.ts');
+          console.log(`Verified ${packed.name}@${packed.version} package contents`);
+          NODE
+
+      - name: Verify installed package
+        run: |
+          tmpdir="$(mktemp -d)"
+          npm pack ./packages/cli --pack-destination "$tmpdir"
+          tarball="$(find "$tmpdir" -name '*.tgz' -print -quit)"
+          cd "$tmpdir"
+          npm install "$tarball"
+          bun -e 'const native = `@opentui/core-${process.platform}-${process.arch}`; await import(native); console.log(`loaded ${native}`);'
+          ./node_modules/.bin/asem --help
+          test "$(./node_modules/.bin/asem --version)" = "0.1.0"
+
+      - name: Publish to npm with Trusted Publishing
+        run: |
+          cd packages/cli
+          npm publish --provenance --access public

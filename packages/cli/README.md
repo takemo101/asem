@@ -11,7 +11,7 @@ Repository: <https://github.com/takemo101/asem>
 npm install -g @takemo101/asem
 ```
 
-The package installs the `asem` binary.
+The package installs the `asem` binary. It is built for Bun-based execution, so install [Bun](https://bun.sh/) before running `asem`.
 
 Verify the installed version:
 

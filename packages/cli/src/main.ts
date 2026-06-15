@@ -174,7 +174,7 @@ export function wantsHelp(argv: readonly string[]): boolean {
 }
 
 function isVersionRequest(argv: readonly string[]): boolean {
-  return argv.length === 1 && (argv[0] === "--version" || argv[0] === "-v");
+  return argv[0] === "--version" || argv[0] === "-v";
 }
 
 /** Entry point for the installed binary. Returns the process exit code. */

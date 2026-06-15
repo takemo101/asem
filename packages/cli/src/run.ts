@@ -137,7 +137,7 @@ export async function runCli(opts: RunCliOptions): Promise<number> {
     return EXIT_OK;
   }
   if (parsed.kind === "version") {
-    io.out(`${packageJson.version}\n`);
+    io.out(packageJson.version);
     return EXIT_OK;
   }
   if (parsed.kind === "error") {

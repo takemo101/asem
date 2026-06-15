@@ -18,6 +18,14 @@ asem is intentionally small. It is not a task board, team scheduler, hosted serv
 
 ## Install
 
+Recommended with Bun:
+
+```sh
+bun install -g @takemo101/asem
+```
+
+npm also works when `bun` is available on your `PATH`:
+
 ```sh
 npm install -g @takemo101/asem
 ```
@@ -25,9 +33,9 @@ npm install -g @takemo101/asem
 One-off use:
 
 ```sh
-npx @takemo101/asem init
-# or
 bunx @takemo101/asem init
+# or, with Bun available on PATH
+npx @takemo101/asem init
 ```
 
 asem is currently built for Bun-based execution. The published package installs an `asem` binary backed by the bundled CLI entrypoint.

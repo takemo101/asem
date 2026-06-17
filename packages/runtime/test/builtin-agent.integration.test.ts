@@ -86,4 +86,13 @@ describe.skipIf(!INTEGRATION)("builtin agent integration (opt-in)", () => {
       expect(help("opencode").toLowerCase()).toContain("tui");
     });
   });
+
+  describe.skipIf(!has("kimi"))("kimi", () => {
+    test("the interactive TUI has no positional prompt, so paste is used", () => {
+      expect(builtin("kimi").paste_prompt).toBe(true);
+      // `-p, --prompt` is the non-interactive one-shot mode we avoid; the
+      // default `kimi` invocation starts the interactive TUI.
+      expect(help("kimi").toLowerCase()).toContain("prompt");
+    });
+  });
 });

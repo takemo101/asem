@@ -13,7 +13,7 @@ import {
  * Builtin agent template tests (MIK-008, MIK-030).
  *
  * These exercise the builtin agent templates (claude / codex / pi / gemini /
- * agy / opencode) and prompt-aware Agent command rendering entirely through the
+ * agy / opencode / kimi) and prompt-aware Agent command rendering entirely through the
  * typed registry, {@link renderAgentCommand}, and the {@link FakeTemplateRunner}.
  * No real agent CLI is required (implementation principle 4) — the optional
  * real-CLI `--help` checks live in `builtin-agent.integration.test.ts` and skip
@@ -34,6 +34,7 @@ import {
  * - gemini   `gemini [query..]`       positional query "interactive by default"
  * - agy      `agy --prompt-interactive <text>` interactive initial prompt → `agy -i`
  * - opencode `opencode` (TUI)         no initial-prompt arg → paste_prompt + before_paste delay
+ * - kimi     `kimi` (TUI)             no initial-prompt arg → paste_prompt + before_paste delay
  */
 
 /** Path that contains a space + shell metachar to prove `_shell` escaping. */
@@ -52,7 +53,15 @@ function agentTemplate(name: string): AgentTemplate {
 describe("builtin agent templates: set & shape", () => {
   test("every required builtin resolves through the typed path", () => {
     const registry = createTemplateRegistry();
-    for (const name of ["claude", "codex", "pi", "gemini", "agy", "opencode"]) {
+    for (const name of [
+      "claude",
+      "codex",
+      "pi",
+      "gemini",
+      "agy",
+      "opencode",
+      "kimi",
+    ]) {
       const template = registry.getAgentTemplate(name);
       expect(template).toBeDefined();
       // Parsed into the typed shape: command + paste flag + sequence/hook arrays.
@@ -103,21 +112,41 @@ describe("builtin agent templates: set & shape", () => {
     for (const name of ["claude", "codex", "pi", "gemini", "opencode"]) {
       expect(agentTemplate(name).model_flag).toBe("--model");
     }
+    expect(agentTemplate("kimi").model_flag).toBe("-m");
     expect(agentTemplate("agy").model_flag).toBeUndefined();
   });
 
-  test("only the paste builtin sets paste_prompt and a before_paste sequence", () => {
-    expect(agentTemplate("opencode").before_paste).toEqual([
-      { type: "wait_ms", ms: 750 },
-    ]);
+  test("the paste builtins set paste_prompt and a before_paste boot delay", () => {
+    for (const name of ["opencode", "kimi"]) {
+      expect(agentTemplate(name).paste_prompt).toBe(true);
+      expect(agentTemplate(name).before_paste).toEqual([
+        { type: "wait_ms", ms: 750 },
+      ]);
+    }
     for (const name of ["claude", "codex", "pi", "gemini", "agy"]) {
       expect(agentTemplate(name).paste_prompt).toBe(false);
       expect(agentTemplate(name).before_paste).toEqual([]);
     }
   });
 
+  test("kimi command and paste flag match the documented shape", () => {
+    expect(agentTemplate("kimi").command).toBe("kimi {{model_shell}}");
+    expect(agentTemplate("kimi").paste_prompt).toBe(true);
+    expect(agentTemplate("kimi").before_paste).toEqual([
+      { type: "wait_ms", ms: 750 },
+    ]);
+  });
+
   test("no builtin declares before_agent / after_agent hooks by default", () => {
-    for (const name of ["claude", "codex", "pi", "gemini", "agy", "opencode"]) {
+    for (const name of [
+      "claude",
+      "codex",
+      "pi",
+      "gemini",
+      "agy",
+      "opencode",
+      "kimi",
+    ]) {
       expect(agentTemplate(name).before_agent).toEqual([]);
       expect(agentTemplate(name).after_agent).toEqual([]);
     }
@@ -159,7 +188,7 @@ describe("builtin agent templates: rendered launch command", () => {
     ).toBe(`claude '--model' 'sonnet' "$(cat ${PROMPT_SHELL})"`);
   });
 
-  test("paste builtin renders the bare command (prompt pasted later)", () => {
+  test("paste builtins render the bare command (prompt pasted later)", () => {
     // No prompt token on the command line — the prompt is delivered by the mux
     // `send` sequence after the agent starts. With no model the {{model_shell}}
     // collapses to empty, leaving a trailing space.
@@ -174,6 +203,17 @@ describe("builtin agent templates: rendered launch command", () => {
         model: "grok",
       }),
     ).toBe("opencode '--model' 'grok'");
+    expect(
+      renderAgentCommand(agentTemplate("kimi"), {
+        promptPath: PROMPT_PATH,
+      }),
+    ).toBe("kimi ");
+    expect(
+      renderAgentCommand(agentTemplate("kimi"), {
+        promptPath: PROMPT_PATH,
+        model: "kimi-k2",
+      }),
+    ).toBe("kimi '-m' 'kimi-k2'");
   });
 });
 
@@ -517,11 +557,49 @@ describe("paste flow: before_paste precedes a mux send after the agent starts", 
     ]);
   });
 
+  test("kimi: start bare, run before_paste, then mux-send the prompt", async () => {
+    const template = agentTemplate("kimi");
+    expect(template.paste_prompt).toBe(true);
+
+    const launchCommand = renderAgentCommand(template, {
+      promptPath: PROMPT_PATH,
+    });
+    expect(launchCommand).toBe("kimi ");
+
+    const muxSend = createTemplateRegistry().getMuxTemplate("herdr")!.send;
+    const runner = new FakeTemplateRunner();
+    const engine = new SequenceEngine({ runner });
+
+    const beforeResult = await engine.run(template.before_paste, {
+      cwd: "/repo",
+      variables: { pane_id: "w-3" },
+    });
+    expect(beforeResult.ok).toBe(true);
+    expect(runner.commands).toHaveLength(0);
+
+    const sendResult = await engine.run(muxSend, {
+      cwd: "/repo",
+      variables: {
+        pane_id: "w-3",
+        herdr_session: "asem",
+        message: "do the work",
+      },
+    });
+    expect(sendResult.ok).toBe(true);
+
+    expect(commandsOf(runner)).toEqual([
+      "herdr --session 'asem' wait agent-status 'w-3' --status idle --timeout 30000",
+      "herdr --session 'asem' pane run 'w-3' 'do the work'",
+    ]);
+  });
+
   test("before_paste declares a boot delay so the paste lands after the TUI is ready", () => {
-    const beforePaste = agentTemplate("opencode").before_paste;
-    expect(beforePaste).toEqual([{ type: "wait_ms", ms: 750 }]);
-    for (const step of beforePaste) {
-      expect(step.type).not.toBe("run");
+    for (const name of ["opencode", "kimi"]) {
+      const beforePaste = agentTemplate(name).before_paste;
+      expect(beforePaste).toEqual([{ type: "wait_ms", ms: 750 }]);
+      for (const step of beforePaste) {
+        expect(step.type).not.toBe("run");
+      }
     }
   });
 });

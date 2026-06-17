@@ -40,6 +40,7 @@ describe("doctor", () => {
       "codex",
       "opencode",
       "pi",
+      "kimi",
     ]);
     expect(
       output.multiplexers.find((c) => c.template === "herdr"),
@@ -60,11 +61,17 @@ describe("doctor", () => {
       path: "/bin/claude",
       isDefault: true,
     });
+    expect(output.agents.find((c) => c.template === "kimi")).toMatchObject({
+      status: "missing",
+      path: null,
+      isDefault: false,
+    });
     expect([...executableResolver.requests].sort()).toEqual([
       "agy",
       "claude",
       "codex",
       "herdr",
+      "kimi",
       "opencode",
       "pi",
       "rmux",
@@ -141,7 +148,7 @@ describe("doctor", () => {
       configPath: "/repo/.asem.yaml",
       issues: ["workspace.id is required"],
     });
-    expect(output.agents).toHaveLength(5);
+    expect(output.agents).toHaveLength(6);
     expect(output.multiplexers).toHaveLength(4);
   });
 });

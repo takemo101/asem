@@ -21,6 +21,7 @@ const BUILTIN_AGENT_EXECUTABLES = [
   ["codex", "codex"],
   ["opencode", "opencode"],
   ["pi", "pi"],
+  ["kimi", "kimi"],
 ] as const;
 
 export async function doctor(

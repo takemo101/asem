@@ -51,6 +51,20 @@ If the same profile id appears in more than one source, the highest-priority sou
 
 Project profiles are intentionally stored under `.asem/agents/`, which is not covered by asem's runtime-state ignore rules. Runtime token-bearing paths remain ignored (`.asem/sessions/`, `.asem/current-session*.json`, `.asem/tokens/`).
 
+Example project profile for a repository-specific handoff workflow:
+
+```md
+---
+id: pr-merger
+description: Prepare, review, and merge a PR using asem Sessions and GitButler.
+agent: kimi
+---
+
+You prepare and merge a PR for a bounded, tested change.
+Use `but` for all version-control write operations; never use raw git add/commit/push/merge.
+Preserve asem Session history unless explicitly asked to clean it.
+```
+
 ## Profile file format
 
 User and project profiles are Markdown files with YAML frontmatter:

@@ -326,6 +326,10 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
  *   so the prompt cannot be passed as an argument. The agent starts bare and the
  *   prompt is pasted afterwards. → `paste_prompt: true`, with a `before_paste`
  *   boot delay.
+ * - **kimi** — `kimi` starts the interactive TUI, but `-p, --prompt` is the
+ *   non-interactive one-shot mode we avoid. There is no positional initial
+ *   prompt, so the prompt is pasted after the TUI boots. → `paste_prompt: true`,
+ *   with a `before_paste` boot delay; `-m, --model` selects the model.
  */
 export const builtinAgentTemplates: Readonly<Record<string, unknown>> = {
   // Positional prompt seeds the interactive session. `--model` selects the model
@@ -363,6 +367,15 @@ export const builtinAgentTemplates: Readonly<Record<string, unknown>> = {
   opencode: {
     command: "opencode {{model_shell}}",
     model_flag: "--model",
+    paste_prompt: true,
+    before_paste: [{ type: "wait_ms", ms: 750 }],
+  },
+  // Kimi Code paste flow: `kimi -p` is non-interactive, and the interactive TUI
+  // has no positional initial prompt. Start bare and paste the prompt after the
+  // TUI boots; `-m` selects the model.
+  kimi: {
+    command: "kimi {{model_shell}}",
+    model_flag: "-m",
     paste_prompt: true,
     before_paste: [{ type: "wait_ms", ms: 750 }],
   },

@@ -417,6 +417,7 @@ Initial builtin agent templates:
 - `pi`
 - `gemini` / `agy`
 - `opencode`
+- `kimi`
 
 Exact command flags must be verified during implementation; do not assume every CLI accepts prompt files.
 

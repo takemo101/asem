@@ -56,7 +56,7 @@ export type CliCommand =
     }
   | { type: "session-get"; id: string; refresh: boolean; json: boolean }
   | { type: "session-attach"; id: string; json: boolean }
-  | { type: "session-close"; id: string; json: boolean }
+  | { type: "session-close"; id: string; force: boolean; json: boolean }
   | { type: "session-delete"; id: string; force: boolean; json: boolean }
   | { type: "message-list"; filter?: MessageListFilter; json: boolean }
   | {
@@ -433,9 +433,9 @@ function parseSessionAttach(args: string[]): ParseResult {
   };
 }
 
-/** `asem session close <id> [--json]`. */
+/** `asem session close <id> [--force] [--json]`. */
 function parseSessionClose(args: string[]): ParseResult {
-  const flags = parseFlags(args, { booleans: ["json"], values: [] });
+  const flags = parseFlags(args, { booleans: ["force", "json"], values: [] });
   if (!flags.ok) return { kind: "error", error: flags.error };
   const { positionals, booleans } = flags.value;
 
@@ -450,7 +450,12 @@ function parseSessionClose(args: string[]): ParseResult {
   }
   return {
     kind: "command",
-    command: { type: "session-close", id, json: booleans.has("json") },
+    command: {
+      type: "session-close",
+      id,
+      force: booleans.has("force"),
+      json: booleans.has("json"),
+    },
   };
 }
 

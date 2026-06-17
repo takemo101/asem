@@ -179,6 +179,7 @@ export interface GetSessionOutput {
 export const closeSessionInputSchema = z
   .object({
     id: nonEmptyString,
+    force: z.boolean().optional(),
   })
   .strict();
 export type CloseSessionInput = z.infer<typeof closeSessionInputSchema>;

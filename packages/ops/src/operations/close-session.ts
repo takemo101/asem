@@ -20,7 +20,10 @@
  * Truthfulness over optimism: if the mux `close` sequence fails, the pane may
  * still be alive, so the operation returns the structured sequence error and
  * leaves the stored status unchanged rather than falsely marking the Session
- * `closed`. No delivery/read/ack state is invented anywhere in this path.
+ * `closed`. `force: true` is the explicit recovery escape hatch for known-stale
+ * live Sessions whose mux resource has already disappeared; it records `closed`
+ * while preserving Message/Report history. No delivery/read/ack state is invented
+ * anywhere in this path.
  */
 import {
   type Clock,
@@ -154,13 +157,17 @@ export async function closeSession(
       variables: muxRefVars(session.muxRef),
     });
     if (!result.ok) {
-      // Truthful: the pane may still be alive, so leave the status unchanged
-      // and surface the structured error rather than claim a false close.
       logger?.warn("mux close failed", {
         sessionId: session.id,
         code: result.error.code,
+        force: input.force === true,
       });
-      return err(result.error);
+      if (input.force !== true) {
+        // Truthful by default: the pane may still be alive, so leave the status
+        // unchanged and surface the structured error rather than claim a false
+        // close. Callers must opt into force for known-stale mux refs.
+        return err(result.error);
+      }
     }
   }
 

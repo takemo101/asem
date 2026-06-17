@@ -320,10 +320,12 @@ const SESSION_CLOSE_USAGE = [
   "  <id>        Session id",
   "",
   "options:",
+  "  --force     record closed even when mux close fails for a known-stale live Session",
   "  --json      print the closed Session as JSON",
   "",
   "examples:",
   "  asem session close s_1",
+  "  asem session close s_1 --force",
 ];
 
 const SESSION_DELETE_USAGE = [

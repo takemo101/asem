@@ -509,6 +509,16 @@ describe("parseArgs session", () => {
     expect(command(["session", "close", "s_1"])).toEqual({
       type: "session-close",
       id: "s_1",
+      force: false,
+      json: false,
+    });
+  });
+
+  test("session close maps --force", () => {
+    expect(command(["session", "close", "s_1", "--force"])).toEqual({
+      type: "session-close",
+      id: "s_1",
+      force: true,
       json: false,
     });
   });

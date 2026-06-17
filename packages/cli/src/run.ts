@@ -449,7 +449,11 @@ async function runSessionClose(
   command: Extract<CliCommand, { type: "session-close" }>,
   { cwd, deps, io }: DispatchEnv,
 ): Promise<number> {
-  const result = await closeSession(deps, { id: command.id }, { cwd });
+  const result = await closeSession(
+    deps,
+    { id: command.id, force: command.force },
+    { cwd },
+  );
   return render(io, result, (value) => {
     if (command.json) emitJson(io, value.session);
     else emit(io, renderClosedSession(value.session));

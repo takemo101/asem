@@ -54,11 +54,11 @@ Unknown placeholders are invalid Agent Template configuration.
 Prompt paste remains a separate explicit boolean:
 
 ```yaml
-command: "opencode"
+command: "kimi {{model_shell}}"
 paste_prompt: true
 before_paste:
   - type: wait_ms
-    ms: 750
+    ms: 2000
 ```
 
 Rules:
@@ -81,7 +81,7 @@ Builtin Agent Templates migrate as follows:
 - `pi`: `pi {{prompt_shell}}`
 - `gemini`: `gemini {{prompt_shell}}`
 - `agy`: `agy -i {{prompt_shell}}`
-- `opencode`: `opencode` with `paste_prompt: true` and `before_paste` wait.
+- `opencode`: `opencode {{model_shell}} --prompt {{prompt_shell}}` with `model_flag: "--model"`. `opencode run [message]` is the non-interactive form we avoid; the interactive TUI accepts `--prompt` as its initial prompt.
 - `kimi`: `kimi {{model_shell}}` with `paste_prompt: true`, `before_paste` wait, and `model_flag: "-m"`. `kimi -p/--prompt` is non-interactive one-shot mode, so the interactive TUI starts bare and receives the prompt through the mux `send` sequence.
 
 ## Consequences

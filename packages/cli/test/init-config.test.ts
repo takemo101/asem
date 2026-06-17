@@ -64,7 +64,7 @@ describe("materializeInitConfig", () => {
     });
   });
 
-  test("keeps paste_prompt and before_paste for the paste builtin", () => {
+  test("materializes opencode with --prompt and no paste flow", () => {
     const result = materializeInitConfig({
       workspaceId: "ws_1",
       agent: "opencode",
@@ -75,10 +75,8 @@ describe("materializeInitConfig", () => {
     if (!result.ok) throw new Error(JSON.stringify(result.error));
 
     expect(result.value.agent.templates.opencode).toEqual({
-      command: "opencode {{model_shell}}",
+      command: "opencode {{model_shell}} --prompt {{prompt_shell}}",
       model_flag: "--model",
-      paste_prompt: true,
-      before_paste: [{ type: "wait_ms", ms: 750 }],
     });
   });
 
@@ -166,12 +164,10 @@ describe("materializeInitConfig", () => {
       command: "claude {{model_shell}} {{prompt_shell}}",
       model_flag: "--model",
     });
-    // ...while opencode keeps its meaningful paste fields plus model support.
+    // ...while opencode keeps its prompt flag plus model support.
     expect(result.value.agent.templates.opencode).toEqual({
-      command: "opencode {{model_shell}}",
+      command: "opencode {{model_shell}} --prompt {{prompt_shell}}",
       model_flag: "--model",
-      paste_prompt: true,
-      before_paste: [{ type: "wait_ms", ms: 750 }],
     });
   });
 });

@@ -321,11 +321,9 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
  * - **agy** — `agy --prompt-interactive <text>` ("Run an initial prompt
  *   interactively and continue the session"). The `-i` flag lives in `command`,
  *   and `{{prompt_shell}}` supplies its value. → `command: "agy -i {{prompt_shell}}"`.
- * - **opencode** — `opencode [project]` starts the TUI with no initial-prompt
- *   positional (`opencode run [message]` is the non-interactive form we avoid),
- *   so the prompt cannot be passed as an argument. The agent starts bare and the
- *   prompt is pasted afterwards. → `paste_prompt: true`, with a `before_paste`
- *   boot delay.
+ * - **opencode** — `opencode [project]` starts the TUI, and `--prompt <text>`
+ *   seeds its initial prompt. (`opencode run [message]` is the non-interactive
+ *   form we avoid.) → `command: "opencode {{model_shell}} --prompt {{prompt_shell}}"`.
  * - **kimi** — `kimi` starts the interactive TUI, but `-p, --prompt` is the
  *   non-interactive one-shot mode we avoid. There is no positional initial
  *   prompt, so the prompt is pasted after the TUI boots. → `paste_prompt: true`,
@@ -360,20 +358,16 @@ export const builtinAgentTemplates: Readonly<Record<string, unknown>> = {
   agy: {
     command: "agy -i {{prompt_shell}}",
   },
-  // Paste flow: the TUI has no initial-prompt argument, so start bare and let
-  // the mux `send` sequence paste the prompt after a short boot delay. Model
-  // selection still works through the startup command (paste only affects the
-  // prompt, not the model flag).
+  // The interactive TUI accepts an initial prompt via `--prompt`; pass it at
+  // startup so opencode does not depend on mux paste timing.
   opencode: {
-    command: "opencode {{model_shell}}",
+    command: "opencode {{model_shell}} --prompt {{prompt_shell}}",
     model_flag: "--model",
-    paste_prompt: true,
-    before_paste: [{ type: "wait_ms", ms: 750 }],
   },
   // Kimi Code paste flow: `kimi -p` is non-interactive, and the interactive TUI
   // has no positional initial prompt. Start bare and paste the prompt after the
-  // TUI boots; `-m` selects the model. The boot delay is longer than opencode
-  // because the kimi TUI needs more time before it accepts input.
+  // TUI boots; `-m` selects the model. The TUI needs a longer boot delay before
+  // it accepts input.
   kimi: {
     command: "kimi {{model_shell}}",
     model_flag: "-m",

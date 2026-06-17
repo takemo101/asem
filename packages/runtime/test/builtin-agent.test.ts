@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   type AgentTemplate,
   agentTemplateSchema,
-  type CommandSequence,
   createTemplateRegistry,
   FakeTemplateRunner,
   renderAgentCommand,
@@ -33,7 +32,7 @@ import {
  * - pi       `pi [messages...]`       positional message, interactive default
  * - gemini   `gemini [query..]`       positional query "interactive by default"
  * - agy      `agy --prompt-interactive <text>` interactive initial prompt → `agy -i`
- * - opencode `opencode` (TUI)         no initial-prompt arg → paste_prompt + before_paste delay
+ * - opencode `opencode --prompt <text>` interactive initial prompt
  * - kimi     `kimi` (TUI)             no initial-prompt arg → paste_prompt + before_paste delay
  */
 
@@ -102,10 +101,10 @@ describe("builtin agent templates: set & shape", () => {
       "gemini {{model_shell}} {{prompt_shell}}",
     );
     expect(agentTemplate("agy").command).toBe("agy -i {{prompt_shell}}");
-    // opencode starts bare and pastes the prompt instead, but still supports
-    // model selection through its startup command.
-    expect(agentTemplate("opencode").command).toBe("opencode {{model_shell}}");
-    expect(agentTemplate("opencode").paste_prompt).toBe(true);
+    expect(agentTemplate("opencode").command).toBe(
+      "opencode {{model_shell}} --prompt {{prompt_shell}}",
+    );
+    expect(agentTemplate("opencode").paste_prompt).toBe(false);
   });
 
   test("model-supported builtins declare model_flag; agy does not", () => {
@@ -116,16 +115,12 @@ describe("builtin agent templates: set & shape", () => {
     expect(agentTemplate("agy").model_flag).toBeUndefined();
   });
 
-  test("the paste builtins set paste_prompt and a before_paste boot delay", () => {
-    expect(agentTemplate("opencode").paste_prompt).toBe(true);
-    expect(agentTemplate("opencode").before_paste).toEqual([
-      { type: "wait_ms", ms: 750 },
-    ]);
+  test("only kimi sets paste_prompt and a before_paste boot delay", () => {
     expect(agentTemplate("kimi").paste_prompt).toBe(true);
     expect(agentTemplate("kimi").before_paste).toEqual([
       { type: "wait_ms", ms: 2000 },
     ]);
-    for (const name of ["claude", "codex", "pi", "gemini", "agy"]) {
+    for (const name of ["claude", "codex", "pi", "gemini", "agy", "opencode"]) {
       expect(agentTemplate(name).paste_prompt).toBe(false);
       expect(agentTemplate(name).before_paste).toEqual([]);
     }
@@ -190,21 +185,18 @@ describe("builtin agent templates: rendered launch command", () => {
     ).toBe(`claude '--model' 'sonnet' "$(cat ${PROMPT_SHELL})"`);
   });
 
-  test("paste builtins render the bare command (prompt pasted later)", () => {
-    // No prompt token on the command line — the prompt is delivered by the mux
-    // `send` sequence after the agent starts. With no model the {{model_shell}}
-    // collapses to empty, leaving a trailing space.
+  test("opencode renders --prompt while kimi renders the bare paste command", () => {
     expect(
       renderAgentCommand(agentTemplate("opencode"), {
         promptPath: PROMPT_PATH,
       }),
-    ).toBe("opencode ");
+    ).toBe(`opencode  --prompt "$(cat ${PROMPT_SHELL})"`);
     expect(
       renderAgentCommand(agentTemplate("opencode"), {
         promptPath: PROMPT_PATH,
         model: "grok",
       }),
-    ).toBe("opencode '--model' 'grok'");
+    ).toBe(`opencode '--model' 'grok' --prompt "$(cat ${PROMPT_SHELL})"`);
     expect(
       renderAgentCommand(agentTemplate("kimi"), {
         promptPath: PROMPT_PATH,
@@ -512,51 +504,15 @@ describe("paste flow: before_paste precedes a mux send after the agent starts", 
   const commandsOf = (runner: FakeTemplateRunner): string[] =>
     runner.commands.map((c) => c.command);
 
-  test("opencode: start bare, run before_paste, then mux-send the prompt", async () => {
+  test("opencode: prompt is passed at launch, not pasted through the mux", () => {
     const template = agentTemplate("opencode");
-    expect(template.paste_prompt).toBe(true);
+    expect(template.paste_prompt).toBe(false);
+    expect(template.before_paste).toEqual([]);
 
-    // 1) The launch command starts the agent with no prompt argument.
     const launchCommand = renderAgentCommand(template, {
       promptPath: PROMPT_PATH,
     });
-    expect(launchCommand).toBe("opencode ");
-
-    // 2) The operation would start that command in the pane (run_in_pane). We
-    //    model the post-start steps here: the agent template's `before_paste`
-    //    (a boot delay it owns), then the mux `send` sequence (which the mux
-    //    template owns — the agent template never embeds mux commands).
-    const muxSend = createTemplateRegistry().getMuxTemplate("herdr")!.send;
-
-    const runner = new FakeTemplateRunner();
-    const engine = new SequenceEngine({ runner });
-
-    // before_paste runs first (the agent has just started)...
-    const beforePaste: CommandSequence = template.before_paste;
-    const beforeResult = await engine.run(beforePaste, {
-      cwd: "/repo",
-      variables: { pane_id: "w-3" },
-    });
-    expect(beforeResult.ok).toBe(true);
-    // wait_ms is not a shell command, so nothing was run on the multiplexer yet.
-    expect(runner.commands).toHaveLength(0);
-
-    // ...then the mux `send` sequence pastes the prompt into the same pane.
-    const sendResult = await engine.run(muxSend, {
-      cwd: "/repo",
-      variables: {
-        pane_id: "w-3",
-        herdr_session: "asem",
-        message: "do the work",
-      },
-    });
-    expect(sendResult.ok).toBe(true);
-
-    const muxCommands = commandsOf(runner);
-    expect(muxCommands).toEqual([
-      "herdr --session 'asem' wait agent-status 'w-3' --status idle --timeout 30000",
-      "herdr --session 'asem' pane run 'w-3' 'do the work'",
-    ]);
+    expect(launchCommand).toBe(`opencode  --prompt "$(cat ${PROMPT_SHELL})"`);
   });
 
   test("kimi: start bare, run before_paste, then mux-send the prompt", async () => {
@@ -595,12 +551,9 @@ describe("paste flow: before_paste precedes a mux send after the agent starts", 
     ]);
   });
 
-  test("before_paste declares a boot delay so the paste lands after the TUI is ready", () => {
-    const opencodeBeforePaste = agentTemplate("opencode").before_paste;
-    expect(opencodeBeforePaste).toEqual([{ type: "wait_ms", ms: 750 }]);
-    for (const step of opencodeBeforePaste) {
-      expect(step.type).not.toBe("run");
-    }
+  test("before_paste declares a boot delay only for paste templates", () => {
+    expect(agentTemplate("opencode").before_paste).toEqual([]);
+
     const kimiBeforePaste = agentTemplate("kimi").before_paste;
     expect(kimiBeforePaste).toEqual([{ type: "wait_ms", ms: 2000 }]);
     for (const step of kimiBeforePaste) {

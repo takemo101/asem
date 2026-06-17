@@ -79,11 +79,11 @@ describe.skipIf(!INTEGRATION)("builtin agent integration (opt-in)", () => {
   });
 
   describe.skipIf(!has("opencode"))("opencode", () => {
-    test("the TUI default has no initial-prompt arg, so paste is used", () => {
-      expect(builtin("opencode").paste_prompt).toBe(true);
-      // `run` is the non-interactive message form we deliberately avoid; the
-      // default `opencode` invocation starts the interactive TUI.
-      expect(help("opencode").toLowerCase()).toContain("tui");
+    test("--help documents the --prompt flag the TUI command uses", () => {
+      const template = builtin("opencode");
+      expect(template.command).toContain("--prompt {{prompt_shell}}");
+      expect(template.paste_prompt).toBe(false);
+      expect(help("opencode")).toContain("--prompt");
     });
   });
 

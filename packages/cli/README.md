@@ -56,7 +56,8 @@ asem ships with built-in Agent Templates for common agent CLIs:
 
 - `claude`, `codex`, `pi`, `gemini` — positional prompt seeds the interactive session.
 - `agy` — uses `--prompt-interactive` for the initial prompt.
-- `opencode`, `kimi` — start the interactive TUI bare and paste the prompt after a short boot delay (`paste_prompt: true`). `kimi` uses `-m` for model selection.
+- `opencode` — uses `--prompt` for the initial interactive TUI prompt.
+- `kimi` — starts the interactive TUI bare and pastes the prompt after a boot delay (`paste_prompt: true`); it uses `-m` for model selection.
 
 Use `asem doctor` to check that the selected Agent CLI is installed and reachable.
 

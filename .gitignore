@@ -11,6 +11,9 @@ build/
 .asem/current-session*.json
 .asem/tokens/
 
+# asem project-local profiles (intended to be committed)
+!.asem/agents/
+
 # Logs
 *.log
 

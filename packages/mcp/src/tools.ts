@@ -7,6 +7,7 @@
  * delivery behavior, or destructive-operation policy.
  */
 import {
+  closeSessionInputSchema,
   createSessionInputSchema,
   deleteSessionInputSchema,
   getProfileInputSchema,
@@ -171,8 +172,10 @@ const toolDefinitions = {
   close_session: {
     name: "close_session",
     description:
-      "Close a Session pane/process and record closed process state.",
-    inputSchema: objectSchema({ id: stringSchema }, ["id"]),
+      "Close a Session pane/process and record closed process state. force=true records a known-stale live Session closed even when mux close fails.",
+    inputSchema: objectSchema({ id: stringSchema, force: booleanSchema }, [
+      "id",
+    ]),
   },
   delete_session: {
     name: "delete_session",
@@ -310,7 +313,7 @@ const tools = {
   close_session: {
     definition: toolDefinitions.close_session,
     handler: (args, { cwd, deps }) =>
-      parsed(getSessionInputSchema, args, async (input) =>
+      parsed(closeSessionInputSchema, args, async (input) =>
         operationResult(
           await closeSession(deps, input, { cwd, origin: "agent" }),
         ),

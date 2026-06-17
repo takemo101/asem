@@ -295,6 +295,7 @@ Message guarantees:
 Close/delete rule:
 
 - `close_session` normally runs the mux template `close` sequence for a live Session, then records status `closed`.
+- `close_session --force` is the explicit recovery path for a known-stale live Session whose mux resource has already disappeared. It attempts the mux `close` sequence; if that sequence fails, it still records status `closed` while preserving Message/Report history. Without `--force`, mux close failure leaves the stored status unchanged.
 - Sessions registered with `init-session` borrow an already-existing pane/workspace rather than owning a mux resource. Their `mux_ref_json` carries `asem_mux_owned = "false"`; `close_session` skips mux `close` for those Sessions and records only the status transition. This prevents deleting a parent/current Session from closing the operator's existing herdr workspace.
 - `delete_session --force` deletes only non-live Sessions. A `starting` or `running` Session must be closed first so pane/process cleanup is not bypassed by store deletion. For borrowed `init-session` Sessions, that close is safe because it does not close the borrowed mux resource.
 - Once a Session is non-live, `delete_session --force` deletes the Session and all related messages where `from_session_id = id OR to_session_id = id`.

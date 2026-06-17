@@ -117,12 +117,14 @@ describe("builtin agent templates: set & shape", () => {
   });
 
   test("the paste builtins set paste_prompt and a before_paste boot delay", () => {
-    for (const name of ["opencode", "kimi"]) {
-      expect(agentTemplate(name).paste_prompt).toBe(true);
-      expect(agentTemplate(name).before_paste).toEqual([
-        { type: "wait_ms", ms: 750 },
-      ]);
-    }
+    expect(agentTemplate("opencode").paste_prompt).toBe(true);
+    expect(agentTemplate("opencode").before_paste).toEqual([
+      { type: "wait_ms", ms: 750 },
+    ]);
+    expect(agentTemplate("kimi").paste_prompt).toBe(true);
+    expect(agentTemplate("kimi").before_paste).toEqual([
+      { type: "wait_ms", ms: 2000 },
+    ]);
     for (const name of ["claude", "codex", "pi", "gemini", "agy"]) {
       expect(agentTemplate(name).paste_prompt).toBe(false);
       expect(agentTemplate(name).before_paste).toEqual([]);
@@ -133,7 +135,7 @@ describe("builtin agent templates: set & shape", () => {
     expect(agentTemplate("kimi").command).toBe("kimi {{model_shell}}");
     expect(agentTemplate("kimi").paste_prompt).toBe(true);
     expect(agentTemplate("kimi").before_paste).toEqual([
-      { type: "wait_ms", ms: 750 },
+      { type: "wait_ms", ms: 2000 },
     ]);
   });
 
@@ -594,12 +596,15 @@ describe("paste flow: before_paste precedes a mux send after the agent starts", 
   });
 
   test("before_paste declares a boot delay so the paste lands after the TUI is ready", () => {
-    for (const name of ["opencode", "kimi"]) {
-      const beforePaste = agentTemplate(name).before_paste;
-      expect(beforePaste).toEqual([{ type: "wait_ms", ms: 750 }]);
-      for (const step of beforePaste) {
-        expect(step.type).not.toBe("run");
-      }
+    const opencodeBeforePaste = agentTemplate("opencode").before_paste;
+    expect(opencodeBeforePaste).toEqual([{ type: "wait_ms", ms: 750 }]);
+    for (const step of opencodeBeforePaste) {
+      expect(step.type).not.toBe("run");
+    }
+    const kimiBeforePaste = agentTemplate("kimi").before_paste;
+    expect(kimiBeforePaste).toEqual([{ type: "wait_ms", ms: 2000 }]);
+    for (const step of kimiBeforePaste) {
+      expect(step.type).not.toBe("run");
     }
   });
 });

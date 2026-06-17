@@ -5,7 +5,8 @@ import {
   type Message,
   type Session,
 } from "@asem/core";
-import { getProfile, getSession, listProfiles, listSessions } from "@asem/ops";
+import { getSession, listProfiles, listSessions } from "@asem/ops";
+import { FakeTemplateRunner } from "@asem/runtime";
 import {
   FakeCurrentSessionResolver,
   FakeStore,
@@ -132,6 +133,18 @@ describe("MCP tool registry", () => {
     expect(schema.required).not.toContain("profile");
   });
 
+  test("close_session input schema exposes optional force", () => {
+    const tool = listMcpTools().find((t) => t.name === "close_session");
+    const schema = tool?.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.properties).toHaveProperty("force");
+    expect(schema.properties.force).toMatchObject({ type: "boolean" });
+    expect(schema.required).toContain("id");
+    expect(schema.required).not.toContain("force");
+  });
+
   test("get_profile requires an id", () => {
     const tool = listMcpTools().find((t) => t.name === "get_profile");
     const schema = tool?.inputSchema as { required: string[] };
@@ -255,6 +268,45 @@ describe("MCP tool calls", () => {
     expect(store.messages).toHaveLength(1);
     expect(store.messages[0]?.body).toBe("hello");
     expect(store.messages[0]?.fromSessionId).toBe("current");
+  });
+
+  test("close_session force records a stale live Session closed when mux close fails", async () => {
+    const store = new FakeStore();
+    const current = makeSession({ id: "current" });
+    store.sessions.push(
+      makeSession({
+        id: "s_stale",
+        status: "running",
+        muxRef: {
+          pane_id: "pane-1",
+          herdr_session: "asem",
+          herdr_workspace_id: "missing-workspace",
+        },
+      }),
+    );
+    const deps = makeOpsDeps({
+      store,
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: current.id,
+        token: CURRENT_TOKEN,
+        scope,
+      }),
+      templateRunner: new FakeTemplateRunner({
+        commands: [{ exitCode: 1, stderr: "workspace not found" }],
+      }),
+    });
+    store.sessions.push(current);
+
+    const result = await callMcpTool(
+      "close_session",
+      { id: "s_stale", force: true },
+      { ...ctx, deps },
+    );
+
+    expect(result.isError).toBeUndefined();
+    const session = store.sessions.find((s) => s.id === "s_stale");
+    expect(session?.status).toBe("closed");
+    expect(session?.closedAt).not.toBeNull();
   });
 
   test("delete_session preserves ops force semantics", async () => {

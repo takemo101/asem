@@ -372,11 +372,12 @@ export const builtinAgentTemplates: Readonly<Record<string, unknown>> = {
   },
   // Kimi Code paste flow: `kimi -p` is non-interactive, and the interactive TUI
   // has no positional initial prompt. Start bare and paste the prompt after the
-  // TUI boots; `-m` selects the model.
+  // TUI boots; `-m` selects the model. The boot delay is longer than opencode
+  // because the kimi TUI needs more time before it accepts input.
   kimi: {
     command: "kimi {{model_shell}}",
     model_flag: "-m",
     paste_prompt: true,
-    before_paste: [{ type: "wait_ms", ms: 750 }],
+    before_paste: [{ type: "wait_ms", ms: 2000 }],
   },
 };

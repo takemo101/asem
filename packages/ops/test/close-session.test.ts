@@ -201,6 +201,27 @@ describe("closeSession — mux close failure", () => {
     expect(stored?.closedAt).toBeNull();
   });
 
+  test("force closes a stale live Session when mux close fails", async () => {
+    const store = new FakeStore();
+    const session = makeRunning();
+    store.sessions.push(session);
+    const runner = new FakeTemplateRunner({
+      commands: [{ exitCode: 1, stderr: "workspace not found" }],
+    });
+    const d = deps({ store, runner });
+
+    const { session: closed } = expectOk(
+      await closeSession(d, { id: session.id, force: true }, CTX),
+    );
+
+    expect(d.runner.commands).toHaveLength(1);
+    expect(closed.status).toBe("closed");
+    expect(closed.closedAt).not.toBeNull();
+    const stored = await d.store.getSessionById(scopeA, session.id);
+    expect(stored?.status).toBe("closed");
+    expect(stored?.closedAt).toBe(closed.closedAt);
+  });
+
   test("an unknown mux template for a live Session is mux_template_not_found", async () => {
     const store = new FakeStore();
     const session = makeRunning({ mux: "does-not-exist" });

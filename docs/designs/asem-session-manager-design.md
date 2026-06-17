@@ -397,7 +397,7 @@ Optional model selection (MIK-040):
 - `model_flag` is one shell-token flag such as `--model` or `-m`.
 - `model_flag` and `{{model_shell}}` must appear together. A Template carrying only one of them is `invalid_template`. A Template carrying neither is model-unsupported.
 - `{{model_shell}}` is independent of the prompt placeholders, so a `paste_prompt` Agent (e.g. `opencode`) may still support model selection in its startup command.
-- Builtins `claude` / `codex` / `pi` / `gemini` / `opencode` declare `model_flag: "--model"`; builtin `agy` is intentionally model-unsupported. Requesting a model for a model-unsupported Template fails with `invalid_input` before any filesystem, mux, or store side effects — asem never silently launches an Agent without the requested model.
+- Builtins `claude` / `codex` / `pi` / `gemini` / `opencode` declare `model_flag: "--model"`; builtin `kimi` declares `model_flag: "-m"`; builtin `agy` is intentionally model-unsupported. Requesting a model for a model-unsupported Template fails with `invalid_input` before any filesystem, mux, or store side effects — asem never silently launches an Agent without the requested model.
 - The launch script also exports `AS_MODEL` (empty when no model was selected).
 
 Agent launch hooks (`before_agent` / `after_agent`):

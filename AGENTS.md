@@ -71,8 +71,9 @@ For non-trivial implementation work, prefer dogfooding asem Sessions while keepi
 3. Wait for the child Report.
 4. Launch a separate child Session with the `reviewer` Agent Profile to review the implementation against the request, docs, tests, and repo standards.
 5. If review finds issues, send a Message back to the worker Session for repair and wait for another Report.
-6. Parent Session runs final validation, opens/merges the PR, updates mikan, and cleans GitButler state.
-7. Close child Sessions to preserve Message/Report history; do not delete them unless explicitly cleaning history.
+6. Parent Session runs final validation and merges the change. For PR merge steps, prefer using the project-local `pr-merger` Agent Profile (`asem session create ... --profile pr-merger`), defined in `.asem/agents/pr-merger.md`. The profile instructions use GitButler (`but`) for version-control mutations and preserve asem Session history. Alternatively, open/merge the PR manually with `but` and `gh`.
+7. Update mikan and clean GitButler state.
+8. Close child Sessions to preserve Message/Report history; do not delete them unless explicitly cleaning history.
 
 Do not treat this as task orchestration semantics inside asem. It is an agent workflow for using Sessions, Messages, and Reports during development.
 

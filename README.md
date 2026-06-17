@@ -11,6 +11,7 @@ AI coding sessions often need more structure than a terminal tab, but less proce
 - launch and track local child Sessions from one project Workspace;
 - keep Message and Report history scoped to the current Workspace and Worktree Root;
 - use familiar multiplexers such as tmux, zellij, herdr, or rmux through Templates;
+- launch through built-in Agent Templates for claude, codex, pi, gemini, agy, opencode, or kimi;
 - shape child prompts with explicit Agent Profiles;
 - let compatible AI clients connect through stdio MCP and installed Skills.
 

@@ -82,6 +82,7 @@ Builtin Agent Templates migrate as follows:
 - `gemini`: `gemini {{prompt_shell}}`
 - `agy`: `agy -i {{prompt_shell}}`
 - `opencode`: `opencode` with `paste_prompt: true` and `before_paste` wait.
+- `kimi`: `kimi {{model_shell}}` with `paste_prompt: true`, `before_paste` wait, and `model_flag: "-m"`. `kimi -p/--prompt` is non-interactive one-shot mode, so the interactive TUI starts bare and receives the prompt through the mux `send` sequence.
 
 ## Consequences
 

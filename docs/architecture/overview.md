@@ -18,7 +18,7 @@ mikan と同じく local-first な設計を採用します。ただし source of
 ~/.asem/state.db                  # Session / Message の durable state
 <worktree_root>/.asem/sessions/   # prompt, launch script, token-bearing files, logs
 <worktree_root>/.asem/agents/     # project-local Agent Profile files
-.asem.yaml                        # project-local config and templates
+.asem.yaml                        # workspace/project config, templates, and optional repo aliases
 external AI client config files    # Integration Target MCP/Skill setup, when explicitly installed
 ```
 
@@ -105,6 +105,7 @@ Rules:
 - `ops` は concrete SQLite connection や real shell を import せず、injected ports だけを呼ぶ。
 - `cli` / `mcp` / `tui` は semantic logic を重複実装しない。
 - CLI と MCP は同じ operation handlers / schemas を呼ぶ。
+- CLI-only conveniences such as `session create --repo <alias>` may resolve human-facing aliases before calling shared operations, but the resulting Session/Message semantics must still come from `@asem/ops`.
 - TUI は operator surface であり、MCP tool ではない。
 - `integrations` は CLI-only Integration Target setup を持つ。外部AIクライアントの設定ファイルを書き換えるため、AI-facing MCP surface には公開しない。
 

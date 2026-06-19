@@ -165,14 +165,36 @@ agent:
   default: claude
 ```
 
+A workspace-root config may also define repo aliases for creating Sessions from a directory that contains multiple working copies:
+
+```yaml
+workspace:
+  id: product-x
+
+repos:
+  frontend:
+    path: ./frontend
+  backend:
+    path: ./backend
+
+mux:
+  default: herdr
+
+agent:
+  default: claude
+```
+
 Rules:
 
 - `workspace.id` is required after `asem init`.
+- `repos` is optional. Each key is a Repo Alias and each `path` is resolved relative to the config file that declares it.
+- A Repo Alias is only a cwd shortcut for Session creation. It does not create cross-worktree Parent Session, Message, or Report semantics.
+- `repos.<alias>.path` must resolve to an existing directory before `create_session` side effects begin. The target may be a Git worktree or any directory accepted by the normal `ScopeResolver` realpath fallback.
 - Builtin templates are available even when project-local `templates` is omitted or empty.
 - Generated config uses block-style YAML and avoids flow-style empty collection notation such as `: {}` or `: []`. Empty schema-default fields such as empty `templates` maps, empty command sequences, empty `attach_command`, and empty `refs` maps are omitted. Hand-written config may still use explicit YAML flow-style empty collections; parsing remains representation-neutral.
 - `asem init --interactive` may materialize the selected builtin Agent and Multiplexer Templates into project-local `templates`; see [`init-wizard-design.md`](./init-wizard-design.md).
 - Non-interactive `asem init --workspace <id> --agent <name> --mux <name>` may also materialize selected builtin Templates.
-- Project-local templates are trusted like local code.
+- Project-local templates and repo aliases are trusted like local code.
 - Multiple worktrees may share the same `workspace.id`, but normal operations remain worktree-isolated.
 - No `config validate` command in MVP.
 
@@ -186,6 +208,32 @@ The handoff fixes the config filename and schema but not the exact search behavi
 4. If missing for commands that require project config, return a structured `config_not_found` error suggesting `asem init`.
 
 `asem init` creates `.asem.yaml` in the current worktree root by default.
+
+### Repo alias creation from a workspace root
+
+`asem session create --repo <alias>` is a human CLI convenience for workspace-root operation. It resolves `<alias>` through the nearest discovered `.asem.yaml` that contains a `repos` map, validates that the configured path exists, and then launches the Session with the resolved path as the effective `cwd`.
+
+For example:
+
+```sh
+cd ~/work/product-x
+asem session create frontend-parent \
+  --repo frontend \
+  --root \
+  --prompt "Act as the parent Session for frontend work."
+```
+
+is semantically equivalent to creating the same root Session with `--cwd ~/work/product-x/frontend`, except the path is named and centralized in `.asem.yaml`.
+
+Repo alias rules:
+
+- `--repo` and `--cwd` are mutually exclusive because both choose the effective create cwd.
+- The root `.asem.yaml` that defines `repos` remains the config source for workspace id, Agent defaults, Multiplexer defaults, and project-local templates used by the create operation.
+- The resolved repo path becomes the Session `cwd`, and normal scope resolution still records `worktree_root` from that target cwd: Git root when available, otherwise realpath.
+- Parent resolution is unchanged. `--root` creates a repo-scoped root Session; `--parent <id>` must name a Session in the target repo's Effective Scope; with no parent flag, the current Session fallback is resolved in the target repo scope.
+- A repo parent may create child Sessions normally. Those child and grandchild Sessions use the existing same-scope `parent_session_id` chain; `report_parent` sends to the direct Parent Session as usual.
+- Message and Report storage/delivery stay in the target repo's normal Effective Scope. There is no cross-worktree Message, Report, launch-origin, or workspace-parent relationship in this design.
+- `asem workspace repo list` reads the discovered config and renders aliases, resolved paths, and whether each path currently exists. It does not read Session state.
 
 ## Persistence model
 
@@ -481,7 +529,8 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 |---|---|---|---|---|---|
 | Initialize project | `asem init` | — | human local trust | current worktree | creates `.asem.yaml`, updates `.gitignore` |
 | Register current Session | `asem init-session` | `init_session` | token generated | effective scope | inserts Session row, prints exports |
-| Create Session | `asem session create` | `create_session` | human or verified current Session | effective scope | creates pane, writes files, inserts Session row |
+| Create Session | `asem session create [--repo <alias>]` | `create_session` | human or verified current Session | effective scope | creates pane, writes files, inserts Session row; `--repo` is CLI-only cwd alias resolution before calling the shared operation |
+| List Repo Aliases | `asem workspace repo list` | — | human local trust | current config | reads `.asem.yaml` repo aliases and path existence |
 | List Profiles | `asem profile list` | `list_profiles` | human local trust | current config/worktree | reads builtin/user/project Agent Profile definitions |
 | Get Profile | `asem profile get <id>` | `get_profile` | human local trust | current config/worktree | reads one resolved Agent Profile definition |
 | List Sessions | `asem session list` | `list_sessions` | human or verified current Session | effective scope | reads Session rows, may update liveness |
@@ -553,8 +602,10 @@ with mode `0600` when it contains token material. This path is covered by the `.
 
 ### Create Session flow
 
-1. Resolve config `.asem.yaml`.
-2. Resolve `workspace_id` and `worktree_root`.
+For the CLI only, `--repo <alias>` is resolved before calling the shared `create_session` operation: discover the config that declares `repos`, resolve the alias path relative to that config, reject a missing/non-directory path, pin the alias-declaring `.asem.yaml` as the config source, and pass the resolved path as `input.cwd`. MCP callers use `cwd` directly and do not receive a separate repo-alias abstraction.
+
+1. Resolve config `.asem.yaml`. For `--repo`, this is the alias-declaring root config, not a repo-local override.
+2. Resolve `workspace_id` from the resolved config and `worktree_root` from the effective create cwd.
 3. Resolve parent using the parent-resolution truth table unless `--root` / `--no-parent` is set.
 4. Resolve the requested Agent Profile, if any, from project/user/builtin sources.
 5. Resolve final Agent and model using `explicit input > selected profile default > config default`, suppressing the profile model default when an explicit Agent differs from the profile Agent default.

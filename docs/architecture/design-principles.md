@@ -126,6 +126,7 @@ asem は推測で重要な境界を埋めない。
 - deliverable Session には stored `mux` + `mux_ref` が必要。`init-session` may safely derive those coordinates from the current process environment only when the Multiplexer already hosts that process (for example complete herdr pane env vars).
 - 明示的な `mux: none` は non-deliverable Session として扱い、real-time delivery が必要なら deliverable mux で再登録するよう案内する。
 - parent Session は `--parent <session-id>` / `--root` (`--no-parent`) / current Session で明示的に決まる。
+- `--repo <alias>` のような Repo Alias は cwd を選ぶ convenience であり、cross-worktree parent/report semantics を暗黙に作らない。
 - template command は raw value ではなく shell-escaped variable を使う。
 
 Auto-detection は便利機能に留め、security や delivery semantics の前提にしない。Auto-detection が失敗した場合は、重要な境界を推測して `none` に落とさず、明示入力または actionable error に戻す。

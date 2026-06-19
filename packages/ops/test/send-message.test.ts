@@ -277,6 +277,28 @@ describe("sendMessage — formatted body & delivery failure", () => {
     expect(message.deliveryError).toContain("mux template not found");
   });
 
+  test("a stored mux: none target records an actionable delivery_error and still persists the Message", async () => {
+    const store = new FakeStore();
+    const target = makeTarget({ mux: "none" });
+    store.sessions.push(target);
+    const d = deps({ store });
+
+    const { message } = expectOk(
+      await sendMessage(d, { toSessionId: target.id, body: "ping" }, CTX),
+    );
+
+    // Durability is preserved: the Message is recorded even though the target
+    // has no live delivery Multiplexer.
+    expect(d.store.messages).toHaveLength(1);
+    expect(message.deliveredAt).toBeNull();
+
+    // The delivery error is actionable, not the bare internal template lookup
+    // failure, and points at re-registering with a deliverable mux (MIK-049).
+    expect(message.deliveryError).not.toBe("mux template not found: none");
+    expect(message.deliveryError).toContain("no live delivery Multiplexer");
+    expect(message.deliveryError?.toLowerCase()).toContain("herdr");
+  });
+
   test("a malformed target mux template returns invalid_template and records no Message", async () => {
     const store = new FakeStore();
     const target = makeTarget();

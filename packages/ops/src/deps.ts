@@ -73,4 +73,12 @@ export interface OpContext {
   cwd: string;
   refreshLiveness?: boolean;
   origin?: "operator" | "agent";
+  /**
+   * Process environment of the invocation, supplied by trusted composition
+   * roots (never parsed from external command/tool input). `init-session` reads
+   * it to safely discover the current Multiplexer pane that already hosts this
+   * process — for example a complete herdr pane env (`HERDR_ENV=1` plus the
+   * herdr identifiers). Absent in pure tests that exercise no env discovery.
+   */
+  env?: Record<string, string | undefined>;
 }

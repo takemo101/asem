@@ -279,11 +279,19 @@ async function deliver(
   // missing template is a best-effort delivery failure recorded on the Message.
   const muxTemplate = muxResult.value;
   if (muxTemplate === undefined) {
+    // A target stored with `mux: none` is intentionally non-deliverable. Record
+    // an actionable delivery_error (not the bare internal template lookup
+    // failure) explaining how to make it deliverable (MIK-049). Any other
+    // missing template stays the generic best-effort delivery failure.
+    const deliveryError =
+      target.mux === "none"
+        ? `target Session ${target.name} (${target.id}) has no live delivery Multiplexer (mux: none); the Message was recorded but not delivered. Re-register it with a deliverable mux such as herdr (re-run \`asem init-session\` inside herdr) if real-time delivery is desired.`
+        : `mux template not found: ${target.mux}`;
     return recordDeliveryError(
       deps,
       scope,
       message,
-      redactor.redact(`mux template not found: ${target.mux}`),
+      redactor.redact(deliveryError),
       logger,
     );
   }

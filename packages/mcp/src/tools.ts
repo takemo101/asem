@@ -50,6 +50,13 @@ interface ParseSchema<T> {
 export interface McpContext {
   cwd: string;
   deps: OpsDeps;
+  /**
+   * Process environment of the server, supplied by the composition root.
+   * `init_session` reads it to discover the current Multiplexer pane that hosts
+   * the agent process (for example a complete herdr pane env), so an agent
+   * inside herdr auto-registers as a deliverable `mux: herdr` Session (MIK-049).
+   */
+  env?: Record<string, string | undefined>;
 }
 
 export interface McpToolDefinition {
@@ -123,7 +130,9 @@ const toolDefinitions = {
         muxRef: muxRefSchema,
         parentSessionId: { anyOf: [{ type: "string" }, { type: "null" }] },
       },
-      ["name", "muxRef"],
+      // muxRef is optional: inside a complete herdr environment the operation
+      // discovers the current pane's mux ref from the server env (MIK-049).
+      ["name"],
     ),
   },
   create_session: {
@@ -258,10 +267,14 @@ async function parsed<T>(
 const tools = {
   init_session: {
     definition: toolDefinitions.init_session,
-    handler: (args, { cwd, deps }) =>
+    handler: (args, { cwd, deps, env }) =>
       parsed(initSessionInputSchema, args, async (input) =>
         operationResult(
-          await initSession(deps, input, { cwd, origin: "agent" }),
+          await initSession(deps, input, {
+            cwd,
+            origin: "agent",
+            ...(env !== undefined ? { env } : {}),
+          }),
         ),
       ),
   },

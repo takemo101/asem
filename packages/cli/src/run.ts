@@ -57,10 +57,12 @@ import {
   renderMessageList,
   renderProfileGet,
   renderProfileList,
+  renderRepoList,
   renderSentMessage,
   renderSessionDetail,
   renderSessionList,
 } from "./render.ts";
+import { listRepoAliases, resolveRepoAlias } from "./repo-alias.ts";
 import { usageFor } from "./usage.ts";
 
 /** Inputs for one CLI invocation. `deps` is the injected operation bundle. */
@@ -192,6 +194,8 @@ async function dispatch(
       return runDoctor(command, env);
     case "session-create":
       return runSessionCreate(command, env);
+    case "workspace-repo-list":
+      return runWorkspaceRepoList(command, env);
     case "session-list":
       return runSessionList(command, env);
     case "session-get":
@@ -373,9 +377,23 @@ async function runSessionCreate(
   command: Extract<CliCommand, { type: "session-create" }>,
   { cwd, deps, io }: DispatchEnv,
 ): Promise<number> {
-  // Pure delegation: the CLI maps flags to the create_session input and renders
-  // the result. Parent resolution, template selection, launch, cleanup, and the
-  // "never persist a failed create" ordering all live in the operation.
+  // `--repo <alias>` is a CLI-only cwd convenience resolved before the shared
+  // operation: it maps the alias to a directory and pins the alias-declaring
+  // `.asem.yaml` as the config source via `ctx.configCwd`, then delegates to
+  // create_session like a `--cwd <resolved>` call. Resolution fails (unknown
+  // alias / missing path) before any create side effects (Repo Alias design).
+  let effectiveCwd = command.cwd;
+  let configCwd: string | undefined;
+  if (command.repo !== undefined) {
+    const resolved = await resolveRepoAlias(deps, cwd, command.repo);
+    if (!resolved.ok) return fail(io, resolved.error);
+    effectiveCwd = resolved.value.cwd;
+    configCwd = resolved.value.configCwd;
+  }
+
+  // Otherwise pure delegation: the CLI maps flags to the create_session input
+  // and renders the result. Parent resolution, template selection, launch,
+  // cleanup, and the "never persist a failed create" ordering live in the op.
   const result = await createSession(
     deps,
     {
@@ -385,17 +403,33 @@ async function runSessionCreate(
       ...(command.mux !== undefined ? { mux: command.mux } : {}),
       ...(command.model !== undefined ? { model: command.model } : {}),
       ...(command.profile !== undefined ? { profile: command.profile } : {}),
-      ...(command.cwd !== undefined ? { cwd: command.cwd } : {}),
+      ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
       ...(command.parentSessionId !== undefined
         ? { parentSessionId: command.parentSessionId }
         : {}),
       ...(command.root !== undefined ? { root: command.root } : {}),
     },
-    { cwd },
+    { cwd, ...(configCwd !== undefined ? { configCwd } : {}) },
   );
   return render(io, result, (value) => {
     if (command.json) emitJson(io, value.session);
     else emit(io, renderCreatedSession(value.session));
+  });
+}
+
+/**
+ * `asem workspace repo list`: render the Repo Aliases declared in the discovered
+ * `.asem.yaml` and each alias's path status. This is a CLI-only convenience that
+ * reads config and the filesystem; it never reads or mutates Session state.
+ */
+async function runWorkspaceRepoList(
+  command: Extract<CliCommand, { type: "workspace-repo-list" }>,
+  { cwd, deps, io }: DispatchEnv,
+): Promise<number> {
+  const result = await listRepoAliases(deps, cwd);
+  return render(io, result, (rows) => {
+    if (command.json) emitJson(io, rows);
+    else emit(io, renderRepoList(rows));
   });
 }
 

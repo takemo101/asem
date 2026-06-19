@@ -39,6 +39,9 @@ const ROOT_USAGE = [
   "  session close   close a Session's pane/process and mark it closed",
   "  session delete  delete a Session and its Messages (destructive)",
   "",
+  "Workspace:",
+  "  workspace repo list  list Repo Aliases declared in .asem.yaml",
+  "",
   "Profiles:",
   "  profile list    list Agent Profiles for `session create --profile`",
   "  profile get     show one Agent Profile's instructions",
@@ -193,6 +196,8 @@ const SESSION_CREATE_USAGE = [
   "                     does not support models)",
   "  --profile <id>     Agent Profile to shape the prompt (see `asem profile list`)",
   "  --cwd <dir>        working directory for the child (defaults to current)",
+  "  --repo <alias>     create in a Repo Alias directory from .asem.yaml",
+  "                     (see `asem workspace repo list`; exclusive with --cwd)",
   "  --root             create as a root Session (no parent)",
   "  --parent <id>      create under an explicit parent Session",
   "  --json             print the created Session as JSON",
@@ -202,6 +207,7 @@ const SESSION_CREATE_USAGE = [
   "  asem session create build --prompt 'run CI' --agent codex --mux tmux",
   "  asem session create reviewer-2 --prompt 'review' --agent claude --model sonnet",
   "  asem session create reviewer-3 --prompt 'review the diff' --profile reviewer",
+  "  asem session create fe-parent --repo frontend --root --prompt 'frontend work'",
   "",
   "notes:",
   "  Without --root or --parent, the child is parented to the current Session.",
@@ -209,6 +215,39 @@ const SESSION_CREATE_USAGE = [
   "  Model support is Agent-Template-dependent; builtin agy is model-unsupported.",
   "  --profile shapes prompt.md (profile instructions first, your prompt second);",
   "  the profile may also set default --agent/--model, but explicit flags win.",
+  "  --repo resolves an alias to its directory and uses it as the Session cwd; the",
+  "  alias-declaring .asem.yaml stays the config source. It is only a cwd shortcut",
+  "  and does not create cross-worktree parent/report relationships.",
+];
+
+const WORKSPACE_GROUP_USAGE = [
+  "asem workspace — inspect Workspace-level configuration",
+  "",
+  "usage: asem workspace <subcommand> [options]",
+  "",
+  "subcommands:",
+  "  repo list   list Repo Aliases declared in .asem.yaml and their path status",
+  "",
+  "Run `asem workspace repo list --help` for usage, options, and examples.",
+];
+
+const WORKSPACE_REPO_USAGE = [
+  "asem workspace repo — inspect Repo Aliases from .asem.yaml",
+  "",
+  "usage:",
+  "  asem workspace repo list [--json]",
+  "",
+  "options:",
+  "  --json    print the Repo Aliases as JSON",
+  "",
+  "examples:",
+  "  asem workspace repo list",
+  "  asem workspace repo list --json",
+  "",
+  "notes:",
+  "  Lists each Repo Alias's configured path, resolved path, and whether that path",
+  "  currently exists as a directory. A Repo Alias is only a cwd shortcut for",
+  "  `session create --repo <alias>`; this command never reads Session state.",
 ];
 
 const PROFILE_GROUP_USAGE = [
@@ -523,6 +562,8 @@ const TUI_USAGE = [
 /** Focused pages keyed by their command path (`group subcommand` or command). */
 const PAGES: Record<string, string[]> = {
   session: SESSION_GROUP_USAGE,
+  workspace: WORKSPACE_GROUP_USAGE,
+  "workspace repo": WORKSPACE_REPO_USAGE,
   profile: PROFILE_GROUP_USAGE,
   message: MESSAGE_GROUP_USAGE,
   report: REPORT_GROUP_USAGE,

@@ -157,6 +157,13 @@ export interface FileSystem {
     options?: { mode?: number },
   ): Promise<void>;
   exists(path: string): Promise<boolean>;
+  /**
+   * True when `path` exists and is a directory. Used by the CLI repo-alias
+   * convenience to validate that a configured `repos.<alias>.path` resolves to a
+   * real directory before any `create_session` side effects (Repo Alias design).
+   * Returns `false` for a missing path or a non-directory rather than throwing.
+   */
+  isDirectory(path: string): Promise<boolean>;
   mkdirp(path: string): Promise<void>;
   chmod(path: string, mode: number): Promise<void>;
   realpath(path: string): Promise<string>;

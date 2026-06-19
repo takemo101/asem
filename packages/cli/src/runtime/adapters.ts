@@ -16,6 +16,7 @@ import {
   readdir as fsReaddir,
   readFile as fsReadFile,
   realpath as fsRealpath,
+  stat as fsStat,
   mkdir,
   rename,
   writeFile,
@@ -81,6 +82,14 @@ export class NodeFileSystem implements FileSystem {
     try {
       await access(path);
       return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async isDirectory(path: string): Promise<boolean> {
+    try {
+      return (await fsStat(path)).isDirectory();
     } catch {
       return false;
     }

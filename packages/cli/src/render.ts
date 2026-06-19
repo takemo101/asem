@@ -17,6 +17,7 @@ import {
   shellEscape,
 } from "@asem/core";
 import type { ResolvedProfile } from "@asem/ops";
+import type { RepoAliasStatus } from "./repo-alias.ts";
 
 /** Render a structured error as `error: <code>: <message>` plus detail lines. */
 export function renderError(error: OperationError): string[] {
@@ -240,6 +241,29 @@ export function renderProfileGet(profile: ResolvedProfile): string[] {
     "instructions:",
     profile.instructions,
   ];
+}
+
+// --- repo aliases ----------------------------------------------------------
+
+/**
+ * Render `workspace repo list`: one row per Repo Alias with its configured path,
+ * resolved path, and current status. Status is path state only (`ok`,
+ * `missing`, `not-a-dir`); it says nothing about Sessions, which a Repo Alias
+ * never affects (CONTEXT.md "Repo Alias").
+ */
+export function renderRepoList(rows: readonly RepoAliasStatus[]): string[] {
+  if (rows.length === 0) {
+    return ["no repo aliases configured"];
+  }
+  return rows.map((row) => {
+    const status = row.directory ? "ok" : row.exists ? "not-a-dir" : "missing";
+    return [
+      row.alias,
+      row.configuredPath,
+      `→ ${row.resolvedPath}`,
+      `[${status}]`,
+    ].join("  ");
+  });
 }
 
 // --- messages --------------------------------------------------------------

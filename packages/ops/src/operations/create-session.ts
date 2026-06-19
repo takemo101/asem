@@ -197,7 +197,15 @@ export async function createSession(
   // actually created (MIK-025).
   const cwd = input.cwd ?? ctx.cwd;
 
-  const contextResult = await resolveContext(deps, cwd);
+  // The config source may be pinned to a different directory than the effective
+  // create cwd via the trusted `ctx.configCwd` seam: the CLI `--repo <alias>`
+  // convenience targets the resolved repo path as `cwd` while keeping the
+  // alias-declaring root `.asem.yaml` as the source for workspace id, Agent/Mux
+  // defaults, and project-local templates. Scope (and the launch cwd) still come
+  // from the effective create cwd (design "Repo alias creation"). Default: both
+  // resolve from the same cwd, so non-repo creates are unchanged.
+  const configCwd = ctx.configCwd ?? cwd;
+  const contextResult = await resolveContext(deps, configCwd, cwd);
   if (!contextResult.ok) {
     return contextResult;
   }

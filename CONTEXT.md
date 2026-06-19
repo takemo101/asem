@@ -28,6 +28,10 @@ _Avoid_: Project, team, swarm, board.
 The filesystem root that isolates a working copy. Normal Session visibility and messaging are scoped by Workspace plus Worktree Root.
 _Avoid_: Directory, project root, repository when the isolation boundary specifically means the active worktree.
 
+**Repo Alias**:
+A human CLI convenience name in `.asem.yaml` that resolves to a filesystem directory used as the `cwd` for Session creation. A Repo Alias is only a cwd shortcut; it does not create cross-worktree Parent Session, Message, or Report semantics.
+_Avoid_: Project membership, package graph, orchestration target.
+
 **Effective Scope**:
 The boundary inside which Sessions can normally see and message each other: Workspace plus Worktree Root.
 _Avoid_: Global workspace, project scope when worktree isolation matters.
@@ -73,3 +77,4 @@ _Avoid_: Dashboard when it implies analytics; orchestrator when it implies contr
 - “Report” does not close a Session and does not mean the work is done.
 - “Completion” is not a domain state. A Session may exit or be closed, but asem does not judge whether the agent accomplished its assignment.
 - “Worktree isolation” is part of the domain. Separate worktrees must not normally message each other just because they share a Workspace name.
+- “Repo Alias” is a cwd convenience for Session creation, not a new scope boundary or cross-repository coordination model.

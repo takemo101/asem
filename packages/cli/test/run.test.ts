@@ -12,10 +12,12 @@ import {
   FakeConfigLoader,
   FakeCurrentSessionResolver,
   FakeExecutableResolver,
+  FakeFileSystem,
   FakeLivenessProbe,
   FakeScopeResolver,
   FakeStore,
   MemoryLogger,
+  makeConfig,
   makeOpsDeps,
 } from "../../ops/src/testing/fakes.ts";
 import { BufferIo } from "../src/io.ts";
@@ -771,6 +773,200 @@ describe("runCli session create", () => {
     );
     expect(code).toBe(EXIT_ERROR);
     expect(io.errText()).toContain("session_name_conflict");
+  });
+});
+
+describe("runCli session create --repo", () => {
+  const HERDR_CREATE_JSON = JSON.stringify({
+    result: {
+      workspace: { workspace_id: "herdr-workspace-1" },
+      root_pane: { pane_id: "pane-1" },
+      tab: { tab_id: "tab-1" },
+    },
+  });
+
+  /**
+   * Deps whose root `.asem.yaml` declares repo aliases and whose filesystem has
+   * the resolved repo directory (and a non-directory file) registered.
+   */
+  function repoDeps(options: { store?: FakeStore } = {}) {
+    const store = options.store ?? new FakeStore();
+    const fs = new FakeFileSystem();
+    fs.dirs.add("/repo/frontend");
+    fs.files.set("/repo/notes.txt", { contents: "x" });
+    const deps = makeOpsDeps({
+      store,
+      fs,
+      configLoader: new FakeConfigLoader({
+        kind: "found",
+        config: makeConfig({
+          repos: {
+            frontend: { path: "./frontend" },
+            ghost: { path: "./ghost" },
+            notes: { path: "./notes.txt" },
+          },
+        }),
+        configPath: "/repo/.asem.yaml",
+      }),
+      scopeResolver: new FakeScopeResolver(SCOPE),
+      currentSessionResolver: new FakeCurrentSessionResolver(null),
+      templateRunner: new FakeTemplateRunner({
+        commands: [{ stdout: "asem" }, { stdout: HERDR_CREATE_JSON }],
+      }),
+    });
+    return { deps, store };
+  }
+
+  test("resolves the alias path and creates a Session scoped to it", async () => {
+    const { deps, store } = repoDeps();
+    const { io, code } = await run(
+      [
+        "session",
+        "create",
+        "fe-parent",
+        "--repo",
+        "frontend",
+        "--root",
+        "--prompt",
+        "go",
+        "--json",
+      ],
+      deps,
+    );
+    expect(code).toBe(EXIT_OK);
+    const session = JSON.parse(io.outText());
+    expect(session.cwd).toBe("/repo/frontend");
+    // The operation persisted it with the resolved repo path as the cwd.
+    expect(store.sessions).toHaveLength(1);
+    expect(store.sessions[0]?.cwd).toBe("/repo/frontend");
+    // Workspace id still comes from the alias-declaring root config.
+    expect(store.sessions[0]?.workspaceId).toBe(SCOPE.workspaceId);
+  });
+
+  test("unknown alias fails as a usage error before any side effects", async () => {
+    const { deps, store } = repoDeps();
+    const { io, code } = await run(
+      [
+        "session",
+        "create",
+        "x",
+        "--repo",
+        "backend",
+        "--root",
+        "--prompt",
+        "go",
+      ],
+      deps,
+    );
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("invalid_input");
+    expect(store.sessions).toHaveLength(0);
+  });
+
+  test("missing repo path fails before any side effects", async () => {
+    const { deps, store } = repoDeps();
+    const { io, code } = await run(
+      ["session", "create", "x", "--repo", "ghost", "--root", "--prompt", "go"],
+      deps,
+    );
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("invalid_config");
+    expect(store.sessions).toHaveLength(0);
+  });
+
+  test("a non-directory repo path fails before any side effects", async () => {
+    const { deps, store } = repoDeps();
+    const { io, code } = await run(
+      ["session", "create", "x", "--repo", "notes", "--root", "--prompt", "go"],
+      deps,
+    );
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("invalid_config");
+    expect(store.sessions).toHaveLength(0);
+  });
+});
+
+describe("runCli workspace repo list", () => {
+  /** Deps whose root config declares aliases; store throws if touched. */
+  function listDeps() {
+    const fs = new FakeFileSystem();
+    fs.dirs.add("/repo/frontend");
+    const throwingStore = new Proxy({} as FakeStore, {
+      get() {
+        throw new Error("workspace repo list must not touch Session state");
+      },
+    });
+    return makeOpsDeps({
+      store: throwingStore,
+      fs,
+      configLoader: new FakeConfigLoader({
+        kind: "found",
+        config: makeConfig({
+          repos: {
+            frontend: { path: "./frontend" },
+            ghost: { path: "./ghost" },
+          },
+        }),
+        configPath: "/repo/.asem.yaml",
+      }),
+    });
+  }
+
+  test("lists aliases with configured path, resolved path, and status", async () => {
+    const { io, code } = await run(["workspace", "repo", "list"], listDeps());
+    expect(code).toBe(EXIT_OK);
+    const out = io.outText();
+    expect(out).toContain("frontend");
+    expect(out).toContain("./frontend");
+    expect(out).toContain("/repo/frontend");
+    expect(out).toContain("ghost");
+  });
+
+  test("--json reports alias, paths, and status without touching the store", async () => {
+    const { io, code } = await run(
+      ["workspace", "repo", "list", "--json"],
+      listDeps(),
+    );
+    expect(code).toBe(EXIT_OK);
+    const parsed = JSON.parse(io.outText());
+    expect(parsed).toEqual([
+      {
+        alias: "frontend",
+        configuredPath: "./frontend",
+        resolvedPath: "/repo/frontend",
+        exists: true,
+        directory: true,
+      },
+      {
+        alias: "ghost",
+        configuredPath: "./ghost",
+        resolvedPath: "/repo/ghost",
+        exists: false,
+        directory: false,
+      },
+    ]);
+  });
+
+  test("renders an empty notice when no repo aliases are configured", async () => {
+    const deps = makeOpsDeps({
+      configLoader: new FakeConfigLoader({
+        kind: "found",
+        config: makeConfig(),
+        configPath: "/repo/.asem.yaml",
+      }),
+    });
+    const { io, code } = await run(["workspace", "repo", "list"], deps);
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("no repo aliases");
+  });
+
+  test("surfaces config_not_found when no config is discovered", async () => {
+    const deps = makeOpsDeps({
+      configLoader: new FakeConfigLoader({ kind: "not_found" }),
+    });
+    const { io, code } = await run(["workspace", "repo", "list"], deps);
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("config_not_found");
   });
 });
 

@@ -30,21 +30,28 @@ export interface ProjectContext {
 }
 
 /**
- * Discover and parse `.asem.yaml` for `cwd`, then resolve Effective Scope.
+ * Discover and parse `.asem.yaml` for `configCwd`, then resolve Effective Scope.
  * Returns `config_not_found` / `invalid_config` so callers surface the right
  * structured error without inspecting the loader's internals.
+ *
+ * `scopeCwd` defaults to `configCwd`, so the common case discovers config and
+ * resolves scope from the same directory. They differ only for the CLI repo-alias
+ * seam (`session create --repo <alias>`): config is pinned to the alias-declaring
+ * root while scope/launch target the resolved repo path (design "Repo alias
+ * creation from a workspace root").
  */
 export async function resolveContext(
   deps: { configLoader: ConfigLoader; scopeResolver: ScopeResolver },
-  cwd: string,
+  configCwd: string,
+  scopeCwd: string = configCwd,
 ): Promise<OperationResult<ProjectContext>> {
-  const discovery = await deps.configLoader.load(cwd);
+  const discovery = await deps.configLoader.load(configCwd);
   if (discovery.kind === "not_found") {
     return err(
       operationError(
         "config_not_found",
         "no .asem.yaml found; run `asem init` to create one",
-        { cwd },
+        { cwd: configCwd },
       ),
     );
   }
@@ -56,7 +63,7 @@ export async function resolveContext(
       }),
     );
   }
-  const scope = await deps.scopeResolver.resolve(cwd, discovery.config);
+  const scope = await deps.scopeResolver.resolve(scopeCwd, discovery.config);
   return ok({
     config: discovery.config,
     configPath: discovery.configPath,

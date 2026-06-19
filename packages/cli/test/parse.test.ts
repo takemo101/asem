@@ -417,6 +417,49 @@ describe("parseArgs session create", () => {
     ).toBe("invalid_input");
   });
 
+  test("--repo maps to repo", () => {
+    expect(
+      command([
+        "session",
+        "create",
+        "fe-parent",
+        "--prompt",
+        "do it",
+        "--repo",
+        "frontend",
+        "--root",
+      ]),
+    ).toMatchObject({ type: "session-create", repo: "frontend" });
+  });
+
+  test("omitting --repo leaves repo unset", () => {
+    expect(
+      command(["session", "create", "reviewer-1", "--prompt", "do it"]),
+    ).not.toHaveProperty("repo");
+  });
+
+  test("--repo and --cwd are mutually exclusive", () => {
+    expect(
+      errorCode([
+        "session",
+        "create",
+        "x",
+        "--prompt",
+        "p",
+        "--repo",
+        "frontend",
+        "--cwd",
+        "/somewhere",
+      ]),
+    ).toBe("invalid_input");
+  });
+
+  test("--repo with no value is invalid_input", () => {
+    expect(
+      errorCode(["session", "create", "x", "--prompt", "p", "--repo"]),
+    ).toBe("invalid_input");
+  });
+
   test("--profile maps to profile", () => {
     expect(
       command([
@@ -453,6 +496,46 @@ describe("parseArgs session create", () => {
     expect(
       errorCode(["session", "create", "n", "extra", "--prompt", "p"]),
     ).toBe("invalid_input");
+  });
+});
+
+describe("parseArgs workspace repo list", () => {
+  test("maps `workspace repo list` and defaults json to false", () => {
+    expect(command(["workspace", "repo", "list"])).toEqual({
+      type: "workspace-repo-list",
+      json: false,
+    });
+  });
+
+  test("`workspace repo list --json` sets json", () => {
+    expect(command(["workspace", "repo", "list", "--json"])).toEqual({
+      type: "workspace-repo-list",
+      json: true,
+    });
+  });
+
+  test("missing workspace subcommand is invalid_input", () => {
+    expect(errorCode(["workspace"])).toBe("invalid_input");
+  });
+
+  test("unknown workspace subcommand is invalid_input", () => {
+    expect(errorCode(["workspace", "frobnicate"])).toBe("invalid_input");
+  });
+
+  test("missing repo subcommand is invalid_input", () => {
+    expect(errorCode(["workspace", "repo"])).toBe("invalid_input");
+  });
+
+  test("unknown repo subcommand is invalid_input", () => {
+    expect(errorCode(["workspace", "repo", "frobnicate"])).toBe(
+      "invalid_input",
+    );
+  });
+
+  test("extra positionals are invalid_input", () => {
+    expect(errorCode(["workspace", "repo", "list", "extra"])).toBe(
+      "invalid_input",
+    );
   });
 });
 

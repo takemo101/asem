@@ -161,6 +161,9 @@ export function isReadOnlyCommand(argv: readonly string[]): boolean {
   if (argv[0] === "doctor") return true;
   if (argv[0] === "skills") return true;
   if (argv[0] === "mcp" && argv[1] === "add") return true;
+  // `workspace repo list` only reads `.asem.yaml` and the filesystem; it never
+  // touches Session state, so it stays off the durable SQLite store.
+  if (argv[0] === "workspace") return true;
   return false;
 }
 

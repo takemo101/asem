@@ -42,10 +42,12 @@ export type CliCommand =
       model?: string;
       profile?: string;
       cwd?: string;
+      repo?: string;
       parentSessionId?: string;
       root?: boolean;
       json: boolean;
     }
+  | { type: "workspace-repo-list"; json: boolean }
   | { type: "profile-list"; json: boolean }
   | { type: "profile-get"; id: string; json: boolean }
   | {
@@ -301,6 +303,7 @@ function parseSessionCreate(args: string[]): ParseResult {
       "model",
       "profile",
       "cwd",
+      "repo",
       "parent",
     ],
   });
@@ -336,6 +339,12 @@ function parseSessionCreate(args: string[]): ParseResult {
   const model = values.get("model");
   const profile = values.get("profile");
   const cwd = values.get("cwd");
+  const repo = values.get("repo");
+  // `--repo <alias>` and `--cwd <dir>` both choose the effective create cwd, so
+  // accepting both would be ambiguous (design "Repo alias rules").
+  if (repo !== undefined && cwd !== undefined) {
+    return invalid("--repo and --cwd are mutually exclusive");
+  }
 
   const command: CliCommand = {
     type: "session-create",
@@ -347,10 +356,57 @@ function parseSessionCreate(args: string[]): ParseResult {
     ...(model !== undefined ? { model } : {}),
     ...(profile !== undefined ? { profile } : {}),
     ...(cwd !== undefined ? { cwd } : {}),
+    ...(repo !== undefined ? { repo } : {}),
     ...(parent !== undefined ? { parentSessionId: parent } : {}),
     ...(isRoot ? { root: true } : {}),
   };
   return { kind: "command", command };
+}
+
+/**
+ * `asem workspace repo list [--json]`. Lists the Repo Aliases declared in the
+ * discovered `.asem.yaml` and each alias's path status. CLI-only convenience; it
+ * reads config and the filesystem, never Session state.
+ */
+function parseWorkspaceRepoList(args: string[]): ParseResult {
+  const flags = parseFlags(args, { booleans: ["json"], values: [] });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { positionals, booleans } = flags.value;
+  if (positionals.length > 0) {
+    return invalid("unexpected extra arguments", { extra: positionals });
+  }
+  return {
+    kind: "command",
+    command: { type: "workspace-repo-list", json: booleans.has("json") },
+  };
+}
+
+function parseWorkspaceRepo(args: string[]): ParseResult {
+  const [sub, ...rest] = args;
+  switch (sub) {
+    case undefined:
+      return invalid("missing workspace repo subcommand (list)");
+    case "list":
+      return parseWorkspaceRepoList(rest);
+    default:
+      return invalid(`unknown workspace repo subcommand: ${sub}`, {
+        expected: ["list"],
+      });
+  }
+}
+
+function parseWorkspace(args: string[]): ParseResult {
+  const [sub, ...rest] = args;
+  switch (sub) {
+    case undefined:
+      return invalid("missing workspace subcommand (repo)");
+    case "repo":
+      return parseWorkspaceRepo(rest);
+    default:
+      return invalid(`unknown workspace subcommand: ${sub}`, {
+        expected: ["repo"],
+      });
+  }
 }
 
 function parseSessionList(args: string[]): ParseResult {
@@ -806,6 +862,7 @@ function isVersionFlag(arg: string | undefined): boolean {
 
 const HELP_SUBCOMMANDS: Record<string, readonly string[]> = {
   session: ["create", "list", "get", "attach", "close", "delete"],
+  workspace: ["repo"],
   profile: ["list", "get"],
   message: ["list", "wait", "send"],
   report: ["parent"],
@@ -831,6 +888,7 @@ function helpResult(command: string, rest: readonly string[]): ParseResult {
         "init",
         "init-session",
         "session",
+        "workspace",
         "profile",
         "message",
         "report",
@@ -881,6 +939,8 @@ export function parseArgs(argv: readonly string[]): ParseResult {
       return parseDoctor(rest);
     case "session":
       return parseSession(rest);
+    case "workspace":
+      return parseWorkspace(rest);
     case "profile":
       return parseProfile(rest);
     case "message":
@@ -898,6 +958,7 @@ export function parseArgs(argv: readonly string[]): ParseResult {
           "init",
           "init-session",
           "session",
+          "workspace",
           "profile",
           "message",
           "report",

@@ -78,6 +78,10 @@ export class FakeFileSystem implements FileSystem {
     return this.files.has(path) || this.dirs.has(path);
   }
 
+  async isDirectory(path: string): Promise<boolean> {
+    return this.dirs.has(path);
+  }
+
   async mkdirp(path: string): Promise<void> {
     this.dirs.add(path);
   }

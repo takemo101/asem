@@ -30,9 +30,28 @@ export const workspaceConfigSchema = z
   })
   .strict();
 
+/**
+ * One Repo Alias entry: a human CLI convenience naming a directory used as the
+ * `cwd` for Session creation (`session create --repo <alias>`). `path` is
+ * resolved relative to the `.asem.yaml` that declares it. A Repo Alias is only a
+ * cwd shortcut — it introduces no cross-worktree Parent Session, Message, or
+ * Report semantics (CONTEXT.md "Repo Alias"; design "Repo alias creation").
+ */
+export const repoAliasSchema = z
+  .object({
+    path: nonEmptyString,
+  })
+  .strict();
+
 export const configSchema = z
   .object({
     workspace: workspaceConfigSchema,
+    /**
+     * Optional map of Repo Aliases. Absent when no aliases are declared; the CLI
+     * `--repo`/`workspace repo list` conveniences resolve entries here. Kept
+     * optional rather than defaulted so a config that declares none stays clean.
+     */
+    repos: z.record(z.string(), repoAliasSchema).optional(),
     mux: muxConfigSchema.default({ default: "herdr", templates: {} }),
     agent: agentConfigSchema.default({ default: "claude", templates: {} }),
   })
@@ -41,4 +60,5 @@ export const configSchema = z
 export type WorkspaceConfig = z.infer<typeof workspaceConfigSchema>;
 export type MuxConfig = z.infer<typeof muxConfigSchema>;
 export type AgentConfig = z.infer<typeof agentConfigSchema>;
+export type RepoAlias = z.infer<typeof repoAliasSchema>;
 export type Config = z.infer<typeof configSchema>;

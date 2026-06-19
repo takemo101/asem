@@ -74,6 +74,20 @@ export interface OpContext {
   refreshLiveness?: boolean;
   origin?: "operator" | "agent";
   /**
+   * Optional config-discovery directory seam, supplied only by trusted
+   * composition roots (never parsed from external command/tool input). When set,
+   * `create_session` discovers `.asem.yaml` (workspace id, Agent/Multiplexer
+   * defaults, project-local templates) from this directory while the effective
+   * create cwd still drives scope resolution and the launch cwd.
+   *
+   * This exists for the CLI `session create --repo <alias>` convenience: it pins
+   * the alias-declaring root `.asem.yaml` as the config source while targeting
+   * the resolved repo path as the Session cwd (design "Repo alias creation from a
+   * workspace root"). MCP callers use `cwd` directly and never set it, so the
+   * shared `@asem/ops` create semantics are unchanged for them.
+   */
+  configCwd?: string;
+  /**
    * Process environment of the invocation, supplied by trusted composition
    * roots (never parsed from external command/tool input). `init-session` reads
    * it to safely discover the current Multiplexer pane that already hosts this

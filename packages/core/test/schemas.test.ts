@@ -172,6 +172,58 @@ describe("configSchema", () => {
       false,
     );
   });
+
+  test("parses an optional repos map", () => {
+    const parsed = configSchema.safeParse({
+      workspace: { id: "my-ws" },
+      repos: {
+        frontend: { path: "./frontend" },
+        backend: { path: "./backend" },
+      },
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.repos).toEqual({
+        frontend: { path: "./frontend" },
+        backend: { path: "./backend" },
+      });
+    }
+  });
+
+  test("leaves repos undefined when omitted", () => {
+    const parsed = configSchema.safeParse({ workspace: { id: "my-ws" } });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.repos).toBeUndefined();
+    }
+  });
+
+  test("rejects a repo entry without a path", () => {
+    expect(
+      configSchema.safeParse({
+        workspace: { id: "my-ws" },
+        repos: { frontend: {} },
+      }).success,
+    ).toBe(false);
+  });
+
+  test("rejects a repo entry with an empty path", () => {
+    expect(
+      configSchema.safeParse({
+        workspace: { id: "my-ws" },
+        repos: { frontend: { path: "" } },
+      }).success,
+    ).toBe(false);
+  });
+
+  test("rejects an unknown key in a repo entry", () => {
+    expect(
+      configSchema.safeParse({
+        workspace: { id: "my-ws" },
+        repos: { frontend: { path: "./frontend", extra: true } },
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("effectiveScopeSchema", () => {

@@ -518,7 +518,19 @@ Parent resolution truth table:
 | no parent flag + current Session exists | Use current Session as parent. |
 | no parent flag + no current Session | Return structured `current_session_not_found` with hint to use `--root` or run `asem init-session`. |
 
-`init-session` requires an explicit mux reference if the Session should be deliverable. It should not rely only on auto-detection. Because `init-session` registers an existing pane/workspace instead of creating one, the stored mux ref is marked as borrowed with `asem_mux_owned = "false"`; close/delete flows use that marker to avoid closing the operator's current multiplexer resource before deleting the Session row.
+`init-session` registers an already-existing pane/workspace. It must record enough Multiplexer coordinates for the registered Session to be deliverable, but it does not own that mux resource. The stored mux ref is therefore marked as borrowed with `asem_mux_owned = "false"`; close/delete flows use that marker to avoid closing the operator's current multiplexer resource before deleting the Session row.
+
+Current Multiplexer registration rules:
+
+| Input / environment | Stored mux behavior |
+|---|---|
+| Explicit `mux` and `muxRef` input | Use the explicit values after schema validation. This is the strongest signal. |
+| Explicit `mux: none` | Register a non-deliverable Session intentionally. Message history still works, but live pane delivery is unavailable. |
+| No explicit mux + complete herdr environment (`HERDR_ENV=1`, `HERDR_SESSION`, `HERDR_WORKSPACE_ID`, `HERDR_TAB_ID`, `HERDR_PANE_ID`) | Auto-register `mux: herdr` with the current herdr pane identifiers and `asem_mux_owned = "false"`. This is safe environment discovery of the pane that already hosts the current process, not workflow inference. |
+| Herdr environment is indicated but required identifiers are incomplete | Do not silently fall back to `mux: none`; return a structured, actionable error or warning telling the caller to pass explicit mux data or intentionally choose `mux: none`. |
+| No explicit mux and no supported current-mux environment | Use the configured default only if it can produce a valid borrowed mux ref for the current process; otherwise require explicit mux input. |
+
+A Session registered with `mux: none` is valid but non-deliverable. `send_message` / `report_parent` must still persist the Message attempt, then record an actionable `delivery_error` explaining that the target Session has no live delivery Multiplexer and should be re-registered with a deliverable mux such as `herdr` when real-time delivery is desired. Do not expose only an internal template lookup failure such as `mux template not found: none`.
 
 After `init-session`, print exports:
 
@@ -861,9 +873,9 @@ Operation test matrix:
 | Operation family | Required fake deps | Must test |
 |---|---|---|
 | `init` / config | `FileSystem`, `ConfigLoader`, `ScopeResolver` | config creation, gitignore rules, missing/invalid config errors |
-| `init_session` | `Store`, `FileSystem`, `TokenGenerator`, `Clock`, `IdGenerator` | token hash only in DB, current-session file mode/ignore coverage, explicit mux ref requirement |
+| `init_session` | `Store`, `FileSystem`, `TokenGenerator`, `Clock`, `IdGenerator` | token hash only in DB, current-session file mode/ignore coverage, herdr-env borrowed mux auto-registration, explicit `mux: none` remains non-deliverable |
 | `create_session` | `Store`, `TemplateRegistry`, `TemplateRunner`, `FileSystem`, `CurrentSessionResolver`, `TokenGenerator`, `Logger` | sequence order, parent resolution, DB insert only after success, cleanup on failure, log path in error |
-| `send_message` / `report_parent` | `Store`, `TemplateRunner`, `CurrentSessionResolver`, `Clock` | auth/scope checks, formatted body, delivered_at vs delivery_error persistence |
+| `send_message` / `report_parent` | `Store`, `TemplateRunner`, `CurrentSessionResolver`, `Clock` | auth/scope checks, formatted body, delivered_at vs delivery_error persistence, actionable non-deliverable `mux: none` failure |
 | `list/get` | `Store`, `ScopeResolver`, `LivenessProbe` | default scope filters, optional liveness update, no work-outcome inference |
 | `close/delete` | `Store`, `TemplateRunner`, `Clock` | scoped lookup, close best-effort behavior, operation-owned related-message cleanup |
 | CLI/MCP projection | fake `@asem/ops` result or fully faked deps | surface parsing/rendering only, no duplicated semantics |

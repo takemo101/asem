@@ -57,7 +57,11 @@ export const initSessionInputSchema = z
     name: nonEmptyString,
     agent: nonEmptyString.optional(),
     mux: nonEmptyString.optional(),
-    muxRef: muxRefSchema,
+    // Optional: `init-session` inside a complete herdr environment derives the
+    // current pane's mux ref automatically, so callers need not pass one. When
+    // both are present, explicit muxRef fields win over derived identifiers
+    // (MIK-049). Defaults to an empty ref in the operation.
+    muxRef: muxRefSchema.optional(),
     parentSessionId: nonEmptyString.nullable().optional(),
   })
   .strict();

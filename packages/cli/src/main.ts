@@ -187,7 +187,7 @@ export async function main(argv: string[]): Promise<number> {
   // falls through to runCli as a local-config command, and `asem mcp --help`
   // falls through to the pure help path so it prints focused help.
   if (argv[0] === "mcp" && argv[1] === undefined && !wantsHelp(argv)) {
-    await runMcpStdio({ cwd: process.cwd(), deps });
+    await runMcpStdio({ cwd: process.cwd(), deps, env: process.env });
     return 0;
   }
   // The TUI needs a real terminal host, so it is launched from the composition

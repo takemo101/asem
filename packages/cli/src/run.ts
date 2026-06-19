@@ -99,6 +99,12 @@ export interface RunCliOptions {
   integrations?: IntegrationInstallers;
   /** Home directory for global Integration Target installs (defaults to OS home). */
   home?: string;
+  /**
+   * Process environment forwarded to operations that safely discover the
+   * current Multiplexer pane (for example `init-session` reading a complete
+   * herdr pane env). Defaults to `process.env` (MIK-049).
+   */
+  env?: Record<string, string | undefined>;
 }
 
 /** Process-style exit codes the CLI returns (0 ok, 2 usage, 1 operation error). */
@@ -154,6 +160,7 @@ export async function runCli(opts: RunCliOptions): Promise<number> {
       opts.sleepMs ??
       ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     integrations: opts.integrations,
+    env: opts.env ?? process.env,
     ...(opts.home !== undefined ? { home: opts.home } : {}),
   });
 }
@@ -168,6 +175,8 @@ type DispatchEnv = {
   sleepMs: (ms: number) => Promise<void>;
   integrations?: IntegrationInstallers;
   home?: string;
+  /** Process environment forwarded to env-discovering operations (MIK-049). */
+  env: Record<string, string | undefined>;
 };
 
 async function dispatch(
@@ -331,7 +340,7 @@ async function runInit(
 
 async function runInitSession(
   command: Extract<CliCommand, { type: "init-session" }>,
-  { cwd, deps, io }: DispatchEnv,
+  { cwd, deps, io, env }: DispatchEnv,
 ): Promise<number> {
   const result = await initSession(
     deps,
@@ -344,7 +353,7 @@ async function runInitSession(
         ? { parentSessionId: command.parentSessionId }
         : {}),
     },
-    { cwd },
+    { cwd, env },
   );
   return render(io, result, (value) => {
     if (command.json) {

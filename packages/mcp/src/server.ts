@@ -24,6 +24,12 @@ import { callMcpTool, listMcpTools } from "./tools.ts";
 export interface McpServerOptions {
   cwd: string;
   deps: OpsDeps;
+  /**
+   * Process environment of the server, forwarded to operations that safely
+   * discover the current Multiplexer pane (for example `init_session` reading a
+   * complete herdr pane env). Supplied by the composition root (MIK-049).
+   */
+  env?: Record<string, string | undefined>;
 }
 
 interface ToolsCallParams {

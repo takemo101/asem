@@ -10,6 +10,7 @@
  */
 import {
   type Clock,
+  type Config,
   type ConfigLoader,
   err,
   type FileSystem,
@@ -19,6 +20,7 @@ import {
   type InitSessionOutput,
   initSessionInputSchema,
   type Logger,
+  type MuxRef,
   type OperationResult,
   ok,
   operationError,
@@ -47,6 +49,79 @@ type InitSessionDeps = {
   tokenGenerator: TokenGenerator;
   logger?: Logger;
 };
+
+/**
+ * Required herdr pane coordinates and the muxRef field each maps to. A complete
+ * herdr environment exports all of these alongside `HERDR_ENV=1`; they are the
+ * coordinates the herdr `send` sequence needs to deliver into the pane.
+ */
+const HERDR_REQUIRED: ReadonlyArray<{ envVar: string; refKey: string }> = [
+  { envVar: "HERDR_SESSION", refKey: "herdr_session" },
+  { envVar: "HERDR_WORKSPACE_ID", refKey: "herdr_workspace_id" },
+  { envVar: "HERDR_TAB_ID", refKey: "tab_id" },
+  { envVar: "HERDR_PANE_ID", refKey: "pane_id" },
+];
+
+/**
+ * `init-session` registers an already-existing pane/workspace, so asem does not
+ * own that mux resource: every stored ref is marked borrowed with
+ * `asem_mux_owned = "false"` so close/delete never run the mux close sequence
+ * for it (for herdr that could close the operator's whole workspace).
+ */
+function borrowed(ref: MuxRef): MuxRef {
+  return { ...ref, asem_mux_owned: "false" };
+}
+
+/**
+ * Resolve the Session's stored `mux` + `muxRef` (design "Current Session
+ * registration", MIK-049). Explicit caller input is the strongest signal and
+ * always wins, including an intentional `mux: none`. Absent an explicit mux, a
+ * complete herdr environment safely discovers the pane that already hosts this
+ * process. A herdr environment that is indicated but incomplete is a structured
+ * actionable error rather than a silent, non-deliverable `mux: none` fallback.
+ */
+function resolveInitMux(
+  input: InitSessionInput,
+  config: Config,
+  env: Record<string, string | undefined>,
+): OperationResult<{ mux: string; muxRef: MuxRef }> {
+  const muxRef = input.muxRef ?? {};
+
+  // Explicit input wins (Explicit over Implicit): use it verbatim, including an
+  // intentional `mux: none` non-deliverable Session.
+  if (input.mux !== undefined) {
+    return ok({ mux: input.mux, muxRef: borrowed(muxRef) });
+  }
+
+  // Herdr is indicated: discover the current pane from the environment.
+  if (env.HERDR_ENV === "1") {
+    const derived: Record<string, string> = {};
+    const missing: string[] = [];
+    for (const { envVar, refKey } of HERDR_REQUIRED) {
+      const value = env[envVar];
+      if (value === undefined || value === "") {
+        missing.push(envVar);
+      } else {
+        derived[refKey] = value;
+      }
+    }
+    if (missing.length > 0) {
+      return err(
+        operationError(
+          "incomplete_mux_env",
+          "herdr environment is indicated (HERDR_ENV=1) but required herdr identifiers are missing; pass explicit --mux/--mux-ref or choose `--mux none` to register a non-deliverable Session intentionally",
+          { mux: "herdr", missing },
+        ),
+      );
+    }
+    // Explicit muxRef fields override discovered identifiers (input still wins).
+    return ok({ mux: "herdr", muxRef: borrowed({ ...derived, ...muxRef }) });
+  }
+
+  // No explicit mux and no supported current-mux environment: use the
+  // configured default with the provided ref (existing behavior).
+  return ok({ mux: config.mux.default, muxRef: borrowed(muxRef) });
+}
 
 /** Duck-typed check for the store's recoverable name-conflict error. */
 function isNameConflict(error: unknown): boolean {
@@ -93,6 +168,14 @@ export async function initSession(
     }
   }
 
+  // Resolve the stored mux + borrowed mux ref before any side effect so an
+  // incomplete herdr environment fails with no Session row (MIK-049).
+  const muxResolution = resolveInitMux(input, config, ctx.env ?? {});
+  if (!muxResolution.ok) {
+    return muxResolution;
+  }
+  const { mux, muxRef } = muxResolution.value;
+
   const id = deps.idGenerator.nextId();
   const token = deps.tokenGenerator.generate();
   const now = deps.clock.nowIso();
@@ -103,7 +186,7 @@ export async function initSession(
     name: input.name,
     cwd: ctx.cwd,
     agent: input.agent ?? config.agent.default,
-    mux: input.mux ?? config.mux.default,
+    mux,
     // init-session registers an already-running Session; model selection is a
     // create-time launch concern, so a registered Session has no model (MIK-040).
     model: null,
@@ -114,12 +197,11 @@ export async function initSession(
     profileSource: null,
     parentSessionId,
     status: "running",
-    // `init-session` registers an already-existing pane/workspace. asem did
-    // not create that mux resource, so `close_session` must not run the mux
-    // close sequence for it (for herdr that could close the operator's whole
-    // workspace). Store the ownership marker in the mux ref so all surfaces use
-    // the same operation semantics without adding schema/storage columns.
-    muxRef: { ...input.muxRef, asem_mux_owned: "false" },
+    // Borrowed mux ref (see resolveInitMux): asem did not create this pane, so
+    // close/delete must not run the mux close sequence for it. The ownership
+    // marker travels in the ref so all surfaces share one semantic without
+    // adding schema/storage columns.
+    muxRef,
     sessionDir: sessionDirFor(scope.worktreeRoot, id),
     tokenHash: hashToken(token),
     createdAt: now,

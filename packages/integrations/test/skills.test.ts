@@ -94,6 +94,41 @@ describe("installSkillForTarget", () => {
     expect(skillDocument).not.toContain("Session Agent");
   });
 
+  test("teaches normal Session operation patterns", () => {
+    expect(skillDocument).toContain("report_parent");
+    expect(skillDocument).toContain("worker");
+    expect(skillDocument).toContain("reviewer");
+    // Close child Sessions after work, but preserve history.
+    expect(skillDocument).toMatch(/close .*child Sessions/i);
+    expect(skillDocument).toMatch(/preserve history/i);
+    expect(skillDocument).toMatch(/do not delete Sessions/i);
+  });
+
+  test("teaches MCP-first with CLI fallback commands", () => {
+    expect(skillDocument).toContain("asem session create");
+    expect(skillDocument).toContain("asem message send");
+    expect(skillDocument).toContain("asem message wait");
+    expect(skillDocument).toContain("asem report parent");
+    expect(skillDocument).toContain("asem session close");
+    expect(skillDocument).toContain("asem workspace repo list");
+  });
+
+  test("teaches workspace-root Repo Alias operation", () => {
+    expect(skillDocument).toContain("Repo Alias");
+    expect(skillDocument).toContain(
+      "asem session create <name> --repo <alias> --root --prompt",
+    );
+    // Repo Alias is only a cwd shortcut, not a new scope boundary.
+    expect(skillDocument).toMatch(/--repo\W+is only [^.]*cwd/i);
+    expect(skillDocument).toContain("asem tui --scope workspace");
+  });
+
+  test("keeps asem scope guards intact", () => {
+    expect(skillDocument).toMatch(/cross-worktree/i);
+    expect(skillDocument).toMatch(/do not infer task completion/i);
+    expect(skillDocument).toMatch(/Agent Profiles? into workflow roles/i);
+  });
+
   test("unknown target fails", () => {
     expect(() => installSkillForTarget("nope", { home: mktemp() })).toThrow(
       "Unknown Integration Target: nope",

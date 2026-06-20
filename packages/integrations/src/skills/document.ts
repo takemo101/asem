@@ -15,66 +15,67 @@ description: asem is a local Session manager for AI agents running in terminal m
 
 const body = `# asem
 
-asem is a local agent Session manager. It manages live AI CLI Sessions running inside terminal multiplexers and records durable Messages and Reports.
+Use asem to run and coordinate local AI CLI Sessions in terminal multiplexers. It records durable Messages and Reports, but it does not judge whether work succeeded.
 
-Prefer asem MCP tools when they are available. Fall back to the \`asem\` CLI when MCP is unavailable.
+## When to use
 
-## Vocabulary
+Use asem when work benefits from:
 
-Use these terms precisely:
+- a separate agent Session;
+- durable Messages/Reports;
+- independent review;
+- workspace/repo scoped supervision.
 
-- Session: a registered agent CLI process running inside a Multiplexer pane.
-- Message: durable communication from one Session or human operator to another Session.
-- Report: a Message from a child Session to its Parent Session.
-- Workspace: a logical grouping for related work.
-- Worktree Root: the filesystem root that isolates a working copy.
-- Effective Scope: Workspace plus Worktree Root.
-- Multiplexer: the terminal environment that owns a live pane, such as herdr, tmux, rmux, or zellij.
-- Agent: the external AI CLI process launched inside a Session.
-- Agent Profile: explicit prompt-shaping instructions for a new Session.
-- Integration Target: an external AI client whose local config can be updated to know how to use asem.
+Do not use asem as a task manager or workflow engine.
 
-## Normal Session operation
+## Use MCP first
 
-- Create child Sessions for bounded units of work, not for the whole job at once.
-- Send Messages for follow-up instructions, questions, or context to an existing Session.
-- A child Session reports progress, findings, and questions back to its Parent Session with \`report_parent\`. A Report is communication, not a completion signal.
-- For non-trivial implementation, use separate worker and reviewer Sessions so review is independent of the work.
-- Close child Sessions once their work, review, and merge are done.
-- Preserve history: do not delete Sessions unless you are explicitly cleaning up history. Closing a Session keeps its Messages and Reports; deleting discards them.
+Prefer MCP tools when available:
 
-## MCP-first, CLI fallback
+- \`create_session\`
+- \`send_message\`
+- \`list_messages\`
+- \`report_parent\`
+- \`close_session\`
 
-Prefer asem MCP tools when they are available. Fall back to the \`asem\` CLI when MCP is unavailable. Common CLI equivalents:
+Fallback CLI commands:
 
-- \`asem session create\` — create a Session (optionally a child of the current one).
-- \`asem message send\` — send a Message to a Session.
-- \`asem message wait\` — wait for a Message or Report.
-- \`asem report parent\` — report from a child Session to its Parent Session.
-- \`asem session close\` — close a Session while preserving its history.
-- \`asem workspace repo list\` — list Repo Aliases defined for the Workspace.
+- \`asem session create\`
+- \`asem message send\`
+- \`asem message wait\`
+- \`asem report parent\`
+- \`asem session close\`
+- \`asem workspace repo list\`
 
-Do not edit \`.asem\` runtime state files directly. In particular, do not edit token-bearing or generated state under \`.asem/sessions/\`, \`.asem/tokens/\`, or \`.asem/current-session*.json\`.
+## Normal playbook
 
-## Workspace-root and Repo Alias operation
+1. Create a bounded worker Session.
+2. Wait for its Report.
+3. For non-trivial work, create a separate reviewer Session.
+4. If review blocks, send the worker a Message with repair instructions.
+5. Repeat until acceptable.
+6. Close child Sessions; do not delete history unless explicitly asked.
 
-A Workspace-root \`.asem.yaml\` may define \`repos\`: named Repo Aliases that map to repository directories.
+## Workspace repo aliases
 
-- \`asem workspace repo list\` lists the available Repo Aliases.
-- \`asem session create <name> --repo <alias> --root --prompt ...\` creates a repo-scoped parent Session from the Workspace root, with its \`cwd\` set to the aliased repository.
-- \`--repo\` is only a \`cwd\` alias. It does not create a new scope boundary or cross-worktree Parent, Message, or Report semantics. Parent/Child, Message, and Report behavior stay normal same-scope behavior within that repository.
-- A repo parent Session should create its own child Sessions inside that repository, the same way a normal Session does.
-- To inspect multiple repos at once when a human cockpit is needed, run \`asem tui --scope workspace\`.
+A Repo Alias is a named cwd shortcut. If the Workspace root \`.asem.yaml\` defines \`repos\`, use:
+
+\`\`\`sh
+asem workspace repo list
+asem session create frontend-parent --repo frontend --root --prompt "Act as the parent Session for frontend work."
+\`\`\`
+
+--repo is only a cwd alias. It does not create cross-worktree Parent/Message/Report semantics. Parent/Child, Message, and Report behavior remains normal same-scope behavior inside the target repo.
+
+Repo parent Sessions create their own repo-local child Sessions. Use \`asem tui --scope workspace\` when a human needs to inspect multiple repos together.
 
 ## Boundaries
 
-Do not treat asem as a task manager, workflow engine, team coordinator, scheduler, or result judge. Session status is process or connection state only. A Report does not mean completion. A Message is not an event stream or unread queue.
-
-Scope guards:
-
-- Do not invent cross-worktree Parent, Report, or Message semantics. Worktree isolation holds even when Sessions share a Workspace name or a Repo Alias.
-- Do not infer task completion from Reports or Session status. asem does not judge whether an Agent finished its assignment.
-- Do not turn Agent Profiles into workflow roles. An Agent Profile shapes a Session's initial prompt and launch defaults; it is not a role, position, or workflow step.
+- Session status is process state, not success/failure.
+- Report is communication, not completion.
+- Do not invent cross-worktree Parent/Report/Message semantics.
+- Agent Profiles shape prompts; they are not workflow roles.
+- Do not edit .asem runtime files directly, especially \`.asem/sessions/\`, \`.asem/tokens/\`, or \`.asem/current-session*.json\`.
 `;
 
 export const skillDocument = `${frontmatter}\n\n${body}`;

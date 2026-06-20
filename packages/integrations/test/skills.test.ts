@@ -87,46 +87,77 @@ describe("installSkillForTarget", () => {
     ).toThrow("codex does not support workspace Skill scope");
   });
 
-  test("the shared document uses asem Integration Target vocabulary", () => {
+  test("the shared document is a concise operational playbook", () => {
     expect(skillDocument).toContain("name: asem");
-    expect(skillDocument).toContain("Integration Target");
-    expect(skillDocument).toContain("Session");
-    expect(skillDocument).not.toContain("Session Agent");
+    expect(skillDocument).toContain("## When to use");
+    expect(skillDocument).toContain("## Use MCP first");
+    expect(skillDocument).toContain("## Normal playbook");
+    expect(skillDocument).toContain("## Workspace repo aliases");
+    expect(skillDocument).toContain("## Boundaries");
+    expect(skillDocument).not.toContain("## Vocabulary");
+    expect(skillDocument.length).toBeLessThan(3_600);
   });
 
-  test("teaches normal Session operation patterns", () => {
-    expect(skillDocument).toContain("report_parent");
-    expect(skillDocument).toContain("worker");
-    expect(skillDocument).toContain("reviewer");
-    // Close child Sessions after work, but preserve history.
-    expect(skillDocument).toMatch(/close .*child Sessions/i);
-    expect(skillDocument).toMatch(/preserve history/i);
-    expect(skillDocument).toMatch(/do not delete Sessions/i);
+  test("teaches when to use asem without broadening its scope", () => {
+    expect(skillDocument).toMatch(/separate agent Session/i);
+    expect(skillDocument).toMatch(/durable Messages\/Reports/i);
+    expect(skillDocument).toMatch(/independent review/i);
+    expect(skillDocument).toMatch(/workspace\/repo scoped supervision/i);
+    expect(skillDocument).toMatch(
+      /Do not use asem as a task manager or workflow engine/i,
+    );
   });
 
-  test("teaches MCP-first with CLI fallback commands", () => {
-    expect(skillDocument).toContain("asem session create");
-    expect(skillDocument).toContain("asem message send");
-    expect(skillDocument).toContain("asem message wait");
-    expect(skillDocument).toContain("asem report parent");
-    expect(skillDocument).toContain("asem session close");
-    expect(skillDocument).toContain("asem workspace repo list");
+  test("maps MCP tools to CLI fallbacks", () => {
+    for (const tool of [
+      "create_session",
+      "send_message",
+      "list_messages",
+      "report_parent",
+      "close_session",
+    ]) {
+      expect(skillDocument).toContain(tool);
+    }
+    for (const command of [
+      "asem session create",
+      "asem message send",
+      "asem message wait",
+      "asem report parent",
+      "asem session close",
+      "asem workspace repo list",
+    ]) {
+      expect(skillDocument).toContain(command);
+    }
   });
 
-  test("teaches workspace-root Repo Alias operation", () => {
+  test("teaches the implementation review repair loop", () => {
+    expect(skillDocument).toMatch(/Create a bounded worker Session/i);
+    expect(skillDocument).toMatch(/Wait for its Report/i);
+    expect(skillDocument).toMatch(/Create a separate reviewer Session/i);
+    expect(skillDocument).toMatch(/send the worker a Message/i);
+    expect(skillDocument).toMatch(/Close child Sessions/i);
+    expect(skillDocument).toMatch(/do not delete history/i);
+  });
+
+  test("teaches workspace-root Repo Alias operation as a cwd shortcut", () => {
     expect(skillDocument).toContain("Repo Alias");
     expect(skillDocument).toContain(
-      "asem session create <name> --repo <alias> --root --prompt",
+      "asem session create frontend-parent --repo frontend --root --prompt",
     );
-    // Repo Alias is only a cwd shortcut, not a new scope boundary.
-    expect(skillDocument).toMatch(/--repo\W+is only [^.]*cwd/i);
+    expect(skillDocument).toMatch(/--repo is only a cwd alias/i);
+    expect(skillDocument).toMatch(
+      /repo parent Sessions create their own repo-local child Sessions/i,
+    );
     expect(skillDocument).toContain("asem tui --scope workspace");
   });
 
   test("keeps asem scope guards intact", () => {
-    expect(skillDocument).toMatch(/cross-worktree/i);
-    expect(skillDocument).toMatch(/do not infer task completion/i);
-    expect(skillDocument).toMatch(/Agent Profiles? into workflow roles/i);
+    expect(skillDocument).toMatch(/Session status is process state/i);
+    expect(skillDocument).toMatch(/Report is communication, not completion/i);
+    expect(skillDocument).toMatch(
+      /Do not invent cross-worktree Parent\/Report\/Message semantics/i,
+    );
+    expect(skillDocument).toMatch(/Do not edit \.asem runtime files directly/i);
   });
 
   test("unknown target fails", () => {

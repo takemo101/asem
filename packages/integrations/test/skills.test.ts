@@ -151,6 +151,20 @@ describe("installSkillForTarget", () => {
     expect(skillDocument).toContain("asem tui --scope workspace");
   });
 
+  test("teaches repo parent Sessions to report to a root parent via CLI or MCP", () => {
+    expect(skillDocument).toMatch(/same Effective Scope/i);
+    expect(skillDocument).toContain(
+      "asem session create frontend-parent --repo frontend --parent <root-session-id>",
+    );
+    expect(skillDocument).toContain("asem report parent --body");
+    expect(skillDocument).toContain(
+      'create_session({ parentSessionId: "<root-session-id>" });',
+    );
+    expect(skillDocument).toContain(
+      'report_parent({ body: "frontend report" });',
+    );
+  });
+
   test("keeps asem scope guards intact", () => {
     expect(skillDocument).toMatch(/Session status is process state/i);
     expect(skillDocument).toMatch(/Report is communication, not completion/i);

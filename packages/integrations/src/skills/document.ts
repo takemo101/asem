@@ -67,6 +67,21 @@ asem session create frontend-parent --repo frontend --root --prompt "Act as the 
 
 --repo is only a cwd alias. It does not create cross-worktree Parent/Message/Report semantics. Parent/Child, Message, and Report behavior remains normal same-scope behavior inside the target repo.
 
+To have repo parent Sessions report to a root/current Session, keep them in the same Effective Scope and create them under that parent:
+
+\`\`\`sh
+asem session create frontend-parent --repo frontend --parent <root-session-id> --prompt "Report progress with: asem report parent --body ..."
+# from inside the repo parent Session:
+asem report parent --body "frontend report"
+\`\`\`
+
+With MCP, pass the same parent id to \`create_session\`, then call \`report_parent\` from that child Session:
+
+\`\`\`ts
+create_session({ parentSessionId: "<root-session-id>" });
+report_parent({ body: "frontend report" });
+\`\`\`
+
 Repo parent Sessions create their own repo-local child Sessions. Use \`asem tui --scope workspace\` when a human needs to inspect multiple repos together.
 
 ## Boundaries

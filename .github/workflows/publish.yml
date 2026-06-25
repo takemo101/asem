@@ -50,31 +50,60 @@ jobs:
 
       - name: Verify publish package contents
         run: |
-          test -f packages/cli/dist/bin.js || (echo "dist/bin.js not found" && exit 1)
-          test -f packages/cli/README.md || (echo "packages/cli/README.md not found" && exit 1)
+          if [ ! -f packages/cli/dist/bin.js ]; then
+            echo "dist/bin.js not found"
+            exit 1
+          fi
+          if [ ! -f packages/cli/README.md ]; then
+            echo "packages/cli/README.md not found"
+            exit 1
+          fi
           node <<'NODE'
           const { execFileSync } = require('node:child_process');
           const cliPackage = require('./packages/cli/package.json');
-          if (cliPackage.name !== '@takemo101/asem') throw new Error(`Unexpected package name ${cliPackage.name}`);
-          if (cliPackage.version !== '0.0.4') throw new Error(`Unexpected package version ${cliPackage.version}`);
-          const deps = { ...cliPackage.dependencies, ...cliPackage.optionalDependencies };
+          if (cliPackage.name !== '@takemo101/asem') {
+            throw new Error(`Unexpected package name ${cliPackage.name}`);
+          }
+          if (cliPackage.version !== '0.0.4') {
+            throw new Error(`Unexpected package version ${cliPackage.version}`);
+          }
+          const deps = {
+            ...cliPackage.dependencies,
+            ...cliPackage.optionalDependencies,
+          };
           for (const [name, version] of Object.entries(deps)) {
-            if (String(version).startsWith('workspace:')) throw new Error(`Publish manifest contains workspace dependency ${name}`);
+            if (String(version).startsWith('workspace:')) {
+              throw new Error(
+                `Publish manifest contains workspace dependency ${name}`,
+              );
+            }
           }
           const platform = process.platform;
           const arch = process.arch;
           const nativePackage = `@opentui/core-${platform}-${arch}`;
           if (cliPackage.optionalDependencies?.[nativePackage] !== '0.2.1') {
-            throw new Error(`Missing optional dependency ${nativePackage}@0.2.1`);
+            throw new Error(
+              `Missing optional dependency ${nativePackage}@0.2.1`,
+            );
           }
-          const pack = execFileSync('npm', ['pack', '--dry-run', '--json', './packages/cli'], { encoding: 'utf8' });
+          const pack = execFileSync(
+            'npm',
+            ['pack', '--dry-run', '--json', './packages/cli'],
+            { encoding: 'utf8' },
+          );
           const [packed] = JSON.parse(pack);
           const files = new Set(packed.files.map((file) => file.path));
           for (const required of ['dist/bin.js', 'README.md', 'package.json']) {
-            if (!files.has(required)) throw new Error(`Packed package missing ${required}`);
+            if (!files.has(required)) {
+              throw new Error(`Packed package missing ${required}`);
+            }
           }
-          if (files.has('src/index.ts')) throw new Error('Packed package must not include src/index.ts');
-          console.log(`Verified ${packed.name}@${packed.version} package contents`);
+          if (files.has('src/index.ts')) {
+            throw new Error('Packed package must not include src/index.ts');
+          }
+          console.log(
+            `Verified ${packed.name}@${packed.version} package contents`,
+          );
           NODE
 
       - name: Verify installed package
@@ -84,11 +113,29 @@ jobs:
           tarball="$(find "$tmpdir" -name '*.tgz' -print -quit)"
           cd "$tmpdir"
           npm install "$tarball"
-          bun -e 'const native = `@opentui/core-${process.platform}-${process.arch}`; await import(native); console.log(`loaded ${native}`);'
+          bun <<'BUN'
+          const native = `@opentui/core-${process.platform}-${process.arch}`;
+          await import(native);
+          console.log(`loaded ${native}`);
+          BUN
           ./node_modules/.bin/asem --help
           test "$(./node_modules/.bin/asem --version)" = "0.0.4"
 
+      - name: Check whether this version is already published
+        id: package-status
+        run: |
+          version="$(node -p "require('./packages/cli/package.json').version")"
+          if npm view "@takemo101/asem@${version}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "@takemo101/asem@${version} is already published."
+            echo "Skipping npm publish."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "@takemo101/asem@${version} is not published yet."
+          fi
+
       - name: Publish to npm with Trusted Publishing
+        if: steps.package-status.outputs.published != 'true'
         run: |
           cd packages/cli
           npm publish --provenance --access public

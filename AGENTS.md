@@ -144,6 +144,21 @@ find docs -name '*.md' -print
 
 and a link/placeholder scan if available.
 
+## Release/package workflow
+
+When preparing an npm release, follow the current dist-package model unless the user explicitly chooses a different packaging strategy.
+
+- Publish the CLI package from `packages/cli`; keep the workspace root private.
+- Bump the published CLI package version in `packages/cli/package.json`. Private workspace package versions are not the release version users see.
+- Bump to a new version after a broken release; npm versions are immutable, so do not try to republish the same version.
+- User-facing version displays must read the published CLI package version from `packages/cli/package.json`, not private workspace package metadata.
+- Update tests that pin release metadata, including CLI package metadata, packed package assertions, and any user-facing version display assertions.
+- Regenerate and validate `packages/cli/dist/` before publishing, but keep generated dist files ignored/uncommitted unless the packaging strategy changes.
+- Verify the packed package, not only the workspace. At minimum run `npm pack --dry-run --json packages/cli` and confirm the tarball contains `dist/bin.js`, `README.md`, and `package.json`, and excludes TypeScript source when using dist-only publishing.
+- Before announcing a release, test from an installed package or packed tarball in a temporary directory, including `asem --help` and `asem --version`; when feasible, smoke-check features that load native optional packages such as `asem tui --help`.
+- After npm publish succeeds, create a matching GitHub release tag such as `v0.0.4` that points at the release commit on `main`. Do not create the tag before publish succeeds unless the user explicitly requests a dry-run or staged release.
+- The GitHub Release notes should summarize user-facing changes and mention the published npm package/version.
+
 ## Documentation rules
 
 Keep durable design material in docs, not in `AGENTS.md`.

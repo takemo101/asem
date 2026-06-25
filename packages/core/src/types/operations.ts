@@ -187,8 +187,14 @@ export const closeSessionInputSchema = z
   })
   .strict();
 export type CloseSessionInput = z.infer<typeof closeSessionInputSchema>;
+export interface MuxCloseWarning {
+  message: string;
+  cleanupCommand?: string;
+}
+
 export interface CloseSessionOutput {
   session: Session;
+  muxCloseWarning?: MuxCloseWarning;
 }
 
 export const deleteSessionInputSchema = z

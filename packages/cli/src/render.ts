@@ -6,6 +6,7 @@
  * No domain decisions live here — the CLI only formats what `@asem/ops` returns.
  */
 import {
+  type CloseSessionOutput,
   type DeleteSessionOutput,
   type DoctorExecutableCheck,
   type DoctorOutput,
@@ -182,12 +183,19 @@ export function renderCreatedSession(session: Session): string[] {
  * the lines report the new `closed` status and the `closed_at` stamp, never a
  * work outcome.
  */
-export function renderClosedSession(session: Session): string[] {
-  return [
-    `closed ${session.name} (${session.id})`,
-    `status:    ${session.status}`,
-    `closed_at: ${session.closedAt ?? "-"}`,
+export function renderClosedSession(output: CloseSessionOutput): string[] {
+  const lines = [
+    `closed ${output.session.name} (${output.session.id})`,
+    `status:    ${output.session.status}`,
+    `closed_at: ${output.session.closedAt ?? "-"}`,
   ];
+  if (output.muxCloseWarning !== undefined) {
+    lines.push(`warning: ${output.muxCloseWarning.message}`);
+    if (output.muxCloseWarning.cleanupCommand !== undefined) {
+      lines.push(`cleanup: ${output.muxCloseWarning.cleanupCommand}`);
+    }
+  }
+  return lines;
 }
 
 /**

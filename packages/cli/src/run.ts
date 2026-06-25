@@ -499,7 +499,7 @@ async function runSessionClose(
   );
   return render(io, result, (value) => {
     if (command.json) emitJson(io, value.session);
-    else emit(io, renderClosedSession(value.session));
+    else emit(io, renderClosedSession(value));
   });
 }
 

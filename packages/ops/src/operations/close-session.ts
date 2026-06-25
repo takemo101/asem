@@ -41,6 +41,7 @@ import {
   type ScopeResolver,
   type SessionStatus,
   type Store,
+  shellEscape,
   type TemplateRegistryFactory,
   type TemplateRunner,
 } from "@asem/core";
@@ -68,6 +69,33 @@ const PANE_LIVE_STATUSES: ReadonlySet<SessionStatus> = new Set<SessionStatus>([
   "starting",
   "running",
 ]);
+
+function muxCloseWarningFor(session: {
+  mux: string;
+  muxRef: Record<string, unknown>;
+}): CloseSessionOutput["muxCloseWarning"] | undefined {
+  if (session.mux !== "herdr") {
+    return {
+      message:
+        "mux close failed; the Multiplexer resource may still exist because --force marked only the Session closed",
+    };
+  }
+
+  const herdrSession = session.muxRef.herdr_session;
+  const workspaceId = session.muxRef.herdr_workspace_id;
+  if (typeof herdrSession !== "string" || typeof workspaceId !== "string") {
+    return {
+      message:
+        "mux close failed; Herdr workspace may still exist because --force marked only the Session closed",
+    };
+  }
+
+  return {
+    message:
+      "mux close failed; Herdr workspace may still exist because --force marked only the Session closed",
+    cleanupCommand: `herdr --session ${shellEscape(herdrSession)} workspace close ${shellEscape(workspaceId)}`,
+  };
+}
 
 export async function closeSession(
   deps: CloseSessionDeps,
@@ -129,6 +157,8 @@ export async function closeSession(
   // pane/workspace (notably the operator's current herdr workspace), so their
   // mux ref carries `asem_mux_owned: "false"`; closing those Sessions records
   // the process-state transition without closing the borrowed multiplexer.
+  let muxCloseWarning: CloseSessionOutput["muxCloseWarning"] | undefined;
+
   if (
     PANE_LIVE_STATUSES.has(session.status) &&
     session.muxRef.asem_mux_owned !== "false"
@@ -168,6 +198,7 @@ export async function closeSession(
         // close. Callers must opt into force for known-stale mux refs.
         return err(result.error);
       }
+      muxCloseWarning = muxCloseWarningFor(session);
     }
   }
 
@@ -188,5 +219,6 @@ export async function closeSession(
       closedAt,
       updatedAt: closedAt,
     },
+    ...(muxCloseWarning !== undefined ? { muxCloseWarning } : {}),
   });
 }

@@ -1165,6 +1165,29 @@ describe("runCli session close", () => {
     expect(session.closedAt).not.toBeNull();
   });
 
+  test("force close warns when mux cleanup may need manual follow-up", async () => {
+    const store = new FakeStore();
+    const s = makeSession({
+      name: "stale-herdr",
+      mux: "herdr",
+      muxRef: HERDR_REF,
+    });
+    store.sessions.push(s);
+    const { deps } = makeCliFixture({ store });
+    deps.templateRunner = new FakeTemplateRunner({
+      commands: [{ exitCode: 1, stderr: "workspace close failed" }],
+    });
+
+    const { io, code } = await run(["session", "close", s.id, "--force"], deps);
+
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("warning: mux close failed");
+    expect(io.outText()).toContain("Herdr workspace may still exist");
+    expect(io.outText()).toContain(
+      "herdr --session 'asem' workspace close 'herdr-workspace-1'",
+    );
+  });
+
   test("close of an unknown id surfaces session_not_found (exit 1)", async () => {
     const { io, code } = await run(["session", "close", "ghost"]);
     expect(code).toBe(EXIT_ERROR);

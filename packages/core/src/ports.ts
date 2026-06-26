@@ -22,9 +22,12 @@ export type SessionUpdate = Partial<
 >;
 
 /**
- * Persistence port. All normal queries are scoped by Effective Scope. Use-case
- * semantics (e.g. when a delete removes related messages) live in `@asem/ops`,
- * not here; the Store only exposes scoped primitives.
+ * Persistence port. Normal Session and Message queries are bounded by Workspace
+ * (`workspace_id`). The `EffectiveScope` argument still carries `worktreeRoot`
+ * as location metadata for filters/runtime context, but ADR 0008 makes
+ * Workspace the parent/message/report boundary. Use-case semantics (e.g. when a
+ * delete removes related messages) live in `@asem/ops`, not here; the Store only
+ * exposes scoped primitives.
  */
 export interface Store {
   insertSession(session: Session): Promise<void>;
@@ -39,9 +42,9 @@ export interface Store {
   ): Promise<Session[]>;
   /**
    * List every Session sharing a `workspace_id`, across worktree roots. This is
-   * the one sanctioned scope-broadening read (implementation principle 7): the
-   * TUI `--scope workspace` view groups the result by `worktree_root`. Normal
-   * worktree-isolated operations must use {@link listSessions} instead.
+   * kept as an explicit Workspace read helper for TUI/CLI callsites that already
+   * name the Workspace directly; {@link listSessions} now uses the same normal
+   * Workspace boundary when an EffectiveScope is already resolved.
    */
   listSessionsByWorkspace(
     workspaceId: string,
@@ -53,6 +56,10 @@ export interface Store {
     patch: SessionUpdate,
   ): Promise<void>;
   deleteSessionScoped(scope: EffectiveScope, id: string): Promise<void>;
+  orphanChildSessionsScoped(
+    scope: EffectiveScope,
+    parentSessionId: string,
+  ): Promise<number>;
   deleteRelatedMessagesScoped(
     scope: EffectiveScope,
     sessionId: string,
@@ -63,9 +70,10 @@ export interface Store {
     filter?: MessageListFilter,
   ): Promise<Message[]>;
   /**
-   * List every Message sharing a `workspace_id`, across worktree roots. The
-   * workspace-wide companion to {@link listMessages}, used only by the TUI
-   * `--scope workspace` view; normal reads stay worktree-isolated.
+   * List every Message sharing a `workspace_id`, across worktree roots. This is
+   * kept as an explicit Workspace read helper for callsites that already name the
+   * Workspace directly; {@link listMessages} now uses the same normal Workspace
+   * boundary when an EffectiveScope is already resolved.
    */
   listMessagesByWorkspace(
     workspaceId: string,

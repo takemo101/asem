@@ -62,7 +62,7 @@ import {
   renderSessionDetail,
   renderSessionList,
 } from "./render.ts";
-import { listRepoAliases, resolveRepoAlias } from "./repo-alias.ts";
+import { listRepoAliases } from "./repo-alias.ts";
 import { usageFor } from "./usage.ts";
 
 /** Inputs for one CLI invocation. `deps` is the injected operation bundle. */
@@ -377,23 +377,10 @@ async function runSessionCreate(
   command: Extract<CliCommand, { type: "session-create" }>,
   { cwd, deps, io }: DispatchEnv,
 ): Promise<number> {
-  // `--repo <alias>` is a CLI-only cwd convenience resolved before the shared
-  // operation: it maps the alias to a directory and pins the alias-declaring
-  // `.asem.yaml` as the config source via `ctx.configCwd`, then delegates to
-  // create_session like a `--cwd <resolved>` call. Resolution fails (unknown
-  // alias / missing path) before any create side effects (Repo Alias design).
-  let effectiveCwd = command.cwd;
-  let configCwd: string | undefined;
-  if (command.repo !== undefined) {
-    const resolved = await resolveRepoAlias(deps, cwd, command.repo);
-    if (!resolved.ok) return fail(io, resolved.error);
-    effectiveCwd = resolved.value.cwd;
-    configCwd = resolved.value.configCwd;
-  }
-
-  // Otherwise pure delegation: the CLI maps flags to the create_session input
-  // and renders the result. Parent resolution, template selection, launch,
-  // cleanup, and the "never persist a failed create" ordering live in the op.
+  // Pure delegation: the CLI maps flags to the create_session input and renders
+  // the result. Repo Alias resolution, parent resolution, template selection,
+  // launch, cleanup, and the "never persist a failed create" ordering live in
+  // the shared op so CLI and MCP agree.
   const result = await createSession(
     deps,
     {
@@ -403,13 +390,14 @@ async function runSessionCreate(
       ...(command.mux !== undefined ? { mux: command.mux } : {}),
       ...(command.model !== undefined ? { model: command.model } : {}),
       ...(command.profile !== undefined ? { profile: command.profile } : {}),
-      ...(effectiveCwd !== undefined ? { cwd: effectiveCwd } : {}),
+      ...(command.cwd !== undefined ? { cwd: command.cwd } : {}),
+      ...(command.repo !== undefined ? { repo: command.repo } : {}),
       ...(command.parentSessionId !== undefined
         ? { parentSessionId: command.parentSessionId }
         : {}),
       ...(command.root !== undefined ? { root: command.root } : {}),
     },
-    { cwd, ...(configCwd !== undefined ? { configCwd } : {}) },
+    { cwd },
   );
   return render(io, result, (value) => {
     if (command.json) emitJson(io, value.session);

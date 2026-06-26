@@ -1,10 +1,10 @@
 /**
- * `list_sessions` operation — list Sessions in the current Effective Scope.
+ * `list_sessions` operation — list Sessions in the current Workspace.
  *
- * Scope is applied by default (implementation principle 7): the Store query is
- * always bounded by `workspace_id + worktree_root`, so Sessions in sibling
- * worktrees that share a workspace id are never returned (ADR 0002). An optional
- * liveness pass may refresh process state without inferring work outcome.
+ * Workspace is the normal visibility boundary (ADR 0008). `worktreeRoot` is an
+ * optional location filter for focused views such as `tui --scope worktree`, not
+ * a parent/message/report boundary. An optional liveness pass may refresh
+ * process state without inferring work outcome.
  */
 import {
   type Clock,

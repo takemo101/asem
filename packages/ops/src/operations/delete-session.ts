@@ -18,10 +18,13 @@
  *      that those rows go with the Session; this operation does, removing them
  *      and the Session together inside one Store transaction so the delete is
  *      all-or-nothing.
+ *   4. **Children are orphaned, not cascaded.** Forced parent deletion clears
+ *      direct child parent links inside the Workspace and never deletes child
+ *      Sessions.
  *
- * The target is resolved by scoped Store lookup, so a Session in a sibling
- * worktree is `session_not_found` and is never deleted across the isolation
- * boundary (ADR 0002). No delivery/read/ack state is invented or inspected.
+ * The target is resolved by Workspace-scoped Store lookup. `worktree_root`
+ * remains location metadata for runtime cleanup and filters, not the delete
+ * boundary (ADR 0008). No delivery/read/ack state is invented or inspected.
  */
 import {
   type ConfigLoader,
@@ -97,8 +100,8 @@ export async function deleteSession(
     );
   }
 
-  // Scoped lookup enforces same-scope delete: a sibling-worktree Session is not
-  // found here, never deleted across the isolation boundary.
+  // Lookup is Workspace-scoped: a sibling-worktree Session in the same Workspace
+  // can be deleted, while another Workspace remains inaccessible.
   const session = await deps.store.getSessionById(scope, input.id);
   if (session === null) {
     return err(
@@ -123,6 +126,7 @@ export async function deleteSession(
   // scoped primitives; this operation decides they belong to one unit of work.
   const deletedMessageCount = await deps.store.withTransaction(async (tx) => {
     const removed = await tx.deleteRelatedMessagesScoped(scope, session.id);
+    await tx.orphanChildSessionsScoped(scope, session.id);
     await tx.deleteSessionScoped(scope, session.id);
     return removed;
   });

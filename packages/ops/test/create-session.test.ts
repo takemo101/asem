@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type ConfigDiscovery, type ConfigLoader, hashToken } from "@asem/core";
+import {
+  type ConfigDiscovery,
+  type ConfigLoader,
+  hashToken,
+  type ScopeResolver,
+} from "@asem/core";
 import { FakeTemplateRunner } from "@asem/runtime";
 import { createSession, TOKEN_FILE_MODE } from "../src/index.ts";
 import {
@@ -52,6 +57,7 @@ function deps(
     runner?: FakeTemplateRunner;
     store?: FakeStore;
     currentSessionResolver?: FakeCurrentSessionResolver;
+    scopeResolver?: ScopeResolver;
   } = {},
 ) {
   const fs = new FakeFileSystem();
@@ -63,7 +69,7 @@ function deps(
     logger,
     store,
     templateRunner: runner,
-    scopeResolver: new FakeScopeResolver(scopeA),
+    scopeResolver: overrides.scopeResolver ?? new FakeScopeResolver(scopeA),
     ...(overrides.currentSessionResolver
       ? { currentSessionResolver: overrides.currentSessionResolver }
       : {}),
@@ -72,6 +78,22 @@ function deps(
 }
 
 const ROOT_INPUT = { name: "reviewer-1", prompt: "do the thing", root: true };
+
+function workspaceScopeByCwd(
+  worktreeByCwd: Record<string, string>,
+): ScopeResolver {
+  return {
+    async resolve(cwd, config) {
+      return {
+        workspaceId: config.workspace.id,
+        worktreeRoot: worktreeByCwd[cwd] ?? cwd,
+      };
+    },
+    async resolveWorktreeRoot(cwd) {
+      return worktreeByCwd[cwd] ?? cwd;
+    },
+  };
+}
 
 describe("createSession — happy path", () => {
   test("runs mux create before run_in_pane and inserts only after a successful start", async () => {
@@ -695,6 +717,77 @@ describe("createSession — Agent Profiles (MIK-041)", () => {
   });
 });
 
+describe("createSession — repo alias resolution", () => {
+  function repoConfigLoader() {
+    return new FakeConfigLoader({
+      kind: "found",
+      config: makeConfig({ repos: { frontend: { path: "./frontend" } } }),
+      configPath: `${scopeA.worktreeRoot}/.asem.yaml`,
+    } satisfies ConfigDiscovery);
+  }
+
+  test("repo alias resolves to cwd under the Workspace root before create side effects", async () => {
+    const d = {
+      ...deps({
+        scopeResolver: workspaceScopeByCwd({
+          [`${scopeA.worktreeRoot}/frontend`]: `${scopeA.worktreeRoot}/frontend`,
+        }),
+      }),
+      configLoader: repoConfigLoader(),
+    };
+    d.fs.dirs.add(`${scopeA.worktreeRoot}/frontend`);
+
+    const { session } = expectOk(
+      await createSession(
+        d,
+        { ...ROOT_INPUT, repo: "frontend" },
+        { cwd: scopeA.worktreeRoot },
+      ),
+    );
+
+    expect(session.cwd).toBe(`${scopeA.worktreeRoot}/frontend`);
+    expect(session.worktreeRoot).toBe(`${scopeA.worktreeRoot}/frontend`);
+    expect(session.sessionDir).toBe(
+      `${scopeA.worktreeRoot}/frontend/.asem/sessions/${FIRST_ID}`,
+    );
+  });
+
+  test("unknown repo alias fails before create side effects", async () => {
+    const d = { ...deps(), configLoader: repoConfigLoader() };
+    const result = await createSession(
+      d,
+      { ...ROOT_INPUT, repo: "missing" },
+      CTX,
+    );
+
+    expectErr(result, "invalid_input");
+    expect(d.runner.commands).toHaveLength(0);
+    expect(d.store.sessions).toHaveLength(0);
+  });
+
+  test("repo alias path outside the Workspace root is invalid_config", async () => {
+    const d = {
+      ...deps(),
+      configLoader: new FakeConfigLoader({
+        kind: "found",
+        config: makeConfig({ repos: { outside: { path: "../outside" } } }),
+        configPath: `${scopeA.worktreeRoot}/.asem.yaml`,
+      } satisfies ConfigDiscovery),
+    };
+    d.fs.dirs.add("/repo/outside");
+
+    const result = await createSession(
+      d,
+      { ...ROOT_INPUT, repo: "outside" },
+      CTX,
+    );
+
+    expectErr(result, "invalid_config");
+    expect(d.runner.commands).toHaveLength(0);
+    expect(d.store.sessions).toHaveLength(0);
+  });
+});
+
 describe("createSession — parent resolution truth table", () => {
   test("--root creates a root Session with parent_session_id = null", async () => {
     const d = deps();
@@ -715,6 +808,46 @@ describe("createSession — parent resolution truth table", () => {
       ),
     );
     expect(session.parentSessionId).toBe("p_1");
+  });
+
+  test("--parent <id> can target a parent in the same Workspace from a different Worktree Root", async () => {
+    const store = new FakeStore();
+    store.sessions.push(
+      makeSession({
+        id: "root_1",
+        name: "workspace-root",
+        cwd: scopeA.worktreeRoot,
+        worktreeRoot: scopeA.worktreeRoot,
+      }),
+    );
+    const d = deps({
+      store,
+      scopeResolver: workspaceScopeByCwd({
+        [scopeA.worktreeRoot]: scopeA.worktreeRoot,
+        [scopeB.worktreeRoot]: scopeB.worktreeRoot,
+      }),
+    });
+
+    const { session } = expectOk(
+      await createSession(
+        d,
+        {
+          name: "repo-child",
+          prompt: "p",
+          cwd: scopeB.worktreeRoot,
+          parentSessionId: "root_1",
+        },
+        CTX,
+      ),
+    );
+
+    expect(session.workspaceId).toBe(scopeA.workspaceId);
+    expect(session.cwd).toBe(scopeB.worktreeRoot);
+    expect(session.worktreeRoot).toBe(scopeB.worktreeRoot);
+    expect(session.parentSessionId).toBe("root_1");
+    expect(session.sessionDir).toBe(
+      `${scopeB.worktreeRoot}/.asem/sessions/${FIRST_ID}`,
+    );
   });
 
   test("--parent <id> not in scope returns parent_session_not_found", async () => {
@@ -748,6 +881,43 @@ describe("createSession — parent resolution truth table", () => {
     const { session } = expectOk(
       await createSession(d, { name: "child", prompt: "p" }, CTX),
     );
+    expect(session.parentSessionId).toBe("cur_1");
+  });
+
+  test("no parent flag can use the Workspace current Session from a different Worktree Root", async () => {
+    const store = new FakeStore();
+    store.sessions.push(
+      makeSession({
+        id: "cur_1",
+        name: "workspace-current",
+        cwd: scopeA.worktreeRoot,
+        worktreeRoot: scopeA.worktreeRoot,
+        tokenHash: hashToken(CURRENT_TOKEN),
+      }),
+    );
+    const d = deps({
+      store,
+      scopeResolver: workspaceScopeByCwd({
+        [scopeA.worktreeRoot]: scopeA.worktreeRoot,
+        [scopeB.worktreeRoot]: scopeB.worktreeRoot,
+      }),
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: "cur_1",
+        token: CURRENT_TOKEN,
+        scope: scopeA,
+      }),
+    });
+
+    const { session } = expectOk(
+      await createSession(
+        d,
+        { name: "repo-child", prompt: "p", cwd: scopeB.worktreeRoot },
+        CTX,
+      ),
+    );
+
+    expect(session.workspaceId).toBe(scopeA.workspaceId);
+    expect(session.worktreeRoot).toBe(scopeB.worktreeRoot);
     expect(session.parentSessionId).toBe("cur_1");
   });
 
@@ -802,12 +972,12 @@ describe("createSession — parent resolution truth table", () => {
     expect(d.store.sessions).toHaveLength(0);
   });
 
-  test("current Session registered in another scope returns scope_mismatch", async () => {
+  test("current Session registered in another Workspace returns scope_mismatch", async () => {
     const d = deps({
       currentSessionResolver: new FakeCurrentSessionResolver({
         sessionId: "cur_1",
         token: "ignored",
-        scope: scopeB,
+        scope: { ...scopeB, workspaceId: "ws_2" },
       }),
     });
     const result = await createSession(d, { name: "child", prompt: "p" }, CTX);
@@ -1248,9 +1418,11 @@ describe("createSession — effective create cwd scope (MIK-025)", () => {
     expect(session.cwd).toBe(SIBLING_CWD);
     expect(session.sessionDir).toBe(SIBLING_SESSION_DIR);
 
-    // It is visible in the target scope and absent from the caller scope.
+    // The normal lookup boundary is the Workspace, so either resolved location
+    // in the same Workspace can find it; its location metadata still records the
+    // target Worktree Root.
     expect(await d.store.getSessionByName(scopeB, "reviewer-1")).not.toBeNull();
-    expect(await d.store.getSessionByName(scopeA, "reviewer-1")).toBeNull();
+    expect(await d.store.getSessionByName(scopeA, "reviewer-1")).not.toBeNull();
 
     // The launch script injects the target worktree root and changes into the
     // target cwd before starting the agent.

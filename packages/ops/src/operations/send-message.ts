@@ -13,8 +13,8 @@
  *      token; human local-trust calls send with no source attribution — and an
  *      operator surface forces that human path via `ctx.origin === "operator"`,
  *      so it never adopts the resolved worktree's current-Session pointer);
- *   3. resolve the target Session — scoped, so a Session in a sibling worktree
- *      is simply not found (this is how same-scope sender/target is enforced);
+ *   3. resolve the target Session within the Workspace; cwd/worktreeRoot may
+ *      differ and are treated as Session location metadata;
  *   4. record the Message row truthfully, then attempt delivery;
  *   5. on a successful mux `send` sequence set `delivered_at`; on failure set
  *      `delivery_error`. Delivery never fabricates ack/read state, and a
@@ -128,8 +128,8 @@ export async function sendMessage(
   }
   const actor = actorResult.value;
 
-  // Same effective scope is enforced for sender and target: the target lookup
-  // is scoped, so a Session in a sibling worktree is simply not found.
+  // Target lookup is Workspace-scoped: sibling worktree Sessions in the same
+  // Workspace are addressable, while other Workspaces remain inaccessible.
   const target = await deps.store.getSessionById(scope, input.toSessionId);
   if (target === null) {
     return err(
@@ -255,7 +255,10 @@ async function deliver(
   const message: Message = {
     id: deps.idGenerator.nextId(),
     workspaceId: scope.workspaceId,
-    worktreeRoot: scope.worktreeRoot,
+    // Location metadata follows the delivery target. Workspace remains the
+    // communication boundary; worktreeRoot records where this Message was aimed
+    // for history, grouping, and worktree filters.
+    worktreeRoot: target.worktreeRoot,
     fromSessionId: fromSession?.id ?? null,
     toSessionId: target.id,
     kind,

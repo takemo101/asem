@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { isStoreError } from "../src/index.ts";
 import { freshStore, makeSession, scopeA, scopeB } from "./helpers.ts";
 
+const scopeC = { ...scopeB, workspaceId: "ws_2" };
+
 describe("Session CRUD", () => {
   test("insert then read back a typed Session", async () => {
     const { store } = freshStore();
@@ -95,7 +97,7 @@ describe("Session duplicate names", () => {
     expect(isStoreError(caught, "session_name_conflict")).toBe(true);
   });
 
-  test("same name is allowed in a different worktree scope", async () => {
+  test("duplicate name in the same Workspace conflicts even across worktree roots", async () => {
     const { store } = freshStore();
     await store.insertSession(
       makeSession({
@@ -104,20 +106,41 @@ describe("Session duplicate names", () => {
         worktreeRoot: scopeA.worktreeRoot,
       }),
     );
+
+    let caught: unknown;
+    try {
+      await store.insertSession(
+        makeSession({
+          id: "s_b",
+          name: "dup",
+          worktreeRoot: scopeB.worktreeRoot,
+        }),
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(isStoreError(caught, "session_name_conflict")).toBe(true);
+  });
+
+  test("same name is allowed in a different Workspace", async () => {
+    const { store } = freshStore();
+    await store.insertSession(makeSession({ id: "s_a", name: "dup" }));
+
     await expect(
       store.insertSession(
         makeSession({
           id: "s_b",
           name: "dup",
-          worktreeRoot: scopeB.worktreeRoot,
+          workspaceId: scopeC.workspaceId,
+          worktreeRoot: scopeC.worktreeRoot,
         }),
       ),
     ).resolves.toBeUndefined();
   });
 });
 
-describe("Session scope isolation", () => {
-  test("reads do not cross worktree boundary within the same workspace", async () => {
+describe("Session Workspace boundary", () => {
+  test("reads cross worktree roots within the same Workspace", async () => {
     const { store } = freshStore();
     const inA = makeSession({
       id: "s_a",
@@ -126,12 +149,25 @@ describe("Session scope isolation", () => {
     });
     await store.insertSession(inA);
 
-    // Same workspace_id, different worktree_root must not see it.
-    expect(await store.getSessionById(scopeB, "s_a")).toBeNull();
-    expect(await store.getSessionByName(scopeB, "shared")).toBeNull();
+    expect(await store.getSessionById(scopeB, "s_a")).toEqual(inA);
+    expect((await store.getSessionByName(scopeB, "shared"))?.id).toBe("s_a");
   });
 
-  test("listSessions returns only the current scope", async () => {
+  test("reads do not cross Workspace boundary", async () => {
+    const { store } = freshStore();
+    await store.insertSession(
+      makeSession({
+        id: "s_a",
+        name: "shared",
+        worktreeRoot: scopeA.worktreeRoot,
+      }),
+    );
+
+    expect(await store.getSessionById(scopeC, "s_a")).toBeNull();
+    expect(await store.getSessionByName(scopeC, "shared")).toBeNull();
+  });
+
+  test("listSessions returns the Workspace view across worktree roots", async () => {
     const { store } = freshStore();
     await store.insertSession(
       makeSession({ id: "s_a", worktreeRoot: scopeA.worktreeRoot }),
@@ -141,18 +177,18 @@ describe("Session scope isolation", () => {
     );
 
     const inA = await store.listSessions(scopeA);
-    expect(inA.map((s) => s.id)).toEqual(["s_a"]);
+    expect(inA.map((s) => s.id)).toEqual(["s_a", "s_b"]);
     const inB = await store.listSessions(scopeB);
-    expect(inB.map((s) => s.id)).toEqual(["s_b"]);
+    expect(inB.map((s) => s.id)).toEqual(["s_a", "s_b"]);
   });
 
-  test("updates and deletes in another scope do not touch this scope", async () => {
+  test("updates and deletes in another Workspace do not touch this Workspace", async () => {
     const { store } = freshStore();
     const inA = makeSession({ id: "s_a", worktreeRoot: scopeA.worktreeRoot });
     await store.insertSession(inA);
 
-    await store.updateSession(scopeB, "s_a", { status: "closed" });
-    await store.deleteSessionScoped(scopeB, "s_a");
+    await store.updateSession(scopeC, "s_a", { status: "closed" });
+    await store.deleteSessionScoped(scopeC, "s_a");
 
     const stillThere = await store.getSessionById(scopeA, "s_a");
     expect(stillThere?.status).toBe("running");

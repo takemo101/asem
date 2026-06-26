@@ -133,6 +133,17 @@ describe("MCP tool registry", () => {
     expect(schema.required).not.toContain("profile");
   });
 
+  test("create_session input schema exposes an optional repo alias", () => {
+    const tool = listMcpTools().find((t) => t.name === "create_session");
+    const schema = tool?.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.properties).toHaveProperty("repo");
+    expect(schema.properties.repo).toMatchObject({ type: "string" });
+    expect(schema.required).not.toContain("repo");
+  });
+
   test("close_session input schema exposes optional force", () => {
     const tool = listMcpTools().find((t) => t.name === "close_session");
     const schema = tool?.inputSchema as {

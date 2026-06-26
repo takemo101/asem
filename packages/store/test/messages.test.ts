@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { freshStore, makeMessage, scopeA, scopeB } from "./helpers.ts";
 
+const scopeC = { ...scopeB, workspaceId: "ws_2" };
+
 describe("Message CRUD", () => {
   test("insert then list returns a typed Message", async () => {
     const { store } = freshStore();
@@ -24,8 +26,8 @@ describe("Message CRUD", () => {
   });
 });
 
-describe("Message scope isolation", () => {
-  test("listMessages returns only the current scope", async () => {
+describe("Message Workspace boundary", () => {
+  test("listMessages returns the Workspace view across worktree roots", async () => {
     const { store } = freshStore();
     await store.insertMessage(
       makeMessage({ id: "m_a", worktreeRoot: scopeA.worktreeRoot }),
@@ -36,10 +38,21 @@ describe("Message scope isolation", () => {
 
     expect((await store.listMessages(scopeA)).map((m) => m.id)).toEqual([
       "m_a",
-    ]);
-    expect((await store.listMessages(scopeB)).map((m) => m.id)).toEqual([
       "m_b",
     ]);
+    expect((await store.listMessages(scopeB)).map((m) => m.id)).toEqual([
+      "m_a",
+      "m_b",
+    ]);
+  });
+
+  test("listMessages does not cross Workspace boundary", async () => {
+    const { store } = freshStore();
+    await store.insertMessage(
+      makeMessage({ id: "m_a", worktreeRoot: scopeA.worktreeRoot }),
+    );
+
+    expect(await store.listMessages(scopeC)).toEqual([]);
   });
 });
 
@@ -102,12 +115,23 @@ describe("Message delivery state", () => {
     expect(got?.deliveredAt).toBeNull();
   });
 
-  test("delivery updates do not cross scope", async () => {
+  test("delivery updates can cross worktree roots in the same Workspace", async () => {
     const { store } = freshStore();
     await store.insertMessage(
       makeMessage({ id: "m_a", worktreeRoot: scopeA.worktreeRoot }),
     );
     await store.markMessageDelivered(scopeB, "m_a", "2026-06-05T12:30:00Z");
+
+    const [got] = await store.listMessages(scopeA);
+    expect(got?.deliveredAt).toBe("2026-06-05T12:30:00Z");
+  });
+
+  test("delivery updates do not cross Workspace boundary", async () => {
+    const { store } = freshStore();
+    await store.insertMessage(
+      makeMessage({ id: "m_a", worktreeRoot: scopeA.worktreeRoot }),
+    );
+    await store.markMessageDelivered(scopeC, "m_a", "2026-06-05T12:30:00Z");
 
     const [got] = await store.listMessages(scopeA);
     expect(got?.deliveredAt).toBeNull();

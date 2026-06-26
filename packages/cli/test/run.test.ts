@@ -1019,7 +1019,7 @@ describe("runCli session list/get", () => {
     expect(io.outText()).toContain("beta");
   });
 
-  test("does not list sessions from a sibling worktree (scope owned by ops)", async () => {
+  test("lists sessions from sibling worktrees in the same Workspace", async () => {
     const store = new FakeStore();
     store.sessions.push(makeSession({ name: "here" }));
     store.sessions.push(
@@ -1033,7 +1033,7 @@ describe("runCli session list/get", () => {
 
     const { io } = await run(["session", "list"], deps);
     expect(io.outText()).toContain("here");
-    expect(io.outText()).not.toContain("there");
+    expect(io.outText()).toContain("there");
   });
 
   test("empty scope renders a friendly message", async () => {

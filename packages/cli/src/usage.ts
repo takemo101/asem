@@ -555,8 +555,8 @@ const TUI_USAGE = [
   "  asem tui --scope worktree",
   "",
   "notes:",
-  "  The Cockpit defaults to the workspace-wide view; only the human TUI",
-  "  broadens scope. Plain CLI and MCP operations stay worktree-isolated.",
+  "  The Cockpit defaults to the workspace-wide view. Worktree scope is a",
+  "  location filter, not a parent/message/report boundary.",
 ];
 
 /** Focused pages keyed by their command path (`group subcommand` or command). */

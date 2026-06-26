@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { type ConfigDiscovery, hashToken } from "@asem/core";
+import {
+  type ConfigDiscovery,
+  hashToken,
+  type ScopeResolver,
+} from "@asem/core";
 import { FakeTemplateRunner } from "@asem/runtime";
 import { formatMessageBody, reportParent, sendMessage } from "../src/index.ts";
 import {
@@ -31,6 +35,7 @@ function deps(
     runner?: FakeTemplateRunner;
     store?: FakeStore;
     currentSessionResolver?: FakeCurrentSessionResolver;
+    scopeResolver?: ScopeResolver;
   } = {},
 ) {
   const store = overrides.store ?? new FakeStore();
@@ -40,7 +45,7 @@ function deps(
     store,
     templateRunner: runner,
     logger,
-    scopeResolver: new FakeScopeResolver(scopeA),
+    scopeResolver: overrides.scopeResolver ?? new FakeScopeResolver(scopeA),
     ...(overrides.currentSessionResolver
       ? { currentSessionResolver: overrides.currentSessionResolver }
       : {}),
@@ -59,6 +64,23 @@ function makeTarget(overrides = {}) {
 }
 
 const CURRENT_TOKEN = "tok-current";
+const scopeC = { ...scopeB, workspaceId: "ws_2" };
+
+function workspaceScopeByCwd(
+  worktreeByCwd: Record<string, string>,
+): ScopeResolver {
+  return {
+    async resolve(cwd, config) {
+      return {
+        workspaceId: config.workspace.id,
+        worktreeRoot: worktreeByCwd[cwd] ?? cwd,
+      };
+    },
+    async resolveWorktreeRoot(cwd) {
+      return worktreeByCwd[cwd] ?? cwd;
+    },
+  };
+}
 
 /** Seed a current Session that authenticates with {@link CURRENT_TOKEN}. */
 function seedCurrent(store: FakeStore, overrides = {}) {
@@ -180,7 +202,7 @@ describe("sendMessage — auth & scope", () => {
     expect(d.store.messages).toHaveLength(0);
   });
 
-  test("a current Session registered in another scope is rejected", async () => {
+  test("a current Session registered in another Workspace is rejected", async () => {
     const store = new FakeStore();
     store.sessions.push(makeTarget());
     const d = deps({
@@ -188,7 +210,7 @@ describe("sendMessage — auth & scope", () => {
       currentSessionResolver: new FakeCurrentSessionResolver({
         sessionId: "cur_x",
         token: "t",
-        scope: scopeB,
+        scope: scopeC,
       }),
     });
     const result = await sendMessage(
@@ -199,21 +221,40 @@ describe("sendMessage — auth & scope", () => {
     expectErr(result, "scope_mismatch");
   });
 
-  test("cross-worktree target is not found (same-scope sender/target enforced)", async () => {
+  test("can target a Session in another Worktree Root within the same Workspace", async () => {
     const store = new FakeStore();
-    // Target lives only in the sibling worktree scopeB; we operate in scopeA.
+    const target = makeTarget({
+      id: "t_b",
+      workspaceId: scopeB.workspaceId,
+      worktreeRoot: scopeB.worktreeRoot,
+      cwd: scopeB.worktreeRoot,
+    });
+    store.sessions.push(target);
+    const d = deps({ store });
+
+    const { message } = expectOk(
+      await sendMessage(d, { toSessionId: "t_b", body: "x" }, CTX),
+    );
+
+    expect(message.toSessionId).toBe("t_b");
+    expect(message.worktreeRoot).toBe(scopeB.worktreeRoot);
+    expect(d.store.messages[0]!.worktreeRoot).toBe(scopeB.worktreeRoot);
+    expect(d.runner.commands).toHaveLength(2);
+  });
+
+  test("target in another Workspace is not found", async () => {
+    const store = new FakeStore();
     store.sessions.push(
       makeTarget({
-        id: "t_b",
-        workspaceId: scopeB.workspaceId,
-        worktreeRoot: scopeB.worktreeRoot,
+        id: "t_c",
+        workspaceId: scopeC.workspaceId,
+        worktreeRoot: scopeC.worktreeRoot,
       }),
     );
     const d = deps({ store });
 
-    const result = await sendMessage(d, { toSessionId: "t_b", body: "x" }, CTX);
+    const result = await sendMessage(d, { toSessionId: "t_c", body: "x" }, CTX);
     expectErr(result, "session_not_found");
-    // No Message is recorded for an out-of-scope target.
     expect(d.store.messages).toHaveLength(0);
   });
 });
@@ -385,6 +426,51 @@ describe("reportParent", () => {
     expect(message.formattedBody).toBe(
       `[asem report from helper-1 (cur_1)]\nhalfway done`,
     );
+    expect(message.deliveredAt).not.toBeNull();
+  });
+
+  test("repo child can report to a parent in another Worktree Root within the same Workspace", async () => {
+    const store = new FakeStore();
+    const parent = makeTarget({
+      id: "p_a",
+      name: "workspace-parent",
+      worktreeRoot: scopeA.worktreeRoot,
+      cwd: scopeA.worktreeRoot,
+    });
+    const me = seedCurrent(store, {
+      id: "cur_b",
+      name: "repo-child",
+      parentSessionId: "p_a",
+      worktreeRoot: scopeB.worktreeRoot,
+      cwd: scopeB.worktreeRoot,
+      sessionDir: `${scopeB.worktreeRoot}/.asem/sessions/cur_b`,
+    });
+    store.sessions.push(parent);
+    const d = deps({
+      store,
+      scopeResolver: workspaceScopeByCwd({
+        [scopeA.worktreeRoot]: scopeA.worktreeRoot,
+        [scopeB.worktreeRoot]: scopeB.worktreeRoot,
+      }),
+      currentSessionResolver: new FakeCurrentSessionResolver({
+        sessionId: me.id,
+        token: CURRENT_TOKEN,
+        scope: scopeB,
+      }),
+    });
+
+    const { message } = expectOk(
+      await reportParent(
+        d,
+        { body: "repo report" },
+        { cwd: scopeB.worktreeRoot },
+      ),
+    );
+
+    expect(message.kind).toBe("report");
+    expect(message.fromSessionId).toBe("cur_b");
+    expect(message.toSessionId).toBe("p_a");
+    expect(message.worktreeRoot).toBe(scopeA.worktreeRoot);
     expect(message.deliveredAt).not.toBeNull();
   });
 

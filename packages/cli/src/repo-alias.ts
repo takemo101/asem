@@ -1,15 +1,9 @@
 /**
- * CLI-only Repo Alias resolution for `session create --repo <alias>` and
- * `workspace repo list`.
+ * CLI-only Repo Alias listing for `workspace repo list`.
  *
- * A Repo Alias is purely a human convenience for choosing the `cwd` of a new
- * Session (CONTEXT.md "Repo Alias"). This module resolves an alias declared in
- * the nearest `.asem.yaml` to an absolute directory and pins that config as the
- * source, then hands the resolved path to the shared `create_session` operation
- * via `ctx.configCwd`/`input.cwd`. It introduces no Session/Message semantics of
- * its own — those still come from `@asem/ops` (architecture: "CLI-only
- * conveniences ... may resolve human-facing aliases before calling shared
- * operations"). It reads config + filesystem only, never Session state.
+ * Repo Alias resolution for `session create --repo <alias>` lives in `@asem/ops`
+ * so CLI and MCP share the same validation and Workspace semantics. This module
+ * only renders configured aliases and path status for the human CLI.
  */
 import { dirname, resolve } from "node:path";
 import {
@@ -61,59 +55,6 @@ async function loadRepoConfig(
     configPath: discovery.configPath,
     configDir: dirname(discovery.configPath),
   });
-}
-
-/** Resolved Repo Alias coordinates for a `create_session` call. */
-export interface ResolvedRepoAlias {
-  /** Resolved absolute repo path used as the effective create `cwd`. */
-  cwd: string;
-  /** Directory of the alias-declaring `.asem.yaml`, pinned as the config source. */
-  configCwd: string;
-}
-
-/**
- * Resolve `--repo <alias>` to an absolute directory.
- *
- * Fails before any create side effects: an unknown alias is `invalid_input`
- * (the human named a repo the config does not declare, mirroring an unknown
- * `--profile`); a configured path that is missing or not a directory is
- * `invalid_config` (the declared repo path is broken).
- */
-export async function resolveRepoAlias(
-  deps: { configLoader: ConfigLoader; fs: FileSystem },
-  cwd: string,
-  alias: string,
-): Promise<OperationResult<ResolvedRepoAlias>> {
-  const loaded = await loadRepoConfig(deps, cwd);
-  if (!loaded.ok) return loaded;
-  const { config, configPath, configDir } = loaded.value;
-
-  const entry = config.repos?.[alias];
-  if (entry === undefined) {
-    return err(
-      operationError("invalid_input", `unknown repo alias: ${alias}`, {
-        alias,
-        configPath,
-        available: Object.keys(config.repos ?? {}).sort(),
-      }),
-    );
-  }
-
-  const resolvedPath = resolve(configDir, entry.path);
-  if (!(await deps.fs.isDirectory(resolvedPath))) {
-    const exists = await deps.fs.exists(resolvedPath);
-    return err(
-      operationError(
-        "invalid_config",
-        exists
-          ? `repo alias path is not a directory: ${resolvedPath}`
-          : `repo alias path does not exist: ${resolvedPath}`,
-        { alias, path: entry.path, resolvedPath, configPath },
-      ),
-    );
-  }
-
-  return ok({ cwd: resolvedPath, configCwd: configDir });
 }
 
 /** One row of `workspace repo list`. */

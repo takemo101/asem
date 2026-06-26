@@ -22,6 +22,7 @@
  * hash is persisted, and the raw value lives solely inside the mode-0600 launch
  * script under the ignored `.asem/sessions/` path (ADR 0001; principle 8).
  */
+import { dirname, relative, resolve } from "node:path";
 import {
   type Clock,
   type ConfigLoader,
@@ -104,6 +105,83 @@ function withLogPath(error: OperationError, logPath: string): OperationError {
     ...(error.details ?? {}),
     logPath,
   });
+}
+
+function isInsideDir(parent: string, child: string): boolean {
+  const rel = relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !rel.startsWith("/"));
+}
+
+async function resolveRepoCreateCwd(
+  deps: Pick<CreateSessionDeps, "configLoader" | "fs">,
+  configCwd: string,
+  alias: string,
+): Promise<OperationResult<{ cwd: string; configCwd: string }>> {
+  const discovery = await deps.configLoader.load(configCwd);
+  if (discovery.kind === "not_found") {
+    return err(
+      operationError(
+        "config_not_found",
+        "no .asem.yaml found; run `asem init` to create one",
+        { cwd: configCwd },
+      ),
+    );
+  }
+  if (discovery.kind === "invalid") {
+    return err(
+      operationError("invalid_config", "`.asem.yaml` could not be parsed", {
+        configPath: discovery.configPath,
+        issues: discovery.issues,
+      }),
+    );
+  }
+
+  const configDir = dirname(discovery.configPath);
+  const entry = discovery.config.repos?.[alias];
+  if (entry === undefined) {
+    return err(
+      operationError("invalid_input", `unknown repo alias: ${alias}`, {
+        alias,
+        configPath: discovery.configPath,
+        available: Object.keys(discovery.config.repos ?? {}).sort(),
+      }),
+    );
+  }
+
+  const resolvedPath = resolve(configDir, entry.path);
+  if (!isInsideDir(configDir, resolvedPath)) {
+    return err(
+      operationError(
+        "invalid_config",
+        `repo alias path must be under the Workspace root: ${resolvedPath}`,
+        {
+          alias,
+          path: entry.path,
+          resolvedPath,
+          configPath: discovery.configPath,
+        },
+      ),
+    );
+  }
+  if (!(await deps.fs.isDirectory(resolvedPath))) {
+    const exists = await deps.fs.exists(resolvedPath);
+    return err(
+      operationError(
+        "invalid_config",
+        exists
+          ? `repo alias path is not a directory: ${resolvedPath}`
+          : `repo alias path does not exist: ${resolvedPath}`,
+        {
+          alias,
+          path: entry.path,
+          resolvedPath,
+          configPath: discovery.configPath,
+        },
+      ),
+    );
+  }
+
+  return ok({ cwd: resolvedPath, configCwd: configDir });
 }
 
 /**
@@ -190,21 +268,25 @@ export async function createSession(
   }
   const input = parsed.data;
 
-  // Resolve config and Effective Scope from the *create* cwd, not the caller's.
-  // A create can target a sibling Worktree Root via `input.cwd`; deriving config,
-  // scope, parent/token checks, project-local templates, and the launch cwd from
-  // this single effective cwd keeps the Session row scoped to where it is
-  // actually created (MIK-025).
-  const cwd = input.cwd ?? ctx.cwd;
-
-  // The config source may be pinned to a different directory than the effective
-  // create cwd via the trusted `ctx.configCwd` seam: the CLI `--repo <alias>`
-  // convenience targets the resolved repo path as `cwd` while keeping the
-  // alias-declaring root `.asem.yaml` as the source for workspace id, Agent/Mux
-  // defaults, and project-local templates. Scope (and the launch cwd) still come
-  // from the effective create cwd (design "Repo alias creation"). Default: both
-  // resolve from the same cwd, so non-repo creates are unchanged.
-  const configCwd = ctx.configCwd ?? cwd;
+  // Resolve config and location from the requested create target. A create can
+  // target a sibling Worktree Root via `input.cwd` or the shared `repo` alias
+  // shortcut. Repo Alias resolution lives in ops so CLI and MCP share the same
+  // behavior: the alias pins config to the declaring Workspace root and maps to
+  // an effective create cwd under that root.
+  let cwd = input.cwd ?? ctx.cwd;
+  let configCwd = ctx.configCwd ?? cwd;
+  if (input.repo !== undefined) {
+    const repoResult = await resolveRepoCreateCwd(
+      deps,
+      ctx.configCwd ?? ctx.cwd,
+      input.repo,
+    );
+    if (!repoResult.ok) {
+      return repoResult;
+    }
+    cwd = repoResult.value.cwd;
+    configCwd = repoResult.value.configCwd;
+  }
   const contextResult = await resolveContext(deps, configCwd, cwd);
   if (!contextResult.ok) {
     return contextResult;

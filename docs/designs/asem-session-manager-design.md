@@ -26,7 +26,7 @@ asem provides one CLI and one MCP surface backed by the same operation handlers 
 
 1. register the current agent process as a Session;
 2. launch new agent Sessions through configured multiplexer and agent templates;
-3. list Sessions in the current scope;
+3. list Sessions in the current Workspace, with location filters when needed;
 4. send a Message to another Session;
 5. report to a parent Session;
 6. view Message history, including self-addressed history;
@@ -36,7 +36,7 @@ asem provides one CLI and one MCP surface backed by the same operation handlers 
 ## Goals
 
 - Manage live local agent CLI Sessions running inside terminal multiplexers.
-- Keep normal visibility and messaging isolated by `workspace_id + worktree_root`.
+- Keep normal visibility, parent-child relationships, Messages, and Reports bounded by `workspace_id`.
 - Store durable Session and Message records in SQLite.
 - Store sensitive and run-specific files under the worktree-local `.asem/sessions/<session_id>/` directory.
 - Use command sequence templates for multiplexer and agent integration instead of fixed TypeScript adapter classes.
@@ -92,13 +92,15 @@ type MessageKind = "message" | "report";
 
 A Report is just a Message from a child Session to its parent Session. It does not close the Session and does not mean the work is complete.
 
-### Workspace, Worktree Root, Effective Scope
+### Workspace and Session location
 
-- `workspace_id` is a logical grouping id from `.asem.yaml`.
+- `workspace_id` is the normal safety boundary from `.asem.yaml`.
 - `worktree_root` is the realpathed Git worktree root, or cwd realpath outside Git.
-- Effective normal scope is `workspace_id + worktree_root`.
+- A Session stores both `cwd` and `worktree_root` as location metadata.
 
-Normal Session visibility, Message sending, and parent-child relationships require both fields to match.
+Normal Session visibility, Message sending, Reports, and parent-child relationships are Workspace-scoped. They require matching `workspace_id`, not matching `worktree_root`.
+
+Within one Workspace, Session names are unique. A root Session may run from the Workspace root while child Sessions run from repo-specific cwd values.
 
 ### Inbox
 
@@ -108,41 +110,36 @@ There is no formal inbox protocol in the MVP. `list_messages --inbox` and MCP `l
 
 There is no `role` field in MVP. Session specialization should be expressed through Session names, prompts, parent relation, and agent templates.
 
-## Scope resolution
+## Workspace resolution and location resolution
 
-Effective scope is resolved before all normal operations that read or mutate Sessions or Messages.
+Operations that read or mutate Sessions or Messages first resolve the Workspace:
 
 1. Load `.asem.yaml` and read `workspace.id`.
+2. Use `workspace_id` as the normal boundary for Session lookup, parent-child relationships, Messages, and Reports.
+
+Operations that create or launch a Session also resolve location metadata from the Session cwd:
+
+1. Resolve `cwd` from explicit `cwd`, `repo`, or the caller cwd.
 2. Resolve `worktree_root`:
    1. run `git rev-parse --show-toplevel` if available;
    2. realpath the result;
    3. if Git lookup fails, realpath cwd.
-3. Use `(workspace_id, worktree_root)` as the default boundary.
+3. Store both `cwd` and `worktree_root` on the Session.
+4. Place runtime files under `<worktree_root>/.asem/sessions/<session_id>/`.
 
-TUI has a workspace-wide cockpit mode by default, with a worktree-only focus still available:
+TUI is a Workspace cockpit by default, with worktree/repo-focused filters still available:
 
 ```sh
-asem tui                  # default workspace cockpit
-asem tui --scope worktree # current worktree only
+asem tui                  # Workspace cockpit
+asem tui --scope worktree # compatibility spelling for current-worktree filter
 asem tui --scope workspace
 ```
 
 - `workspace` shows all Sessions with the same `workspace_id`, grouped by `worktree_root`.
-- `worktree` shows only current `workspace_id + worktree_root`.
-- In `workspace` scope, TUI operations on other worktrees are allowed because the TUI is the explicit human operator cockpit; see [ADR 0004](../adr/0004-tui-defaults-to-workspace-live-cockpit.md).
+- `worktree` filters that Workspace view to the current `worktree_root`.
+- Existing `--scope worktree` wording is UI compatibility; Worktree Root is not the normal relationship boundary.
+- TUI operations are human operator actions. A TUI send remains operator-originated and is not attributed to a target worktree's current Session; see [ADR 0003](../adr/0003-tui-operator-message-attribution.md).
 - There is no `--scope all` in MVP.
-
-The workspace-wide read is the single sanctioned scope broadening (implementation
-principle 7). It is confined to two `@asem/store` primitives
-(`listSessionsByWorkspace` / `listMessagesByWorkspace`, bounded by `workspace_id`
-only) and one `@asem/ops` reader (`load_workspace_snapshot`); the cockpit groups
-the result by `worktree_root`. A cross-worktree operation in `workspace` scope is
-run with `cwd` set to the target Session's `worktree_root`, so the shared
-operation re-resolves to that Session's Effective Scope rather than bypassing
-scope checks. Because that scope is the target worktree's, a TUI send marks
-itself operator-originated so it is not attributed to that worktree's current
-Session (see "Auth and local trust model" and
-[ADR 0003](../adr/0003-tui-operator-message-attribution.md)).
 
 ## Config design
 
@@ -188,14 +185,14 @@ Rules:
 
 - `workspace.id` is required after `asem init`.
 - `repos` is optional. Each key is a Repo Alias and each `path` is resolved relative to the config file that declares it.
-- A Repo Alias is only a cwd shortcut for Session creation. It does not create cross-worktree Parent Session, Message, or Report semantics.
-- `repos.<alias>.path` must resolve to an existing directory before `create_session` side effects begin. The target may be a Git worktree or any directory accepted by the normal `ScopeResolver` realpath fallback.
+- A Repo Alias is only a cwd shortcut for Session creation. It does not create a scope boundary or special Parent Session, Message, or Report semantics.
+- `repos.<alias>.path` must resolve to an existing directory under the Workspace root before `create_session` side effects begin. The target may be a Git worktree or any directory accepted by the normal location resolver realpath fallback.
 - Builtin templates are available even when project-local `templates` is omitted or empty.
 - Generated config uses block-style YAML and avoids flow-style empty collection notation such as `: {}` or `: []`. Empty schema-default fields such as empty `templates` maps, empty command sequences, empty `attach_command`, and empty `refs` maps are omitted. Hand-written config may still use explicit YAML flow-style empty collections; parsing remains representation-neutral.
 - `asem init --interactive` may materialize the selected builtin Agent and Multiplexer Templates into project-local `templates`; see [`init-wizard-design.md`](./init-wizard-design.md).
 - Non-interactive `asem init --workspace <id> --agent <name> --mux <name>` may also materialize selected builtin Templates.
 - Project-local templates and repo aliases are trusted like local code.
-- Multiple worktrees may share the same `workspace.id`, but normal operations remain worktree-isolated.
+- Multiple worktrees may share the same `workspace.id`; normal Session relationships and communication are Workspace-scoped, while worktree roots remain location metadata and filters.
 - No `config validate` command in MVP.
 
 ### Config discovery
@@ -211,29 +208,47 @@ The handoff fixes the config filename and schema but not the exact search behavi
 
 ### Repo alias creation from a workspace root
 
-`asem session create --repo <alias>` is a human CLI convenience for workspace-root operation. It resolves `<alias>` through the nearest discovered `.asem.yaml` that contains a `repos` map, validates that the configured path exists, and then launches the Session with the resolved path as the effective `cwd`.
+`asem session create --repo <alias>` is a cwd convenience for Workspace operation. It resolves `<alias>` through the discovered Workspace `.asem.yaml` that contains a `repos` map, validates that the configured path exists under the Workspace root, and then launches the Session with the resolved path as its `cwd`.
 
 For example:
 
 ```sh
 cd ~/work/product-x
+eval "$(asem init-session --name product-root --root --mux herdr)"
 asem session create frontend-parent \
   --repo frontend \
-  --root \
   --prompt "Act as the parent Session for frontend work."
 ```
 
-is semantically equivalent to creating the same root Session with `--cwd ~/work/product-x/frontend`, except the path is named and centralized in `.asem.yaml`.
+creates this Workspace Session tree:
+
+```text
+product-root cwd=~/work/product-x
+└── frontend-parent cwd=~/work/product-x/frontend
+```
+
+The repo Session is a child of the Workspace current Session because `session create` used neither `--root` nor `--parent`. The repo alias only chose the child Session's cwd.
+
+The same relationship can be made explicit:
+
+```sh
+asem session create frontend-parent \
+  --repo frontend \
+  --parent <product-root-session-id> \
+  --prompt "Report progress with: asem report parent --body ..."
+```
 
 Repo alias rules:
 
-- `--repo` and `--cwd` are mutually exclusive because both choose the effective create cwd.
-- The root `.asem.yaml` that defines `repos` remains the config source for workspace id, Agent defaults, Multiplexer defaults, and project-local templates used by the create operation.
-- The resolved repo path becomes the Session `cwd`, and normal scope resolution still records `worktree_root` from that target cwd: Git root when available, otherwise realpath.
-- Parent resolution is unchanged. `--root` creates a repo-scoped root Session; `--parent <id>` must name a Session in the target repo's Effective Scope; with no parent flag, the current Session fallback is resolved in the target repo scope.
-- A repo parent may create child Sessions normally. Those child and grandchild Sessions use the existing same-scope `parent_session_id` chain; `report_parent` sends to the direct Parent Session as usual.
-- Message and Report storage/delivery stay in the target repo's normal Effective Scope. There is no cross-worktree Message, Report, launch-origin, or workspace-parent relationship in this design.
-- `asem workspace repo list` reads the discovered config and renders aliases, resolved paths, and whether each path currently exists. It does not read Session state.
+- `--repo` and `--cwd` are mutually exclusive because both choose the Session cwd.
+- `repo` is supported by CLI and MCP `create_session`; alias resolution is shared operation behavior owned by `@asem/ops`.
+- The Workspace `.asem.yaml` remains the config source for workspace id, Agent defaults, Multiplexer defaults, Agent Profiles, and project-local templates used by the create operation.
+- The resolved repo path becomes the Session `cwd`, and location resolution records `worktree_root` from that target cwd: Git root when available, otherwise realpath.
+- Parent resolution is Workspace-scoped. `--root` creates a parentless Session; `--parent <id>` must name a Session in the same Workspace; with no parent flag, the Workspace current Session fallback is used.
+- `session create` does not update the Workspace current Session, so one root/current Session can create multiple repo parent Sessions in sequence.
+- A repo parent may create child Sessions normally. Those child and grandchild Sessions use the Workspace `parent_session_id` chain; `report_parent` sends to the direct Parent Session as usual.
+- Message and Report storage/delivery stay inside the Workspace. There is no task, workflow, worker-pool, or cross-Workspace orchestration model in this design.
+- `asem workspace repo list` reads the discovered config and renders aliases, resolved paths, and whether each path currently exists as a directory under the Workspace root. It does not read Session state.
 
 ## Persistence model
 
@@ -245,7 +260,7 @@ Use one global SQLite database:
 ~/.asem/state.db
 ```
 
-The global DB enables discovery across local shells and agent processes while still enforcing operation-level scope filters.
+The global DB enables discovery across local shells and agent processes while still enforcing the Workspace boundary.
 
 ### Worktree-local Session directories
 
@@ -289,11 +304,14 @@ create table sessions (
   closed_at text
 );
 
-create unique index sessions_scope_name_unique
-  on sessions(workspace_id, worktree_root, name);
+create unique index sessions_workspace_name_unique
+  on sessions(workspace_id, name);
 
 create index idx_sessions_workspace_status
-  on sessions(workspace_id, worktree_root, status);
+  on sessions(workspace_id, status);
+
+create index idx_sessions_workspace_worktree
+  on sessions(workspace_id, worktree_root);
 ```
 
 Notes:
@@ -301,7 +319,7 @@ Notes:
 - `mux_ref_json` stores multiplexer-specific coordinates such as herdr workspace/tab/pane or tmux session/window/pane.
 - `model` is the nullable model the Session was launched with (MIK-040). It is launch metadata only: asem does not validate model names, map aliases, select providers, or infer Agent capability from it. Existing rows migrate forward as `model = null`.
 - `profile` / `profile_source` record the optional Agent Profile id and resolved source (`project`, `user`, or `builtin`) selected for Session creation. Profile instructions are not duplicated into SQLite; the effective prompt remains in `prompt.md`. See [Agent Profiles Design](./agent-profiles-design.md).
-- `parent_session_id` must point to a Session in the same effective scope for normal operations.
+- `parent_session_id` must point to a Session in the same Workspace for normal operations.
 - There is no `role` or `metadata_json` in MVP.
 
 ### `messages` table
@@ -322,13 +340,16 @@ create table messages (
 );
 
 create index idx_messages_workspace_created
+  on messages(workspace_id, created_at desc);
+
+create index idx_messages_workspace_worktree_created
   on messages(workspace_id, worktree_root, created_at desc);
 
 create index idx_messages_to_created
   on messages(to_session_id, created_at desc);
 
 create index idx_messages_delivery_error
-  on messages(workspace_id, worktree_root, delivery_error);
+  on messages(workspace_id, delivery_error);
 ```
 
 Message guarantees:
@@ -346,7 +367,8 @@ Close/delete rule:
 - `close_session --force` is the explicit recovery path for a known-stale live Session whose mux resource has already disappeared. It attempts the mux `close` sequence; if that sequence fails, it still records status `closed` while preserving Message/Report history. Without `--force`, mux close failure leaves the stored status unchanged.
 - Sessions registered with `init-session` borrow an already-existing pane/workspace rather than owning a mux resource. Their `mux_ref_json` carries `asem_mux_owned = "false"`; `close_session` skips mux `close` for those Sessions and records only the status transition. This prevents deleting a parent/current Session from closing the operator's existing herdr workspace.
 - `delete_session --force` deletes only non-live Sessions. A `starting` or `running` Session must be closed first so pane/process cleanup is not bypassed by store deletion. For borrowed `init-session` Sessions, that close is safe because it does not close the borrowed mux resource.
-- Once a Session is non-live, `delete_session --force` deletes the Session and all related messages where `from_session_id = id OR to_session_id = id`.
+- Deleting a Session with children normally fails. `delete_session --force` may orphan child Sessions by setting their `parent_session_id` to null; it does not cascade-delete children.
+- Once a Session is non-live and child handling has succeeded, `delete_session --force` deletes the Session and all related messages where `from_session_id = id OR to_session_id = id`.
 - Related-message deletion semantics live in `@asem/ops`, not in FK cascade.
 - `@asem/store` exposes scoped transactional primitives such as `deleteSessionScoped`, `deleteRelatedMessagesScoped`, and `withTransaction`; it does not decide when a delete operation should remove related messages.
 
@@ -525,25 +547,25 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 
 ### Initial operation table
 
-| Operation | CLI surface | MCP tool | Auth | Scope | Main side effect |
+| Operation | CLI surface | MCP tool | Auth | Boundary / location | Main side effect |
 |---|---|---|---|---|---|
-| Initialize project | `asem init` | — | human local trust | current worktree | creates `.asem.yaml`, updates `.gitignore` |
-| Register current Session | `asem init-session` | `init_session` | token generated | effective scope | inserts Session row, prints exports |
-| Create Session | `asem session create [--repo <alias>]` | `create_session` | human or verified current Session | effective scope | creates pane, writes files, inserts Session row; `--repo` is CLI-only cwd alias resolution before calling the shared operation |
-| List Repo Aliases | `asem workspace repo list` | — | human local trust | current config | reads `.asem.yaml` repo aliases and path existence |
-| List Profiles | `asem profile list` | `list_profiles` | human local trust | current config/worktree | reads builtin/user/project Agent Profile definitions |
-| Get Profile | `asem profile get <id>` | `get_profile` | human local trust | current config/worktree | reads one resolved Agent Profile definition |
-| List Sessions | `asem session list` | `list_sessions` | human or verified current Session | effective scope | reads Session rows, may update liveness |
-| Get Session | `asem session get` | `get_session` | human or verified current Session | effective scope | reads one Session, may include `attach_hint` and `attach_command` |
-| Attach Session | `asem session attach` | — | human local trust | effective scope | attaches to external mux |
-| Close Session | `asem session close` | `close_session` | human or verified current Session | effective scope | closes pane/process, sets `closed` |
-| Delete Session | `asem session delete` | `delete_session` | human or verified current Session | effective scope | deletes Session and related messages |
-| Send Message | `asem message send` | `send_message` | human or verified current Session | effective scope | inserts Message, best-effort delivery |
-| List Messages | `asem message list`, `asem message list --inbox`, `asem message list --undelivered` | `list_messages` | human or verified current Session | effective scope | reads Message rows |
-| Wait Message | `asem message wait --to <id> [--from <id>] [--kind message|report]` | — | human local trust | effective scope | polls Message rows until a match or timeout |
-| Report Parent | `asem report parent` | `report_parent` | verified current Session | effective scope | inserts report Message to parent |
+| Initialize project | `asem init` | — | human local trust | current cwd | creates `.asem.yaml`, updates `.gitignore` |
+| Register current Session | `asem init-session` | `init_session` | token generated | Workspace + current cwd location | inserts Session row, sets Workspace current, prints exports |
+| Create Session | `asem session create [--repo <alias>]` | `create_session` | human or verified current Session | Workspace + requested cwd/repo location | creates pane, writes files, inserts Session row; `repo` is shared cwd-alias input |
+| List Repo Aliases | `asem workspace repo list` | — | human local trust | current Workspace config | reads `.asem.yaml` repo aliases and path existence |
+| List Profiles | `asem profile list` | `list_profiles` | human local trust | current Workspace/location | reads builtin/user/project Agent Profile definitions |
+| Get Profile | `asem profile get <id>` | `get_profile` | human local trust | current Workspace/location | reads one resolved Agent Profile definition |
+| List Sessions | `asem session list` | `list_sessions` | human or verified current Session | Workspace, optional location filters | reads Session rows, may update liveness |
+| Get Session | `asem session get` | `get_session` | human or verified current Session | Workspace | reads one Session, may include `attach_hint` and `attach_command` |
+| Attach Session | `asem session attach` | — | human local trust | Workspace lookup, target location | attaches to external mux |
+| Close Session | `asem session close` | `close_session` | human or verified current Session | Workspace lookup, target location | closes pane/process, sets `closed` |
+| Delete Session | `asem session delete` | `delete_session` | human or verified current Session | Workspace lookup | deletes Session and related messages; protects children |
+| Send Message | `asem message send` | `send_message` | human or verified current Session | Workspace | inserts Message, best-effort delivery |
+| List Messages | `asem message list`, `asem message list --inbox`, `asem message list --undelivered` | `list_messages` | human or verified current Session | Workspace, optional location filters | reads Message rows |
+| Wait Message | `asem message wait --to <id> [--from <id>] [--kind message\|report]` | — | human local trust | Workspace | polls Message rows until a match or timeout |
+| Report Parent | `asem report parent` | `report_parent` | verified current Session | Workspace | inserts report Message to stored Parent Session |
 | Start MCP | `asem mcp` | — | local process | current config | starts stdio MCP server |
-| Start TUI | `asem tui` | — | human local trust | worktree/workspace | opens Session cockpit |
+| Start TUI | `asem tui` | — | human local trust | Workspace with filters | opens Session cockpit |
 
 MCP intentionally does not expose attach. `get_session` may return legacy `attach_hint` plus structured `attach_command` for human/operator surfaces; CLI/TUI execute the structured argv form when present.
 
@@ -562,10 +584,10 @@ Parent resolution truth table:
 
 | Input | Parent behavior |
 |---|---|
-| `--parent <session-id>` | Use the explicit parent after verifying same effective scope. |
+| `--parent <session-id>` | Use the explicit parent after verifying the same Workspace. |
 | `--root` / `--no-parent` | Create a root Session with `parent_session_id = null`. |
-| no parent flag + current Session exists | Use current Session as parent. |
-| no parent flag + no current Session | Return structured `current_session_not_found` with hint to use `--root` or run `asem init-session`. |
+| no parent flag + Workspace current Session exists | Use the Workspace current Session as parent. |
+| no parent flag + no Workspace current Session | Return structured `current_session_not_found` with hint to use `--root` or run `asem init-session`. |
 
 `init-session` registers an already-existing pane/workspace. It must record enough Multiplexer coordinates for the registered Session to be deliverable, but it does not own that mux resource. The stored mux ref is therefore marked as borrowed with `asem_mux_owned = "false"`; close/delete flows use that marker to avoid closing the operator's current multiplexer resource before deleting the Session row.
 
@@ -590,27 +612,26 @@ export AS_WORKSPACE_ID=...
 export AS_WORKTREE_ROOT=...
 ```
 
-Also write a project-local current-session file so CLI commands can infer current Session where appropriate.
+Also write a Workspace current-session file so CLI commands can infer the current Session where appropriate. `session create` does not update this file; it is set by `init-session` and by an explicit current-session switch command.
 
-Current-session file path and shape are intentionally not fully locked in the handoff. A conservative proposed MVP shape is:
+Current Session resolution order:
 
-```text
-<worktree_root>/.asem/current-session.json
-```
+1. `AS_SESSION_ID` and `AS_SESSION_TOKEN` from the environment;
+2. the Workspace current-session file.
 
-with mode `0600` when it contains token material. This path is covered by the `.gitignore` runtime rule above. A safer implementation may split non-secret metadata from raw token material, for example by storing a pointer in `current-session.json` and the raw token under `.asem/tokens/`; if so, update this design before locking the format.
+The current-session file path and shape are intentionally not fully locked in this design. The file is under the Workspace root `.asem/` runtime path and must be ignored by Git. When it contains token material, it must be mode `0600`. A safer implementation may split non-secret metadata from raw token material, for example by storing a pointer in `current-session.json` and the raw token under `.asem/tokens/`; if so, update this design before locking the format.
 
 ### Create Session flow
 
-For the CLI only, `--repo <alias>` is resolved before calling the shared `create_session` operation: discover the config that declares `repos`, resolve the alias path relative to that config, reject a missing/non-directory path, pin the alias-declaring `.asem.yaml` as the config source, and pass the resolved path as `input.cwd`. MCP callers use `cwd` directly and do not receive a separate repo-alias abstraction.
+`repo` is shared `create_session` input for CLI and MCP. The operation resolves `repo` before side effects: discover the Workspace config that declares `repos`, resolve the alias path relative to that config, reject a missing/non-directory path, require the path to remain under the Workspace root, and use the resolved path as the Session cwd. `repo` and `cwd` are mutually exclusive.
 
-1. Resolve config `.asem.yaml`. For `--repo`, this is the alias-declaring root config, not a repo-local override.
-2. Resolve `workspace_id` from the resolved config and `worktree_root` from the effective create cwd.
+1. Resolve config `.asem.yaml`. For `repo`, this is the alias-declaring Workspace config, not a repo-local override.
+2. Resolve `workspace_id` from the resolved config, then resolve Session `cwd` and `worktree_root` from the requested cwd/repo.
 3. Resolve parent using the parent-resolution truth table unless `--root` / `--no-parent` is set.
 4. Resolve the requested Agent Profile, if any, from project/user/builtin sources.
 5. Resolve final Agent and model using `explicit input > selected profile default > config default`, suppressing the profile model default when an explicit Agent differs from the profile Agent default.
 6. Validate model support for the final Agent Template before side effects.
-7. Create Session dir under `.asem/sessions/<id>/`.
+7. Create Session dir under `<worktree_root>/.asem/sessions/<id>/`.
 8. Write effective `prompt.md` (profile instructions first when a profile is selected, then the original user prompt).
 9. Execute mux `create` sequence and capture mux refs.
 10. Generate launch script with env and agent command.
@@ -650,20 +671,7 @@ Agent-originated operations require Session token verification.
 
 Human/operator CLI and TUI operations operate under local trust. TUI is an operator surface and may send/close/delete without Session token, guarded by confirmation for destructive operations. TUI mutation effects mark themselves operator-originated so a stale or sibling-worktree current-session pointer cannot block an explicit human close/delete action.
 
-`send_message` decides a Message's source by resolving the current-Session
-pointer for the operation's Effective Scope: an agent-originated call verifies
-that Session's token and is attributed to it; a human local-trust call resolves
-no Session and is recorded with no source attribution (`from_session_id = null`,
-`[asem message]` header). The TUI is inherently the human operator, so it marks
-its send operator-originated (`OpContext.origin = "operator"`) to force the human
-path: it never adopts the resolved worktree's current-Session pointer. This
-matters in `--scope workspace`, where a cross-worktree send runs with `cwd` set
-to the target Session's `worktree_root` — without the operator marker, the send
-would silently impersonate that worktree's own current Session. The marker lives
-in the surface-built context, not the `send_message` input schema, so MCP/CLI
-input cannot set it. `report_parent` always acts as the verified current Session
-and never carries an operator origin. See
-[ADR 0003](../adr/0003-tui-operator-message-attribution.md).
+`send_message` decides a Message's source by resolving the current Session for the Workspace: an agent-originated call verifies that Session's token and is attributed to it; a human local-trust CLI call may use the Workspace current Session when present; an explicit operator-originated call is recorded with no Session source attribution (`from_session_id = null`, `[asem message]` header). The TUI is inherently the human operator, so it marks its send operator-originated (`OpContext.origin = "operator"`) to force the operator path: it never adopts the Workspace current Session. The marker lives in the surface-built context, not the `send_message` input schema, so MCP/CLI input cannot set it. `report_parent` always acts as the verified current Session, follows that Session's stored `parent_session_id`, and never carries an operator origin. See [ADR 0003](../adr/0003-tui-operator-message-attribution.md).
 
 ## Error semantics
 
@@ -674,7 +682,7 @@ Important MVP errors:
 - `config_not_found`
 - `invalid_config`
 - `invalid_template`
-- `scope_mismatch`
+- `workspace_mismatch`
 - `session_not_found`
 - `session_name_conflict`
 - `parent_session_not_found`
@@ -696,11 +704,11 @@ Initial monorepo packages:
 
 | Package | Responsibility | External I/O |
 |---|---|---|
-| `@asem/core` | domain types, schemas, scope types, operation input/output contracts, port interfaces, pure shell escaping helper, token hash/verify | none |
+| `@asem/core` | domain types, schemas, Workspace/location types, operation input/output contracts, port interfaces, pure shell escaping helper, token hash/verify | none |
 | `@asem/runtime` | template registry, template interpolation, sequence engine, capture handling, fake runner contract; uses core shell escaping helper | injected command/file/clock/logger ports |
 | `@asem/profiles` | builtin Agent Profile definitions, user/project profile discovery, Markdown/frontmatter parsing, source precedence, profile resolution, effective prompt rendering | filesystem through injected/rooted inputs |
-| `@asem/store` | SQLite migrations, row mapping, Session/Message CRUD, scoped transaction primitives | SQLite |
-| `@asem/ops` | shared operation handlers over injected ports, auth/scope checks, create/send/close/delete/list semantics | injected ports only |
+| `@asem/store` | SQLite migrations, row mapping, Workspace-scoped Session/Message CRUD, transaction primitives, location filters | SQLite |
+| `@asem/ops` | shared operation handlers over injected ports, auth/Workspace checks, repo alias resolution, create/send/close/delete/list semantics | injected ports only |
 | `@asem/cli` | installed `asem` binary, command parsing, human rendering, starts MCP/TUI | shell/stdout/stderr |
 | `@asem/mcp` | stdio MCP server, MCP tool projection over shared operations | MCP stdio |
 | `@asem/tui` | OpenTUI Session cockpit and TUI view models | terminal UI / attach command |
@@ -926,9 +934,9 @@ Operation test matrix:
 | `init` / config | `FileSystem`, `ConfigLoader`, `ScopeResolver` | config creation, gitignore rules, missing/invalid config errors |
 | `init_session` | `Store`, `FileSystem`, `TokenGenerator`, `Clock`, `IdGenerator` | token hash only in DB, current-session file mode/ignore coverage, herdr-env borrowed mux auto-registration, explicit `mux: none` remains non-deliverable |
 | `create_session` | `Store`, `TemplateRegistry`, `TemplateRunner`, `FileSystem`, `CurrentSessionResolver`, `TokenGenerator`, `Logger` | sequence order, parent resolution, DB insert only after success, cleanup on failure, log path in error |
-| `send_message` / `report_parent` | `Store`, `TemplateRunner`, `CurrentSessionResolver`, `Clock` | auth/scope checks, formatted body, delivered_at vs delivery_error persistence, actionable non-deliverable `mux: none` failure |
-| `list/get` | `Store`, `ScopeResolver`, `LivenessProbe` | default scope filters, optional liveness update, no work-outcome inference |
-| `close/delete` | `Store`, `TemplateRunner`, `Clock` | scoped lookup, close best-effort behavior, operation-owned related-message cleanup |
+| `send_message` / `report_parent` | `Store`, `TemplateRunner`, `CurrentSessionResolver`, `Clock` | auth/Workspace checks, formatted body, delivered_at vs delivery_error persistence, actionable non-deliverable `mux: none` failure |
+| `list/get` | `Store`, `ScopeResolver`, `LivenessProbe` | Workspace default reads, optional location filters, optional liveness update, no work-outcome inference |
+| `close/delete` | `Store`, `TemplateRunner`, `Clock` | Workspace lookup, close best-effort behavior, child protection/orphaning, operation-owned related-message cleanup |
 | CLI/MCP projection | fake `@asem/ops` result or fully faked deps | surface parsing/rendering only, no duplicated semantics |
 | TUI view-model | fake `@asem/ops` and store snapshots | selection, tabs, ephemeral badges, confirmations, no durable unread state |
 
@@ -975,7 +983,7 @@ The opt-in real-mux/agent checks are separate and off by default: the
    - Session schema.
    - Message schema.
    - Config schema.
-   - Scope resolution.
+   - Workspace and location resolution.
    - Token hashing/verification.
    - Port interfaces for store, runtime, filesystem, config loading, current-session resolution, liveness probing, logging, time, ids, and token generation.
    - Shell escaping.
@@ -990,12 +998,12 @@ The opt-in real-mux/agent checks are separate and off by default: the
 4. **Store**
    - SQLite init/migrations.
    - Sessions/Messages CRUD.
-   - Scoped transaction primitives for delete cleanup.
+   - Workspace transaction primitives and location filters for delete cleanup and views.
    - Indexes and constraints.
 
 5. **Ops baseline**
    - shared operation handlers over injected deps;
-   - auth and scope checks;
+   - auth and Workspace checks;
    - list/get/init/message-list operations first.
 
 6. **CLI baseline**
@@ -1020,8 +1028,8 @@ The opt-in real-mux/agent checks are separate and off by default: the
    - best-effort Message delivery.
 
 10. **MCP stdio**
-   - expose agreed tools using shared handlers;
-   - no MCP attach.
+    - expose agreed tools using shared handlers;
+    - no MCP attach.
 
 11. **TUI**
     - OpenTUI in `@asem/tui`;
@@ -1031,9 +1039,12 @@ The opt-in real-mux/agent checks are separate and off by default: the
 ## Deferred questions
 
 - Exact builtin commands and flags for each agent CLI.
-- Whether the proposed `.asem.yaml` discovery rule should stop at the Git root instead of continuing to filesystem root.
-- Exact current-session file path and JSON shape, if the proposed `.asem/current-session.json` shape changes during implementation.
-- Whether `AS_PROJECT_ROOT` should mean cwd, worktree root, or be omitted until needed.
+- Whether the proposed `.asem.yaml` discovery rule should stop at the Git root
+  instead of continuing to filesystem root.
+- Exact current-session file path and JSON shape, if the proposed
+  `.asem/current-session.json` shape changes during implementation.
+- Whether `AS_PROJECT_ROOT` should mean cwd, worktree root, or be omitted until
+  needed.
 - Whether to add `asem config validate` after templates stabilize.
 - Whether template files should support includes/imports after MVP.
 - Whether TUI should later support creation, live transcript embedding, or durable unread state.
@@ -1044,9 +1055,12 @@ asem should start as a small, local-first Session substrate:
 
 - one durable Session table;
 - one durable Message table;
-- one effective scope boundary;
+- one Workspace boundary with cwd / Worktree Root as Session location metadata;
 - command sequence templates for runtime control;
 - shared operations projected into CLI and MCP;
 - a human TUI cockpit that operates on Sessions, not tasks.
 
-The strongest design constraint is negative: asem must stay out of workflow interpretation. It should help agents and humans find, attach to, and talk to live local Sessions, while leaving task meaning and outcome judgment to the humans or agents using it.
+The strongest design constraint is negative: asem must stay out of workflow
+interpretation. It should help agents and humans find, attach to, and talk to
+live local Sessions, while leaving task meaning and outcome judgment to the
+humans or agents using it.

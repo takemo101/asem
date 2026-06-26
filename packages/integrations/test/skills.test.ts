@@ -102,7 +102,7 @@ describe("installSkillForTarget", () => {
     expect(skillDocument).toMatch(/separate agent Session/i);
     expect(skillDocument).toMatch(/durable Messages\/Reports/i);
     expect(skillDocument).toMatch(/independent review/i);
-    expect(skillDocument).toMatch(/workspace\/repo scoped supervision/i);
+    expect(skillDocument).toMatch(/Workspace Session tree supervision/i);
     expect(skillDocument).toMatch(
       /Do not use asem as a task manager or workflow engine/i,
     );
@@ -141,10 +141,10 @@ describe("installSkillForTarget", () => {
 
   test("teaches workspace-root Repo Alias operation as a cwd shortcut", () => {
     expect(skillDocument).toContain("Repo Alias");
-    expect(skillDocument).toContain(
-      "asem session create frontend-parent --repo frontend --root --prompt",
-    );
-    expect(skillDocument).toMatch(/--repo is only a cwd alias/i);
+    expect(skillDocument).toContain("asem workspace repo list");
+    expect(skillDocument).toContain("asem init-session --name workspace-root");
+    expect(skillDocument).toMatch(/--repo only chooses the new Session cwd/i);
+    expect(skillDocument).toMatch(/child of the Workspace current Session/i);
     expect(skillDocument).toMatch(
       /repo parent Sessions create their own repo-local child Sessions/i,
     );
@@ -152,13 +152,13 @@ describe("installSkillForTarget", () => {
   });
 
   test("teaches repo parent Sessions to report to a root parent via CLI or MCP", () => {
-    expect(skillDocument).toMatch(/same Effective Scope/i);
+    expect(skillDocument).toMatch(/You may pass the parent explicitly/i);
     expect(skillDocument).toContain(
       "asem session create frontend-parent --repo frontend --parent <root-session-id>",
     );
     expect(skillDocument).toContain("asem report parent --body");
     expect(skillDocument).toContain(
-      'create_session({ parentSessionId: "<root-session-id>" });',
+      'create_session({ repo: "frontend", parentSessionId: "<root-session-id>" });',
     );
     expect(skillDocument).toContain(
       'report_parent({ body: "frontend report" });',
@@ -169,7 +169,7 @@ describe("installSkillForTarget", () => {
     expect(skillDocument).toMatch(/Session status is process state/i);
     expect(skillDocument).toMatch(/Report is communication, not completion/i);
     expect(skillDocument).toMatch(
-      /Do not invent cross-worktree Parent\/Report\/Message semantics/i,
+      /Keep Parent\/Report\/Message semantics inside one Workspace/i,
     );
     expect(skillDocument).toMatch(/Do not edit \.asem runtime files directly/i);
   });

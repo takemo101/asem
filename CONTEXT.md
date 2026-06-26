@@ -5,7 +5,7 @@ asem is a local agent session manager. It helps humans and agents start, find, a
 ## Language
 
 **Session**:
-A registered agent CLI process running inside a terminal multiplexer. A Session can receive Messages from other Sessions in the same effective scope and may have a parent Session.
+A registered agent CLI process running inside a terminal multiplexer. A Session belongs to one Workspace, has a `cwd`, may have a Parent Session in the same Workspace, and can receive Messages from Sessions in that Workspace.
 _Avoid_: Task, job, workflow step, ticket.
 
 **Parent Session**:
@@ -21,20 +21,16 @@ A Message from a Session to its Parent Session. Reports are used for progress, f
 _Avoid_: Result, completion event, final status.
 
 **Workspace**:
-A named logical grouping for related work. A Workspace name alone does not override worktree isolation.
+A named logical grouping and safety boundary for related Sessions. Normal Session visibility, parent-child relationships, Messages, and Reports are scoped to one Workspace.
 _Avoid_: Project, team, swarm, board.
 
 **Worktree Root**:
-The filesystem root that isolates a working copy. Normal Session visibility and messaging are scoped by Workspace plus Worktree Root.
-_Avoid_: Directory, project root, repository when the isolation boundary specifically means the active worktree.
+The filesystem root for a working copy. A Session stores its Worktree Root as location metadata for launch files, runtime cleanup, grouping, and filters; it is not the normal parent/message/report boundary.
+_Avoid_: Workspace boundary, project membership, coordination scope.
 
 **Repo Alias**:
-A human CLI convenience name in `.asem.yaml` that resolves to a filesystem directory used as the `cwd` for Session creation. A Repo Alias is only a cwd shortcut; it does not create cross-worktree Parent Session, Message, or Report semantics.
+A human convenience name in `.asem.yaml` that resolves to a filesystem directory used as the `cwd` for Session creation. A Repo Alias is only a cwd shortcut; it does not create a scope boundary or special Parent Session, Message, or Report semantics.
 _Avoid_: Project membership, package graph, orchestration target.
-
-**Effective Scope**:
-The boundary inside which Sessions can normally see and message each other: Workspace plus Worktree Root.
-_Avoid_: Global workspace, project scope when worktree isolation matters.
 
 **Multiplexer**:
 The terminal environment that owns the live pane for a Session, such as herdr, tmux, rmux, or zellij.
@@ -65,7 +61,7 @@ A human CLI setup flow for initializing an asem Workspace and choosing its defau
 _Avoid_: Config marketplace, template authoring workflow, environment doctor.
 
 **Cockpit**:
-The human TUI view for supervising Sessions in a scope.
+The human TUI view for supervising Sessions in a Workspace, with optional worktree/repo filters.
 _Avoid_: Dashboard when it implies analytics; orchestrator when it implies control logic.
 
 ## Flagged ambiguities
@@ -76,5 +72,7 @@ _Avoid_: Dashboard when it implies analytics; orchestrator when it implies contr
 - “Inbox” is only a filtered view of Messages addressed to the current Session. It is not a durable unread queue.
 - “Report” does not close a Session and does not mean the work is done.
 - “Completion” is not a domain state. A Session may exit or be closed, but asem does not judge whether the agent accomplished its assignment.
-- “Worktree isolation” is part of the domain. Separate worktrees must not normally message each other just because they share a Workspace name.
+- “Workspace” does not imply task orchestration. It is the Session tree and communication safety boundary, not a task/workflow/team model.
+- “Worktree Root” is location metadata. Do not use it as the normal boundary for Parent Session, Message, or Report behavior.
+- “Effective Scope” was the old term for `workspace_id + worktree_root`; use Workspace for the normal boundary instead.
 - “Repo Alias” is a cwd convenience for Session creation, not a new scope boundary or cross-repository coordination model.

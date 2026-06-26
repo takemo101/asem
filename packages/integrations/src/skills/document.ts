@@ -24,7 +24,7 @@ Use asem when work benefits from:
 - a separate agent Session;
 - durable Messages/Reports;
 - independent review;
-- workspace/repo scoped supervision.
+- Workspace Session tree supervision across repo cwd values.
 
 Do not use asem as a task manager or workflow engine.
 
@@ -62,12 +62,13 @@ A Repo Alias is a named cwd shortcut. If the Workspace root \`.asem.yaml\` defin
 
 \`\`\`sh
 asem workspace repo list
-asem session create frontend-parent --repo frontend --root --prompt "Act as the parent Session for frontend work."
+eval "$(asem init-session --name workspace-root --root --mux herdr)"
+asem session create frontend-parent --repo frontend --prompt "Act as the frontend parent Session."
 \`\`\`
 
---repo is only a cwd alias. It does not create cross-worktree Parent/Message/Report semantics. Parent/Child, Message, and Report behavior remains normal same-scope behavior inside the target repo.
+--repo only chooses the new Session cwd. It does not change parent, Message, or Report semantics. In the example, \`frontend-parent\` is a child of the Workspace current Session and runs with cwd set to the \`frontend\` alias path.
 
-To have repo parent Sessions report to a root/current Session, keep them in the same Effective Scope and create them under that parent:
+You may pass the parent explicitly:
 
 \`\`\`sh
 asem session create frontend-parent --repo frontend --parent <root-session-id> --prompt "Report progress with: asem report parent --body ..."
@@ -75,10 +76,10 @@ asem session create frontend-parent --repo frontend --parent <root-session-id> -
 asem report parent --body "frontend report"
 \`\`\`
 
-With MCP, pass the same parent id to \`create_session\`, then call \`report_parent\` from that child Session:
+With MCP, pass \`repo\` and the same parent id to \`create_session\`, then call \`report_parent\` from that child Session:
 
 \`\`\`ts
-create_session({ parentSessionId: "<root-session-id>" });
+create_session({ repo: "frontend", parentSessionId: "<root-session-id>" });
 report_parent({ body: "frontend report" });
 \`\`\`
 
@@ -88,7 +89,7 @@ Repo parent Sessions create their own repo-local child Sessions. Use \`asem tui 
 
 - Session status is process state, not success/failure.
 - Report is communication, not completion.
-- Do not invent cross-worktree Parent/Report/Message semantics.
+- Keep Parent/Report/Message semantics inside one Workspace; \`--repo\` is just cwd selection.
 - Agent Profiles shape prompts; they are not workflow roles.
 - Do not edit .asem runtime files directly, especially \`.asem/sessions/\`, \`.asem/tokens/\`, or \`.asem/current-session*.json\`.
 `;

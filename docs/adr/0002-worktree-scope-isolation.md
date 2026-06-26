@@ -2,9 +2,12 @@
 
 ## Status
 
-Accepted for MVP design. TUI default-scope behavior is refined by
-[ADR 0004](./0004-tui-defaults-to-workspace-live-cockpit.md); normal CLI/MCP
-operations remain worktree-isolated by default.
+Superseded by [ADR 0008](./0008-workspace-scoped-session-tree.md).
+
+This ADR records the MVP decision that normal CLI/MCP operations were
+worktree-isolated by default. ADR 0008 replaces that decision with a
+Workspace-scoped Session tree while keeping Worktree Root as Session location
+metadata.
 
 ## Context
 

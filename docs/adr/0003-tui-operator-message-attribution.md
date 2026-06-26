@@ -2,29 +2,23 @@
 
 ## Status
 
-Accepted for MVP design.
+Accepted for MVP design. Updated by
+[ADR 0008](./0008-workspace-scoped-session-tree.md), which changes the normal
+communication boundary to Workspace while preserving TUI operator-originated
+sends.
 
 ## Context
 
-`send_message` decides a Message's source by resolving the current-Session
-pointer for the operation's Effective Scope: when one resolves, the call is
-agent-originated and the Message is attributed to that verified Session; when
-none resolves, the call is human local trust and the Message is recorded with
-no source attribution.
+`send_message` decides a Message's source by resolving the current Session when
+appropriate: when one resolves and its token is verified, the call is
+agent-originated and the Message is attributed to that verified Session;
+operator-originated sends are recorded with no source attribution.
 
-The TUI cockpit is the human operator surface. In `--scope workspace` mode it
-may act on a Session in a sibling worktree, and to keep that within
-[ADR 0002](./0002-worktree-scope-isolation.md) it runs the operation with `cwd`
-set to the target Session's `worktree_root`, so the shared operation re-resolves
-to that Session's Effective Scope rather than bypassing scope checks.
-
-That reuse exposed an attribution bug. If the target worktree has its own
-current-Session pointer (an agent registered there via `init-session`), a TUI
-send resolved that pointer and recorded the human operator's Message as if it
-came from that agent — silently impersonating a Session the human is not. The
-sender's worktree happened to have no pointer in the common case, so the
-existing "no current Session → no attribution" path masked the problem until a
-sibling worktree had a live agent.
+The TUI cockpit is the human operator surface. It may act on Sessions across
+Worktree Roots in one Workspace. That raised an attribution risk: if a TUI send
+reused current-Session resolution, the human operator's Message could be
+recorded as if it came from an agent Session — silently impersonating a Session
+the human is not.
 
 ## Decision
 

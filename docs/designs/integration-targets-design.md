@@ -113,7 +113,7 @@ If a target config already has an `asem` MCP entry, setup replaces only that ent
 The Skill should teach agents to:
 
 - treat asem as a local Session manager;
-- use Session, Message, Report, Workspace, Worktree Root, Effective Scope, Multiplexer, Agent, Template, Command Sequence, Cockpit, Agent Profile, and Integration Target vocabulary precisely;
+- use Session, Message, Report, Workspace, Worktree Root, Repo Alias, Multiplexer, Agent, Template, Command Sequence, Cockpit, Agent Profile, and Integration Target vocabulary precisely;
 - prefer asem MCP tools when available;
 - fall back to CLI commands when MCP is unavailable;
 - avoid inferring task success, workflow completion, or durable unread state from Session status, Reports, or Messages;

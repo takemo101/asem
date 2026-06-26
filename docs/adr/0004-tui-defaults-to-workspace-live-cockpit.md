@@ -2,13 +2,15 @@
 
 ## Status
 
-Accepted for implementation planning.
+Accepted for implementation planning. Updated by
+[ADR 0008](./0008-workspace-scoped-session-tree.md), which makes the Workspace
+Session tree the normal Session relationship and communication boundary.
 
 ## Context
 
 The original MVP design made `asem tui` default to `worktree` scope, with
-`--scope workspace` as an explicit broader view. That was conservative and
-aligned with the normal operation boundary: `workspace_id + worktree_root`.
+`--scope workspace` as an explicit broader view. That was conservative under
+the old `workspace_id + worktree_root` operation boundary.
 
 Operator feedback showed that this default makes the TUI feel stale. Sessions
 are often created dynamically from other Sessions or sibling worktrees, while the
@@ -31,8 +33,9 @@ asem tui --scope worktree # current worktree only
 asem tui --scope workspace
 ```
 
-The workspace-wide TUI remains a human operator surface. Non-TUI CLI and MCP
-operations remain normally scoped by `workspace_id + worktree_root`.
+The workspace-wide TUI remains a human operator surface. Under ADR 0008, CLI,
+MCP, and TUI all share the Workspace Session tree boundary; `--scope worktree`
+remains a worktree filter rather than the normal communication boundary.
 
 The cockpit will move toward an OpenTUI/React renderer, following cuekit's visual
 structure: themed header, panels, selected rows, compact footer, modal overlays,
@@ -44,18 +47,18 @@ Live changes are displayed as in-memory TUI activity derived by diffing snapshot
 while the cockpit is open. These activity rows are not durable Messages, not an
 event stream, and not unread/read receipt state.
 
-Cross-worktree mutations from the TUI continue to run with `cwd` set to the
-selected Session's `worktree_root`, so shared ops re-resolve the target Effective
-Scope. TUI sends continue to set `origin: "operator"` as required by
+TUI mutations on a selected Session continue to use that Session's location
+metadata where needed for attach/close/delete execution context. TUI sends
+continue to set `origin: "operator"` as required by
 [ADR 0003](./0003-tui-operator-message-attribution.md), preventing accidental
-impersonation of a sibling worktree's current Session.
+impersonation of a current Session.
 
 ## Consequences
 
 - The default TUI is more useful for supervising dynamic local Session creation.
 - Worktree-only focus remains available through `--scope worktree`.
-- The TUI remains the single sanctioned workspace-wide human view; this does not
-  broaden normal CLI/MCP behavior.
+- The TUI remains the human Workspace cockpit; ADR 0008 separately broadens
+  normal CLI/MCP parent/message/report behavior to the Workspace Session tree.
 - Documentation and CLI usage must change from "default worktree" to "default
   workspace" when implemented.
 - Tests must cover workspace grouping, cross-worktree operation safety, and

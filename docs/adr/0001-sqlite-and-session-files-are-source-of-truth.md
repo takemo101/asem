@@ -53,8 +53,8 @@ The database stores token hashes only. Raw token material lives only in env or m
 
 ## Consequences
 
-- SQLite can enforce Session name uniqueness per effective scope.
-- Message history can be queried by workspace/worktree, target Session, delivery error, and creation time.
+- SQLite can enforce Session name uniqueness per Workspace.
+- Message history can be queried by Workspace, location metadata, target Session, delivery error, and creation time.
 - Session files remain local to the worktree that owns the run.
 - Sensitive runtime files do not enter Git history by default.
 - Humans can still inspect prompts and logs with ordinary tools.

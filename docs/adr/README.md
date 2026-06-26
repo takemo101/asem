@@ -7,12 +7,13 @@ Use ADRs for durable decisions. Use `docs/designs/` for feature/subsystem design
 ## Records
 
 - [`0001-sqlite-and-session-files-are-source-of-truth.md`](./0001-sqlite-and-session-files-are-source-of-truth.md) — Session / Message state lives in global SQLite; sensitive runtime files live under worktree-local Session directories.
-- [`0002-worktree-scope-isolation.md`](./0002-worktree-scope-isolation.md) — normal visibility and messaging are scoped by `workspace_id + worktree_root`.
+- [`0002-worktree-scope-isolation.md`](./0002-worktree-scope-isolation.md) — superseded MVP decision that normal visibility and messaging were scoped by `workspace_id + worktree_root`.
 - [`0003-tui-operator-message-attribution.md`](./0003-tui-operator-message-attribution.md) — TUI sends are operator-originated and never attributed to the target worktree's current Session.
-- [`0004-tui-defaults-to-workspace-live-cockpit.md`](./0004-tui-defaults-to-workspace-live-cockpit.md) — `asem tui` defaults to a workspace-wide live cockpit while normal CLI/MCP scope remains worktree-isolated.
+- [`0004-tui-defaults-to-workspace-live-cockpit.md`](./0004-tui-defaults-to-workspace-live-cockpit.md) — `asem tui` defaults to a workspace-wide live cockpit.
 - [`0005-agent-prompt-delivery-uses-command-templates.md`](./0005-agent-prompt-delivery-uses-command-templates.md) — Agent prompt delivery is expressed with command templates, replacing `prompt_delivery`.
 - [`0006-surface-specific-logger-composition.md`](./0006-surface-specific-logger-composition.md) — Logger implementations are selected by CLI/MCP/TUI surface so protocol and terminal output stay safe.
 - [`0007-agent-profiles-are-explicit-prompt-shaping.md`](./0007-agent-profiles-are-explicit-prompt-shaping.md) — Agent Profiles are explicit prompt-shaping bundles, not workflow roles or automatic selectors.
+- [`0008-workspace-scoped-session-tree.md`](./0008-workspace-scoped-session-tree.md) — normal Session relationships and communication use a Workspace-scoped Session tree; cwd/worktree root are Session location metadata.
 
 ## ADR rules
 

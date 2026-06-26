@@ -68,9 +68,9 @@ what is happening across dynamically created local Sessions, including sibling
 worktrees that share the same `workspace_id`. Keeping the default worktree-only
 makes the cockpit look stale when helpers are launched elsewhere.
 
-This does not change normal CLI/MCP visibility. Normal non-TUI operations remain
-scoped by `workspace_id + worktree_root`. The TUI remains the single human
-operator surface with workspace-wide visibility.
+Under [ADR 0008](../adr/0008-workspace-scoped-session-tree.md), normal CLI/MCP
+visibility and communication are also Workspace-scoped. The TUI remains the human
+operator cockpit over that Workspace Session tree.
 
 ### Renderer
 
@@ -92,10 +92,10 @@ Use cuekit's simple auto-refresh model:
 - refresh immediately after send/close/delete/attach returns;
 - do not add a background daemon or scheduler.
 
-A refresh reads the active cockpit scope:
+A refresh reads the active cockpit view:
 
-- `workspace` scope uses `load_workspace_snapshot`;
-- `worktree` scope uses scoped `list_sessions` and `list_messages`.
+- `workspace` view loads the Workspace Session tree;
+- `worktree` view applies a worktree filter to that Workspace data.
 
 Liveness checks remain lightweight and process/connection-only. A Session moving
 from `running` to `missing` or `exited` is not a work outcome.
@@ -169,10 +169,11 @@ Status color/glyphs stay process-state oriented:
 
 ### Selection and workspace grouping
 
-In workspace mode, Sessions are grouped by `worktree_root`, then organized as a
-parent-child tree within each group. Parent-child links never cross worktree
-groups. New Session markers and badges are shown on the Session rows, not as
-persistent state.
+In workspace mode, Sessions are grouped by `worktree_root` for readability, then
+organized as a Workspace parent-child tree. Parent-child links may cross worktree
+groups; when they do, both the tree relationship and the location group should
+remain visible. New Session markers and badges are shown on the Session rows, not
+as persistent state.
 
 If a refresh removes the selected Session, selection falls back to the nearest
 visible row. If the selected Session remains, preserve selection even when new
@@ -180,13 +181,13 @@ Sessions appear above it.
 
 ### Operation safety
 
-Cross-worktree operations use the selected Session's `worktree_root` as the
-operation `cwd`, as already designed. This lets `@asem/ops` resolve the target
-Effective Scope normally instead of bypassing scope checks.
+Operations on a selected Session use that Session's location metadata where the
+runtime needs an execution context, such as attach, close, delete, and mux
+cleanup.
 
-TUI sends continue to pass `origin: "operator"`, so a human send in workspace
-scope cannot impersonate a sibling worktree's current Session. This remains the
-rule from [ADR 0003](../adr/0003-tui-operator-message-attribution.md).
+TUI sends continue to pass `origin: "operator"`, so a human send in the Workspace
+cockpit cannot impersonate a current Session. This remains the rule from
+[ADR 0003](../adr/0003-tui-operator-message-attribution.md).
 
 Operator-initiated mutation failures (`send`, `close`, `delete`) should open a
 dismissible error modal. These are direct responses to a human action and should

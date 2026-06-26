@@ -33,7 +33,7 @@ If a change starts adding any of these concepts, stop and re-check the design do
 - automatic scheduling, auto-wake, or durable unread/read receipt state;
 - worktree creation, Git branch management, artifact management, or remote tenancy.
 
-Use the project vocabulary from [`CONTEXT.md`](CONTEXT.md): Session, Message, Report, Workspace, Worktree Root, Effective Scope, Multiplexer, Agent, Template, Command Sequence, Cockpit.
+Use the project vocabulary from [`CONTEXT.md`](CONTEXT.md): Session, Message, Report, Workspace, Worktree Root, Repo Alias, Multiplexer, Agent, Template, Command Sequence, Cockpit.
 
 ## Architecture rules
 
@@ -41,8 +41,8 @@ Keep implementation modular and testable.
 
 - `@asem/core` owns domain types, schemas, operation contracts, port interfaces, token helpers, and pure shell escaping helpers.
 - `@asem/runtime` owns template registry, template interpolation, sequence execution, capture handling, and fake runner contract.
-- `@asem/store` owns SQLite migrations, row mapping, scoped CRUD, and transaction primitives.
-- `@asem/ops` owns shared operation handlers, auth/scope checks, use-case semantics, and operation-level cleanup.
+- `@asem/store` owns SQLite migrations, row mapping, Workspace-scoped CRUD, location filters, and transaction primitives.
+- `@asem/ops` owns shared operation handlers, auth/Workspace checks, Repo Alias resolution, use-case semantics, and operation-level cleanup.
 - `@asem/cli`, `@asem/mcp`, and `@asem/tui` are surface projections. They must not duplicate semantic operation logic.
 
 Do not import concrete SQLite connections, real shell execution, or terminal UI into `@asem/core` or `@asem/ops`. Use injected ports.
@@ -104,7 +104,7 @@ Real herdr/tmux/rmux/zellij integration tests are optional and must skip when bi
 
 ## Security and state rules
 
-- Normal visibility and messaging are scoped by `workspace_id + worktree_root`.
+- Normal visibility, parent-child relationships, Messages, and Reports are bounded by `workspace_id`; `worktree_root` is location metadata for files, execution context, grouping, and filters.
 - Session status is process/connection state only; never infer work outcome.
 - Store only token hashes in SQLite.
 - Keep token-bearing files mode `0600` and under ignored runtime paths such as `.asem/sessions/`, `.asem/current-session*.json`, or `.asem/tokens/`.

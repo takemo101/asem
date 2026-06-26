@@ -138,7 +138,8 @@ ephemeral badge. Activity rows do not create durable unread state.
 Follow cuekit's cockpit conventions, adapted to asem vocabulary:
 
 - one-line header with product, scope, workspace id, refresh state, and version;
-- left panel titled `Sessions` with worktree groups in workspace mode;
+- left panel titled `Sessions` showing the Workspace parent-child tree with a
+  compact per-row location badge in workspace mode (MIK-053);
 - themed rows with status glyph/color, selected marker, new-Session marker, and
   ephemeral incoming-message badge;
 - right panel with `Messages`, `Detail`, and `Context` tabs;
@@ -167,13 +168,22 @@ Status color/glyphs stay process-state oriented:
 × closed
 ```
 
-### Selection and workspace grouping
+### Selection and workspace tree
 
-In workspace mode, Sessions are grouped by `worktree_root` for readability, then
-organized as a Workspace parent-child tree. Parent-child links may cross worktree
-groups; when they do, both the tree relationship and the location group should
-remain visible. New Session markers and badges are shown on the Session rows, not
-as persistent state.
+In workspace mode the left pane renders a single Workspace parent-child Session
+tree (the "Global tree + repo badges" direction, MIK-053). Because the Workspace —
+not `worktree_root` — is the relationship boundary (ADR 0008), parent-child links
+are resolved across all in-scope Sessions, so a Workspace root Session adopts its
+repo parent children even when they run in different worktree roots. Each row keeps
+its own location as a compact badge so root vs repo Sessions stay distinguishable;
+the tree answers "who supervises whom?" and the badge answers "where does it run?".
+The Context tab carries a Relationship card with the selected Session's parent,
+location, same-Workspace parent/report note, and sibling Sessions. New Session
+markers and badges are shown on the Session rows, not as persistent state.
+
+`worktree` scope stays a location filter over the current Worktree Root: the host
+loads only that worktree's Sessions, so cross-worktree relatives are intentionally
+absent from that view.
 
 If a refresh removes the selected Session, selection falls back to the nearest
 visible row. If the selected Session remains, preserve selection even when new
@@ -306,7 +316,10 @@ Required tests:
 
 - workspace default flag parsing and usage output;
 - `--scope worktree` still shows only the current worktree;
-- workspace scope groups Sessions by `worktree_root`;
+- workspace scope resolves parent-child links across worktree roots into one
+  Workspace tree with per-row location badges (MIK-053);
+- the Context tab Relationship card names the selected Session's parent,
+  location, same-Workspace semantics, and siblings (MIK-053);
 - refresh preserves selection when possible;
 - refresh falls back when the selected Session disappears;
 - added Session produces an activity row and a row marker;

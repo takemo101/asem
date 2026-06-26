@@ -37,7 +37,13 @@ export const TAB_TITLES: Record<CockpitTab, string> = {
   context: "Context",
 };
 
-/** One left-pane row: a worktree group header or a selectable Session. */
+/**
+ * One left-pane row: a worktree group header or a selectable Session.
+ *
+ * Group headers are no longer emitted by the Workspace tree projection (ADR
+ * 0008 makes the Workspace a single parent-child tree with per-row location
+ * badges); the `group` variant is retained for the renderer's row formatter.
+ */
 export type LeftRow =
   | { kind: "group"; worktreeRoot: string }
   | {
@@ -52,6 +58,11 @@ export type LeftRow =
       badge: number;
       /** True while the Session's `session_added` activity row is still live. */
       isNew: boolean;
+      /**
+       * The Session's own `worktree_root` location, for a repo/location badge
+       * so root vs repo Sessions stay distinguishable in the Workspace tree.
+       */
+      location: string;
     };
 
 /** Left pane: header labels plus the flattened tree rows. */
@@ -131,7 +142,6 @@ export const KEYBAR: readonly KeybarItem[] = [
 function leftRows(state: CockpitState): LeftRow[] {
   const tree = sessionTree(state);
   const rows: LeftRow[] = [];
-  const showGroups = tree.scopeMode === "workspace";
   const fresh = newSessionIds(state.activity);
 
   const walk = (nodes: SessionTreeNode[]): void => {
@@ -146,15 +156,15 @@ function leftRows(state: CockpitState): LeftRow[] {
         selected: node.session.id === state.selectedSessionId,
         badge: badgeFor(state, node.session.id),
         isNew: fresh.has(node.session.id),
+        location: node.session.worktreeRoot,
       });
       walk(node.children);
     }
   };
 
+  // One Workspace parent-child tree; location rides on each row as a badge
+  // rather than as worktree group headers (design "Global tree + repo badges").
   for (const group of tree.groups) {
-    if (showGroups) {
-      rows.push({ kind: "group", worktreeRoot: group.worktreeRoot });
-    }
     walk(group.nodes);
   }
   return rows;

@@ -14,8 +14,8 @@ import type { ActivityItem } from "./activity.ts";
 
 /**
  * Cockpit scope. `workspace` (the `asem tui` default — ADR 0004) shows every
- * Session sharing the `workspace_id`, grouped by `worktree_root` before the
- * tree is drawn; `worktree` shows only the current
+ * Session sharing the `workspace_id` as one Workspace parent-child tree with
+ * per-row location badges; `worktree` filters to the current
  * `workspace_id + worktree_root` (design "Scope resolution").
  */
 export type CockpitScopeMode = "worktree" | "workspace";
@@ -79,10 +79,10 @@ export interface SessionTreeNode {
 }
 
 /**
- * A `worktree_root` grouping of top-level tree nodes. In `worktree` scope there
- * is exactly one group; in `workspace` scope there is one per distinct
- * `worktree_root`, and parent-child links never cross a group (worktree
- * isolation — CONTEXT.md).
+ * A grouping of top-level tree nodes. Both scopes now yield exactly one group:
+ * a single Workspace parent-child forest whose links cross `worktree_root`
+ * boundaries (ADR 0008). `worktreeRoot` here is the scope's reference root;
+ * per-row location lives on each {@link VisibleSessionRow}.
  */
 export interface WorktreeGroup {
   worktreeRoot: string;
@@ -148,6 +148,34 @@ export interface DetailView {
   attachHint: string | null;
 }
 
+/** A parent or sibling Session referenced from a {@link RelationshipView}. */
+export interface RelatedSessionRef {
+  id: string;
+  /** Session name; null only when an out-of-scope parent can't be resolved. */
+  name: string | null;
+  /** The related Session's `worktree_root`, or null when not resolvable. */
+  location: string | null;
+}
+
+/**
+ * Workspace relationship card for the selected Session (design "Relationship
+ * card in Context tab"). After ADR 0008 the Workspace is the parent/report
+ * boundary, so this resolves links across `worktree_root` values and records
+ * each Session's location separately.
+ */
+export interface RelationshipView {
+  /** The selected Session's own location (`worktree_root`). */
+  location: string;
+  /** Resolved parent Session, or null when the Session is a Workspace root. */
+  parent: RelatedSessionRef | null;
+  /** Raw parent id even when the parent is out of scope, else null. */
+  parentSessionId: string | null;
+  /** Other Sessions sharing the same parent (self excluded), in row order. */
+  siblings: RelatedSessionRef[];
+  /** Human note that parent/report semantics are same-Workspace. */
+  scopeNote: string;
+}
+
 /** Context-tab projection: scope + config defaults + selected mux ref. */
 export interface ContextView {
   workspaceId: string;
@@ -158,6 +186,8 @@ export interface ContextView {
   defaultAgent: string;
   /** `key=value` summary of the selected Session's mux ref, or null. */
   selectedMuxRefSummary: string | null;
+  /** Relationship card for the selected Session, or null when none selected. */
+  relationship: RelationshipView | null;
 }
 
 // --- Modal / interaction state -------------------------------------------

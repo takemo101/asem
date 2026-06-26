@@ -70,9 +70,11 @@ describe("session list rows", () => {
       selected: true,
       badge: 2,
       isNew: true,
+      location: "/repo/b",
     };
     expect(rowText(group)).toBe("▾ /repo/b");
-    expect(rowText(session)).toBe("›   ● helper-2 +2 *");
+    // Session rows carry a compact location badge (the worktree root basename).
+    expect(rowText(session)).toBe("›   ● helper-2 +2 * @b");
   });
 
   test("listWindow keeps the selection visible", () => {

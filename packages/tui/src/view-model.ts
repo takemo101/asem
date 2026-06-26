@@ -168,9 +168,13 @@ export function detailTab(
     : detailView(session, state.snapshot.sessions, attachHint);
 }
 
-/** Context-tab projection. */
+/** Context-tab projection, including the Workspace relationship card. */
 export function contextTab(state: CockpitState): ContextView {
-  return contextView(state.env, selectedSession(state));
+  return contextView(
+    state.env,
+    selectedSession(state),
+    state.snapshot.sessions,
+  );
 }
 
 /** New-message badge count for a Session relative to the observed baseline. */

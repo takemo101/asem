@@ -121,6 +121,12 @@ export function decodeKeys(chunk: string): KeyEvent[] {
   return events;
 }
 
+/** Compact location label (the worktree root's last path segment). */
+function locationBadge(worktreeRoot: string): string {
+  const segments = worktreeRoot.split("/").filter((s) => s.length > 0);
+  return segments.at(-1) ?? worktreeRoot;
+}
+
 function leftRowText(row: LeftRow): string {
   if (row.kind === "group") {
     return `▾ ${row.worktreeRoot}`;
@@ -129,7 +135,8 @@ function leftRowText(row: LeftRow): string {
   const badge = row.badge > 0 ? ` +${row.badge}` : "";
   const marker = row.isNew ? " *new" : "";
   const cursor = row.selected ? "> " : "  ";
-  return `${cursor}${indent}${row.symbol} ${row.name}${badge}${marker}`;
+  const where = ` @${locationBadge(row.location)}`;
+  return `${cursor}${indent}${row.symbol} ${row.name}${badge}${marker}${where}`;
 }
 
 function pad(text: string, width: number): string {

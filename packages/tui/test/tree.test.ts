@@ -53,30 +53,9 @@ describe("buildSessionTree (worktree scope)", () => {
 });
 
 describe("buildSessionTree (workspace scope)", () => {
-  test("groups Sessions by worktree_root before building each tree", () => {
-    const a1 = makeSession({ id: "a1", worktreeRoot: WORKTREE_A });
-    const a2 = makeSession({
-      id: "a2",
-      worktreeRoot: WORKTREE_A,
-      parentSessionId: "a1",
-    });
-    const b1 = makeSession({ id: "b1", worktreeRoot: WORKTREE_B });
-
-    const tree = buildSessionTree([a1, a2, b1], "workspace", WORKTREE_A);
-
-    expect(tree.groups.map((g) => g.worktreeRoot)).toEqual([
-      WORKTREE_A,
-      WORKTREE_B,
-    ]);
-    const groupA = tree.groups.find((g) => g.worktreeRoot === WORKTREE_A)!;
-    expect(groupA.nodes).toHaveLength(1);
-    expect(groupA.nodes[0]!.session.id).toBe("a1");
-    expect(groupA.nodes[0]!.children[0]!.session.id).toBe("a2");
-  });
-
-  test("parent-child links never cross a worktree group", () => {
-    // Child in worktree B names a parent that lives in worktree A: isolation
-    // means it must not be adopted across the boundary.
+  test("resolves parent-child links across worktree roots into one Workspace tree", () => {
+    // After ADR 0008 the Workspace is the relationship boundary, so a child
+    // adopts its parent even when they live in different worktree roots.
     const parentA = makeSession({ id: "pa", worktreeRoot: WORKTREE_A });
     const childB = makeSession({
       id: "cb",
@@ -86,11 +65,54 @@ describe("buildSessionTree (workspace scope)", () => {
 
     const tree = buildSessionTree([parentA, childB], "workspace", WORKTREE_A);
 
-    const groupB = tree.groups.find((g) => g.worktreeRoot === WORKTREE_B)!;
-    expect(groupB.nodes).toHaveLength(1);
-    // The child is a root inside its own group, not nested under the A parent.
-    expect(groupB.nodes[0]!.session.id).toBe("cb");
-    expect(groupB.nodes[0]!.depth).toBe(0);
+    // One Workspace tree, not one disconnected root per worktree group.
+    expect(tree.groups).toHaveLength(1);
+    const roots = tree.groups[0]!.nodes;
+    expect(roots).toHaveLength(1);
+    expect(roots[0]!.session.id).toBe("pa");
+    const child = roots[0]!.children[0]!;
+    expect(child.session.id).toBe("cb");
+    expect(child.depth).toBe(1);
+  });
+
+  test("flattens a Workspace root with repo children in different worktrees", () => {
+    const root = makeSession({
+      id: "root",
+      name: "root",
+      worktreeRoot: "/workspace",
+      createdAt: "2026-06-05T12:00:00.000Z",
+    });
+    const frontend = makeSession({
+      id: "fe",
+      name: "frontend-parent",
+      worktreeRoot: "/workspace/frontend",
+      parentSessionId: "root",
+      createdAt: "2026-06-05T12:00:01.000Z",
+    });
+    const backend = makeSession({
+      id: "be",
+      name: "backend-parent",
+      worktreeRoot: "/workspace/backend",
+      parentSessionId: "root",
+      createdAt: "2026-06-05T12:00:02.000Z",
+    });
+
+    const tree = buildSessionTree(
+      [backend, frontend, root],
+      "workspace",
+      "/workspace",
+    );
+    const rows = flattenTree(tree);
+
+    // Root then both children at depth 1, regardless of worktree root.
+    expect(rows.map((r) => r.session.id)).toEqual(["root", "fe", "be"]);
+    expect(rows.map((r) => r.depth)).toEqual([0, 1, 1]);
+    // Each row keeps its own location metadata for badge/rendering.
+    expect(rows.map((r) => r.worktreeRoot)).toEqual([
+      "/workspace",
+      "/workspace/frontend",
+      "/workspace/backend",
+    ]);
   });
 });
 

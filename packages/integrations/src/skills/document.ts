@@ -58,21 +58,27 @@ Fallback CLI commands:
 
 ## Workspace repo aliases
 
-A Repo Alias is a named cwd shortcut. If the Workspace root \`.asem.yaml\` defines \`repos\`, use:
+A Repo Alias is a named cwd shortcut. If the Workspace root \`.asem.yaml\` defines \`repos\`, list aliases first:
 
 \`\`\`sh
 asem workspace repo list
-eval "$(asem init-session --name workspace-root --root --mux herdr)"
-asem session create frontend-parent --repo frontend --prompt "Act as the frontend parent Session."
 \`\`\`
 
---repo only chooses the new Session cwd. It does not change parent, Message, or Report semantics. In the example, \`frontend-parent\` is a child of the Workspace current Session and runs with cwd set to the \`frontend\` alias path.
-
-You may pass the parent explicitly:
+Create repo parent Sessions from a Workspace root/current Session:
 
 \`\`\`sh
+# If this process is not already an asem Session, register it with a real mux ref.
+asem init-session --name workspace-root --root --mux herdr --mux-ref '<json>'
+
 asem session create frontend-parent --repo frontend --parent <root-session-id> --prompt "Report progress with: asem report parent --body ..."
-# from inside the repo parent Session:
+asem session create backend-parent --repo backend --parent <root-session-id> --prompt "Report progress with: asem report parent --body ..."
+\`\`\`
+
+\`--repo\` only chooses the new Session cwd/worktreeRoot. Parent, Message, and Report lookup stay inside the same Workspace, so repo parent Sessions can report to a root parent Session across repo worktree roots.
+
+From inside each repo parent Session:
+
+\`\`\`sh
 asem report parent --body "frontend report"
 \`\`\`
 

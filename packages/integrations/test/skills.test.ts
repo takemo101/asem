@@ -143,8 +143,11 @@ describe("installSkillForTarget", () => {
     expect(skillDocument).toContain("Repo Alias");
     expect(skillDocument).toContain("asem workspace repo list");
     expect(skillDocument).toContain("asem init-session --name workspace-root");
-    expect(skillDocument).toMatch(/--repo only chooses the new Session cwd/i);
-    expect(skillDocument).toMatch(/child of the Workspace current Session/i);
+    expect(skillDocument).toContain("--mux-ref '<json>'");
+    expect(skillDocument).toMatch(/`--repo` only chooses the new Session cwd/i);
+    expect(skillDocument).toMatch(
+      /report to a root parent Session across repo worktree roots/i,
+    );
     expect(skillDocument).toMatch(
       /repo parent Sessions create their own repo-local child Sessions/i,
     );
@@ -152,9 +155,12 @@ describe("installSkillForTarget", () => {
   });
 
   test("teaches repo parent Sessions to report to a root parent via CLI or MCP", () => {
-    expect(skillDocument).toMatch(/You may pass the parent explicitly/i);
+    expect(skillDocument).toMatch(/Create repo parent Sessions/i);
     expect(skillDocument).toContain(
       "asem session create frontend-parent --repo frontend --parent <root-session-id>",
+    );
+    expect(skillDocument).toContain(
+      "asem session create backend-parent --repo backend --parent <root-session-id>",
     );
     expect(skillDocument).toContain("asem report parent --body");
     expect(skillDocument).toContain(

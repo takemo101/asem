@@ -2,6 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { buildSessionTree, filterSessions, flattenTree } from "../src/index.ts";
 import { makeSession, WORKSPACE, WORKTREE_A, WORKTREE_B } from "./helpers.ts";
 
+function defined<T>(value: T | undefined): T {
+  expect(value).toBeDefined();
+  if (value === undefined) {
+    throw new Error("expected value to be defined");
+  }
+  return value;
+}
+
 describe("buildSessionTree (worktree scope)", () => {
   test("nests children under their parent with increasing depth", () => {
     const parent = makeSession({ id: "p", name: "parent" });
@@ -23,31 +31,34 @@ describe("buildSessionTree (worktree scope)", () => {
     );
 
     expect(tree.groups).toHaveLength(1);
-    const roots = tree.groups[0]!.nodes;
+    const roots = defined(tree.groups[0]).nodes;
     expect(roots).toHaveLength(1);
-    expect(roots[0]!.session.id).toBe("p");
-    expect(roots[0]!.depth).toBe(0);
-    const c = roots[0]!.children[0]!;
+    const root = defined(roots[0]);
+    expect(root.session.id).toBe("p");
+    expect(root.depth).toBe(0);
+    const c = defined(root.children[0]);
     expect(c.session.id).toBe("c");
     expect(c.depth).toBe(1);
-    expect(c.children[0]!.session.id).toBe("g");
-    expect(c.children[0]!.depth).toBe(2);
+    const g = defined(c.children[0]);
+    expect(g.session.id).toBe("g");
+    expect(g.depth).toBe(2);
   });
 
   test("a parent missing from scope leaves the child as a root node", () => {
     const orphan = makeSession({ id: "o", parentSessionId: "ghost" });
     const tree = buildSessionTree([orphan], "worktree", WORKTREE_A);
-    const roots = tree.groups[0]!.nodes;
+    const roots = defined(tree.groups[0]).nodes;
     expect(roots).toHaveLength(1);
-    expect(roots[0]!.session.id).toBe("o");
-    expect(roots[0]!.depth).toBe(0);
+    const root = defined(roots[0]);
+    expect(root.session.id).toBe("o");
+    expect(root.depth).toBe(0);
   });
 
   test("siblings are ordered by created_at then id", () => {
     const a = makeSession({ id: "a", createdAt: "2026-06-05T12:00:02.000Z" });
     const b = makeSession({ id: "b", createdAt: "2026-06-05T12:00:01.000Z" });
     const tree = buildSessionTree([a, b], "worktree", WORKTREE_A);
-    const ids = tree.groups[0]!.nodes.map((n) => n.session.id);
+    const ids = defined(tree.groups[0]).nodes.map((n) => n.session.id);
     expect(ids).toEqual(["b", "a"]);
   });
 });
@@ -67,10 +78,11 @@ describe("buildSessionTree (workspace scope)", () => {
 
     // One Workspace tree, not one disconnected root per worktree group.
     expect(tree.groups).toHaveLength(1);
-    const roots = tree.groups[0]!.nodes;
+    const roots = defined(tree.groups[0]).nodes;
     expect(roots).toHaveLength(1);
-    expect(roots[0]!.session.id).toBe("pa");
-    const child = roots[0]!.children[0]!;
+    const root = defined(roots[0]);
+    expect(root.session.id).toBe("pa");
+    const child = defined(root.children[0]);
     expect(child.session.id).toBe("cb");
     expect(child.depth).toBe(1);
   });
@@ -147,7 +159,7 @@ describe("flattenTree", () => {
     const rows = flattenTree(tree);
     expect(rows.map((r) => r.session.id)).toEqual(["a1", "a2", "b1"]);
     expect(rows.map((r) => r.depth)).toEqual([0, 1, 0]);
-    expect(rows[2]!.worktreeRoot).toBe(WORKTREE_B);
+    expect(defined(rows[2]).worktreeRoot).toBe(WORKTREE_B);
   });
 
   test("scope value is carried on the tree", () => {

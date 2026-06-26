@@ -22,6 +22,15 @@ function sessionRows(rows: LeftRow[]) {
   );
 }
 
+function present<T>(value: T | null | undefined): T {
+  expect(value).not.toBeNull();
+  expect(value).toBeDefined();
+  if (value === null || value === undefined) {
+    throw new Error("expected value to be present");
+  }
+  return value;
+}
+
 describe("left pane", () => {
   test("renders status symbols, selection, and depth for the hierarchy", () => {
     const parent = makeSession({ id: "p", name: "parent", status: "running" });
@@ -36,11 +45,11 @@ describe("left pane", () => {
 
     const rows = sessionRows(view.left.rows);
     expect(rows.map((r) => r.name)).toEqual(["parent", "child"]);
-    expect(rows[0]!.symbol).toBe(STATUS_SYMBOLS.running);
-    expect(rows[1]!.symbol).toBe(STATUS_SYMBOLS.exited);
-    expect(rows[1]!.depth).toBe(1);
+    expect(present(rows[0]).symbol).toBe(STATUS_SYMBOLS.running);
+    expect(present(rows[1]).symbol).toBe(STATUS_SYMBOLS.exited);
+    expect(present(rows[1]).depth).toBe(1);
     // First visible row is selected by default.
-    expect(rows[0]!.selected).toBe(true);
+    expect(present(rows[0]).selected).toBe(true);
     expect(view.left.scopeLabel).toBe("scope: worktree");
   });
 
@@ -77,11 +86,11 @@ describe("left pane", () => {
 
     const rows = sessionRows(view.left.rows);
     expect(rows.map((r) => r.name)).toEqual(["root", "frontend-parent"]);
-    const child = rows.find((r) => r.sessionId === "fe")!;
+    const child = present(rows.find((r) => r.sessionId === "fe"));
     expect(child.depth).toBe(1);
     // Each row exposes its own location so root vs repo Sessions are distinct.
     expect(child.location).toBe("/workspace/frontend");
-    expect(rows.find((r) => r.sessionId === "root")!.location).toBe(
+    expect(present(rows.find((r) => r.sessionId === "root")).location).toBe(
       "/workspace",
     );
   });

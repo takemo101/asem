@@ -2,6 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { contextView, detailView } from "../src/index.ts";
 import { makeEnv, makeSession, WORKTREE_A } from "./helpers.ts";
 
+function present<T>(value: T | null | undefined): T {
+  expect(value).not.toBeNull();
+  expect(value).toBeDefined();
+  if (value === null || value === undefined) {
+    throw new Error("expected value to be present");
+  }
+  return value;
+}
+
 describe("detailView", () => {
   test("projects the documented Detail fields", () => {
     const session = makeSession({
@@ -119,8 +128,7 @@ describe("contextView", () => {
       frontend,
       [root, frontend, backend],
     );
-    const rel = view.relationship!;
-    expect(rel).not.toBeNull();
+    const rel = present(view.relationship);
     // Parent name/id and parent location when present.
     expect(rel.parent).toEqual({
       id: "root",
@@ -132,7 +140,7 @@ describe("contextView", () => {
     expect(rel.location).toBe("/workspace/frontend");
     // Sibling/related Sessions under the same parent (excludes self).
     expect(rel.siblings.map((s) => s.id)).toEqual(["be"]);
-    expect(rel.siblings[0]!.location).toBe("/workspace/backend");
+    expect(present(rel.siblings[0]).location).toBe("/workspace/backend");
     // Parent/report semantics are same-Workspace.
     expect(rel.scopeNote.toLowerCase()).toContain("workspace");
   });
@@ -144,7 +152,9 @@ describe("contextView", () => {
       worktreeRoot: "/workspace/x",
       parentSessionId: "root",
     });
-    const rel = contextView(makeEnv(), root, [root, child]).relationship!;
+    const rel = present(
+      contextView(makeEnv(), root, [root, child]).relationship,
+    );
     expect(rel.parent).toBeNull();
     expect(rel.parentSessionId).toBeNull();
     expect(rel.siblings).toEqual([]);

@@ -3,11 +3,7 @@
  * rendered text lines. One of the cockpit's render projections (see
  * `../view.ts`). Reads the pure tab selectors; never touches a terminal.
  */
-import type {
-  CockpitState,
-  MessageRow,
-  RelationshipView,
-} from "../types.ts";
+import type { CockpitState, MessageRow, RelationshipView } from "../types.ts";
 import { contextTab, detailTab, messagesTab } from "../view-model.ts";
 
 function messageLine(row: MessageRow): string {

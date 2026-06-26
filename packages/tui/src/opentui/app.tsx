@@ -17,7 +17,10 @@ import { DetailPane } from "./components/detail-pane.tsx";
 import { FOOTER_HEIGHT, Footer } from "./components/footer.tsx";
 import { Header } from "./components/header.tsx";
 import { ModalDialog } from "./components/modal.tsx";
-import { SessionList } from "./components/session-list.tsx";
+import {
+  SessionList,
+  sessionListWidthForTerminal,
+} from "./components/session-list.tsx";
 import { toKeyEvent } from "./keys.ts";
 import { NoticeToaster } from "./notice-toast.tsx";
 import { theme } from "./theme.ts";
@@ -53,6 +56,7 @@ export function CockpitScreen(props: { store: CockpitViewStore }): ReactNode {
     return null;
   }
   const paneRows = Math.max(1, terminal.height - FIXED_CHROME_ROWS);
+  const sessionListWidth = sessionListWidthForTerminal(terminal.width);
   return (
     <box
       width="100%"
@@ -68,7 +72,11 @@ export function CockpitScreen(props: { store: CockpitViewStore }): ReactNode {
         gap={1}
         backgroundColor={theme.bg}
       >
-        <SessionList left={view.left} maxVisibleRows={paneRows} />
+        <SessionList
+          left={view.left}
+          maxVisibleRows={paneRows}
+          width={sessionListWidth}
+        />
         <DetailPane
           tabs={view.tabs}
           lines={view.right}

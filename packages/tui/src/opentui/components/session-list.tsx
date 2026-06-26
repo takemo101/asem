@@ -7,7 +7,17 @@ import type { ReactNode } from "react";
 import type { LeftPaneView, LeftRow } from "../../view.ts";
 import { statusAccent, theme } from "../theme.ts";
 
-export const SESSION_LIST_WIDTH = 36;
+export const SESSION_LIST_MIN_WIDTH = 36;
+export const SESSION_LIST_MAX_WIDTH = 56;
+const SESSION_LIST_WIDTH_RATIO = 0.32;
+
+export function sessionListWidthForTerminal(totalWidth: number): number {
+  const proportional = Math.floor(totalWidth * SESSION_LIST_WIDTH_RATIO);
+  return Math.min(
+    SESSION_LIST_MAX_WIDTH,
+    Math.max(SESSION_LIST_MIN_WIDTH, proportional),
+  );
+}
 
 /** Window a list around the selected index so the selection stays visible. */
 export function listWindow(
@@ -62,6 +72,7 @@ function rowBackground(row: LeftRow, index: number): string {
 export function SessionList(props: {
   left: LeftPaneView;
   maxVisibleRows: number;
+  width: number;
 }): ReactNode {
   const { left } = props;
   const selectedIndex = left.rows.findIndex(
@@ -79,7 +90,7 @@ export function SessionList(props: {
       borderStyle="single"
       borderColor={theme.border}
       backgroundColor={theme.panel}
-      width={SESSION_LIST_WIDTH}
+      width={props.width}
       flexShrink={0}
       flexDirection="column"
       minHeight={0}

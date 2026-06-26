@@ -9,6 +9,7 @@ import {
 import {
   listWindow,
   rowText,
+  sessionListWidthForTerminal,
 } from "../src/opentui/components/session-list.tsx";
 import {
   noticeKey,
@@ -84,6 +85,19 @@ describe("session list rows", () => {
     const mid = listWindow(20, 10, 5);
     expect(mid.start).toBeLessThanOrEqual(10);
     expect(mid.end).toBeGreaterThan(10);
+  });
+
+  test("sessionListWidthForTerminal keeps narrow terminals at the old width", () => {
+    expect(sessionListWidthForTerminal(80)).toBe(36);
+    expect(sessionListWidthForTerminal(100)).toBe(36);
+  });
+
+  test("sessionListWidthForTerminal widens medium terminals", () => {
+    expect(sessionListWidthForTerminal(140)).toBe(44);
+  });
+
+  test("sessionListWidthForTerminal caps very wide terminals", () => {
+    expect(sessionListWidthForTerminal(240)).toBe(56);
   });
 });
 

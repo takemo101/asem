@@ -7,13 +7,7 @@ import {
   renderCockpitView,
   STATUS_SYMBOLS,
 } from "../src/index.ts";
-import {
-  makeEnv,
-  makeMessage,
-  makeSession,
-  WORKTREE_A,
-  WORKTREE_B,
-} from "./helpers.ts";
+import { makeEnv, makeMessage, makeSession } from "./helpers.ts";
 
 function snapshot(
   sessions: ReturnType<typeof makeSession>[],
@@ -26,6 +20,15 @@ function sessionRows(rows: LeftRow[]) {
   return rows.filter(
     (r): r is Extract<LeftRow, { kind: "session" }> => r.kind === "session",
   );
+}
+
+function present<T>(value: T | null | undefined): T {
+  expect(value).not.toBeNull();
+  expect(value).toBeDefined();
+  if (value === null || value === undefined) {
+    throw new Error("expected value to be present");
+  }
+  return value;
 }
 
 describe("left pane", () => {
@@ -42,11 +45,11 @@ describe("left pane", () => {
 
     const rows = sessionRows(view.left.rows);
     expect(rows.map((r) => r.name)).toEqual(["parent", "child"]);
-    expect(rows[0]!.symbol).toBe(STATUS_SYMBOLS.running);
-    expect(rows[1]!.symbol).toBe(STATUS_SYMBOLS.exited);
-    expect(rows[1]!.depth).toBe(1);
+    expect(present(rows[0]).symbol).toBe(STATUS_SYMBOLS.running);
+    expect(present(rows[1]).symbol).toBe(STATUS_SYMBOLS.exited);
+    expect(present(rows[1]).depth).toBe(1);
     // First visible row is selected by default.
-    expect(rows[0]!.selected).toBe(true);
+    expect(present(rows[0]).selected).toBe(true);
     expect(view.left.scopeLabel).toBe("scope: worktree");
   });
 
@@ -60,19 +63,36 @@ describe("left pane", () => {
     });
   });
 
-  test("workspace scope inserts a group header per worktree root", () => {
-    const a = makeSession({ id: "a", worktreeRoot: WORKTREE_A });
-    const b = makeSession({ id: "b", worktreeRoot: WORKTREE_B });
+  test("workspace scope renders one Workspace tree with per-row location and no worktree group headers", () => {
+    const root = makeSession({
+      id: "root",
+      name: "root",
+      worktreeRoot: "/workspace",
+    });
+    const frontend = makeSession({
+      id: "fe",
+      name: "frontend-parent",
+      worktreeRoot: "/workspace/frontend",
+      parentSessionId: "root",
+    });
     const state = createCockpitState(
-      makeEnv({ scopeMode: "workspace" }),
-      snapshot([a, b]),
+      makeEnv({ scopeMode: "workspace", worktreeRoot: "/workspace" }),
+      snapshot([root, frontend]),
     );
     const view = renderCockpitView(state);
-    const groups = view.left.rows.filter((r) => r.kind === "group");
-    expect(groups).toEqual([
-      { kind: "group", worktreeRoot: WORKTREE_A },
-      { kind: "group", worktreeRoot: WORKTREE_B },
-    ]);
+
+    // Global tree + repo badges: no worktree group headers.
+    expect(view.left.rows.some((r) => r.kind === "group")).toBe(false);
+
+    const rows = sessionRows(view.left.rows);
+    expect(rows.map((r) => r.name)).toEqual(["root", "frontend-parent"]);
+    const child = present(rows.find((r) => r.sessionId === "fe"));
+    expect(child.depth).toBe(1);
+    // Each row exposes its own location so root vs repo Sessions are distinct.
+    expect(child.location).toBe("/workspace/frontend");
+    expect(present(rows.find((r) => r.sessionId === "root")).location).toBe(
+      "/workspace",
+    );
   });
 
   test("badges surface ephemeral new-message counts", () => {
@@ -184,6 +204,44 @@ describe("tabs and right pane", () => {
     expect(text).toContain("config:");
     expect(text).toContain("default_mux:");
     expect(text).toContain("pane=p9");
+  });
+
+  test("Context tab shows the Workspace relationship card for a repo parent Session", () => {
+    const root = makeSession({
+      id: "root",
+      name: "root",
+      worktreeRoot: "/workspace",
+    });
+    const frontend = makeSession({
+      id: "fe",
+      name: "frontend-parent",
+      worktreeRoot: "/workspace/frontend",
+      parentSessionId: "root",
+    });
+    const backend = makeSession({
+      id: "be",
+      name: "backend-parent",
+      worktreeRoot: "/workspace/backend",
+      parentSessionId: "root",
+    });
+    let state = createCockpitState(
+      makeEnv({ scopeMode: "workspace", worktreeRoot: "/workspace" }),
+      snapshot([root, frontend, backend]),
+    );
+    state = dispatchCockpit(state, { type: "select", sessionId: "fe" }).state;
+    state = dispatchCockpit(state, { type: "setTab", tab: "context" }).state;
+    const text = renderCockpitView(state).right.join("\n");
+
+    expect(text).toContain("relationship:");
+    // Parent name/id and parent location when present.
+    expect(text).toContain("root");
+    expect(text).toContain("/workspace");
+    // Current Session location.
+    expect(text).toContain("/workspace/frontend");
+    // Sibling/related Sessions under the same parent.
+    expect(text).toContain("backend-parent");
+    // Parent/report semantics are same-Workspace.
+    expect(text.toLowerCase()).toContain("workspace");
   });
 
   test("empty / no-selection panes render placeholders", () => {

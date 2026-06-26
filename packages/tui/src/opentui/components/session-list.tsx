@@ -26,6 +26,12 @@ export function listWindow(
   return { start, end: start + maxVisible };
 }
 
+/** Compact location label (the worktree root's last path segment). */
+export function locationBadge(worktreeRoot: string): string {
+  const segments = worktreeRoot.split("/").filter((s) => s.length > 0);
+  return segments.at(-1) ?? worktreeRoot;
+}
+
 /** Render one row's text (pure; exported for tests). */
 export function rowText(row: LeftRow): string {
   if (row.kind === "group") {
@@ -35,7 +41,8 @@ export function rowText(row: LeftRow): string {
   const indent = "  ".repeat(row.depth);
   const badge = row.badge > 0 ? ` +${row.badge}` : "";
   const marker = row.isNew ? " *" : "";
-  return `${cursor}${indent}${row.symbol} ${row.name}${badge}${marker}`;
+  const where = ` @${locationBadge(row.location)}`;
+  return `${cursor}${indent}${row.symbol} ${row.name}${badge}${marker}${where}`;
 }
 
 function rowColor(row: LeftRow): string {

@@ -17,6 +17,7 @@ export const sessionListFilterSchema = z
   .object({
     status: sessionStatusSchema.optional(),
     parentSessionId: nonEmptyString.nullable().optional(),
+    worktreeRoot: nonEmptyString.optional(),
   })
   .strict();
 
@@ -26,6 +27,7 @@ export type SessionListFilter = z.infer<typeof sessionListFilterSchema>;
 export const messageListFilterSchema = z
   .object({
     toSessionId: nonEmptyString.optional(),
+    worktreeRoot: nonEmptyString.optional(),
     inbox: z.boolean().optional(),
     undelivered: z.boolean().optional(),
   })
@@ -96,10 +98,15 @@ export const createSessionInputSchema = z
      */
     profile: nonEmptyString.optional(),
     cwd: nonEmptyString.optional(),
+    repo: nonEmptyString.optional(),
     parentSessionId: nonEmptyString.optional(),
     root: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine((input) => input.cwd === undefined || input.repo === undefined, {
+    message: "cwd and repo are mutually exclusive",
+    path: ["repo"],
+  });
 export type CreateSessionInput = z.infer<typeof createSessionInputSchema>;
 export interface CreateSessionOutput {
   session: Session;

@@ -18,6 +18,7 @@ import {
 
 const CTX = { cwd: scopeA.worktreeRoot };
 const RAW_TOKEN = "tok-me";
+const scopeC = { ...scopeB, workspaceId: "ws_2" };
 
 /** A store holding a valid current Session `me` plus assorted messages. */
 function seededStore() {
@@ -41,7 +42,7 @@ function depsWith(
 }
 
 describe("listMessages", () => {
-  test("returns scoped history and excludes sibling-worktree messages", async () => {
+  test("returns Workspace history across worktree roots", async () => {
     const { store } = seededStore();
     const a = makeMessage({ body: "a" });
     const b = makeMessage({
@@ -49,14 +50,42 @@ describe("listMessages", () => {
       workspaceId: scopeB.workspaceId,
       worktreeRoot: scopeB.worktreeRoot,
     });
-    store.messages.push(a, b);
+    const c = makeMessage({
+      body: "c",
+      workspaceId: scopeC.workspaceId,
+      worktreeRoot: scopeC.worktreeRoot,
+    });
+    store.messages.push(a, b, c);
 
     const { messages } = expectOk(
       await listMessages(depsWith(store), { filter: undefined }, CTX),
     );
     const ids = messages.map((m) => m.id);
     expect(ids).toContain(a.id);
-    expect(ids).not.toContain(b.id);
+    expect(ids).toContain(b.id);
+    expect(ids).not.toContain(c.id);
+  });
+
+  test("narrows normal history by worktreeRoot", async () => {
+    const { store } = seededStore();
+    const here = makeMessage({
+      body: "here",
+      worktreeRoot: scopeA.worktreeRoot,
+    });
+    const there = makeMessage({
+      body: "there",
+      worktreeRoot: scopeB.worktreeRoot,
+    });
+    store.messages.push(here, there);
+
+    const { messages } = expectOk(
+      await listMessages(
+        depsWith(store),
+        { filter: { worktreeRoot: scopeA.worktreeRoot } },
+        CTX,
+      ),
+    );
+    expect(messages.map((m) => m.id)).toEqual([here.id]);
   });
 
   test("narrows normal history to one target with toSessionId", async () => {
@@ -174,12 +203,12 @@ describe("listMessages", () => {
     );
   });
 
-  test("inbox surfaces scope_mismatch when the pointer was registered elsewhere", async () => {
+  test("inbox surfaces scope_mismatch when the pointer was registered in another Workspace", async () => {
     const { store, me } = seededStore();
     const ref: CurrentSessionRef = {
       sessionId: me.id,
       token: RAW_TOKEN,
-      scope: scopeB,
+      scope: scopeC,
     };
     expectErr(
       await listMessages(

@@ -7,9 +7,9 @@
  * Messages. It exposes `deleteSessionScoped`, `deleteRelatedMessagesScoped`,
  * and `withTransaction` so `@asem/ops` can compose those decisions.
  *
- * Every normal query is scoped by Effective Scope (`workspace_id +
- * worktree_root`) per implementation principle 7. Scope filters are applied in
- * one place here; callsites cannot opt out ad hoc.
+ * Every normal query is scoped by Workspace (`workspace_id`) per ADR 0008.
+ * `worktree_root` remains stored location metadata for grouping, filters, and
+ * execution context; it is not the normal parent/message/report boundary.
  */
 
 import type { SQLQueryBindings } from "bun:sqlite";
@@ -100,9 +100,9 @@ export class SqliteStore implements Store {
     const row = this.db
       .query(
         `select * from sessions
-         where workspace_id = ? and worktree_root = ? and id = ?`,
+         where workspace_id = ? and id = ?`,
       )
-      .get(scope.workspaceId, scope.worktreeRoot, id) as SessionRow | null;
+      .get(scope.workspaceId, id) as SessionRow | null;
     return row ? parseSessionRow(row) : null;
   }
 
@@ -113,9 +113,9 @@ export class SqliteStore implements Store {
     const row = this.db
       .query(
         `select * from sessions
-         where workspace_id = ? and worktree_root = ? and name = ?`,
+         where workspace_id = ? and name = ?`,
       )
-      .get(scope.workspaceId, scope.worktreeRoot, name) as SessionRow | null;
+      .get(scope.workspaceId, name) as SessionRow | null;
     return row ? parseSessionRow(row) : null;
   }
 
@@ -123,12 +123,16 @@ export class SqliteStore implements Store {
     scope: EffectiveScope,
     filter?: SessionListFilter,
   ): Promise<Session[]> {
-    const clauses = ["workspace_id = ?", "worktree_root = ?"];
-    const params: SQLQueryBindings[] = [scope.workspaceId, scope.worktreeRoot];
+    const clauses = ["workspace_id = ?"];
+    const params: SQLQueryBindings[] = [scope.workspaceId];
 
     if (filter?.status !== undefined) {
       clauses.push("status = ?");
       params.push(filter.status);
+    }
+    if (filter?.worktreeRoot !== undefined) {
+      clauses.push("worktree_root = ?");
+      params.push(filter.worktreeRoot);
     }
     if (filter && filter.parentSessionId !== undefined) {
       if (filter.parentSessionId === null) {
@@ -143,7 +147,7 @@ export class SqliteStore implements Store {
       .query(
         `select * from sessions
          where ${clauses.join(" and ")}
-         order by created_at asc, id asc`,
+         order by worktree_root asc, created_at asc, id asc`,
       )
       .all(...params) as SessionRow[];
     return rows.map(parseSessionRow);
@@ -153,15 +157,16 @@ export class SqliteStore implements Store {
     workspaceId: string,
     filter?: SessionListFilter,
   ): Promise<Session[]> {
-    // Workspace-wide read: bounded by workspace_id only, never worktree_root
-    // (the sanctioned `--scope workspace` broadening, implementation
-    // principle 7). Ordered by worktree_root first so callers can group rows.
     const clauses = ["workspace_id = ?"];
     const params: SQLQueryBindings[] = [workspaceId];
 
     if (filter?.status !== undefined) {
       clauses.push("status = ?");
       params.push(filter.status);
+    }
+    if (filter?.worktreeRoot !== undefined) {
+      clauses.push("worktree_root = ?");
+      params.push(filter.worktreeRoot);
     }
     if (filter && filter.parentSessionId !== undefined) {
       if (filter.parentSessionId === null) {
@@ -210,11 +215,11 @@ export class SqliteStore implements Store {
       return;
     }
 
-    params.push(scope.workspaceId, scope.worktreeRoot, id);
+    params.push(scope.workspaceId, id);
     this.db
       .query(
         `update sessions set ${sets.join(", ")}
-         where workspace_id = ? and worktree_root = ? and id = ?`,
+         where workspace_id = ? and id = ?`,
       )
       .run(...params);
   }
@@ -223,9 +228,22 @@ export class SqliteStore implements Store {
     this.db
       .query(
         `delete from sessions
-         where workspace_id = ? and worktree_root = ? and id = ?`,
+         where workspace_id = ? and id = ?`,
       )
-      .run(scope.workspaceId, scope.worktreeRoot, id);
+      .run(scope.workspaceId, id);
+  }
+
+  async orphanChildSessionsScoped(
+    scope: EffectiveScope,
+    parentSessionId: string,
+  ): Promise<number> {
+    const result = this.db
+      .query(
+        `update sessions set parent_session_id = null
+         where workspace_id = ? and parent_session_id = ?`,
+      )
+      .run(scope.workspaceId, parentSessionId);
+    return Number(result.changes);
   }
 
   async deleteRelatedMessagesScoped(
@@ -235,10 +253,10 @@ export class SqliteStore implements Store {
     const result = this.db
       .query(
         `delete from messages
-         where workspace_id = ? and worktree_root = ?
+         where workspace_id = ?
            and (from_session_id = ? or to_session_id = ?)`,
       )
-      .run(scope.workspaceId, scope.worktreeRoot, sessionId, sessionId);
+      .run(scope.workspaceId, sessionId, sessionId);
     return Number(result.changes);
   }
 
@@ -252,12 +270,16 @@ export class SqliteStore implements Store {
     scope: EffectiveScope,
     filter?: MessageListFilter,
   ): Promise<Message[]> {
-    const clauses = ["workspace_id = ?", "worktree_root = ?"];
-    const params: SQLQueryBindings[] = [scope.workspaceId, scope.worktreeRoot];
+    const clauses = ["workspace_id = ?"];
+    const params: SQLQueryBindings[] = [scope.workspaceId];
 
     if (filter?.toSessionId !== undefined) {
       clauses.push("to_session_id = ?");
       params.push(filter.toSessionId);
+    }
+    if (filter?.worktreeRoot !== undefined) {
+      clauses.push("worktree_root = ?");
+      params.push(filter.worktreeRoot);
     }
     if (filter?.undelivered === true) {
       clauses.push("delivered_at is null");
@@ -280,15 +302,16 @@ export class SqliteStore implements Store {
     workspaceId: string,
     filter?: MessageListFilter,
   ): Promise<Message[]> {
-    // Workspace-wide read: bounded by workspace_id only (the `--scope workspace`
-    // companion to listMessages). Chronological order matches listMessages so
-    // the cockpit's per-Session Message views read the same way.
     const clauses = ["workspace_id = ?"];
     const params: SQLQueryBindings[] = [workspaceId];
 
     if (filter?.toSessionId !== undefined) {
       clauses.push("to_session_id = ?");
       params.push(filter.toSessionId);
+    }
+    if (filter?.worktreeRoot !== undefined) {
+      clauses.push("worktree_root = ?");
+      params.push(filter.worktreeRoot);
     }
     if (filter?.undelivered === true) {
       clauses.push("delivered_at is null");
@@ -312,9 +335,9 @@ export class SqliteStore implements Store {
     this.db
       .query(
         `update messages set delivered_at = ?, delivery_error = null
-         where workspace_id = ? and worktree_root = ? and id = ?`,
+         where workspace_id = ? and id = ?`,
       )
-      .run(deliveredAt, scope.workspaceId, scope.worktreeRoot, id);
+      .run(deliveredAt, scope.workspaceId, id);
   }
 
   async markMessageDeliveryError(
@@ -325,9 +348,9 @@ export class SqliteStore implements Store {
     this.db
       .query(
         `update messages set delivery_error = ?, delivered_at = null
-         where workspace_id = ? and worktree_root = ? and id = ?`,
+         where workspace_id = ? and id = ?`,
       )
-      .run(deliveryError, scope.workspaceId, scope.worktreeRoot, id);
+      .run(deliveryError, scope.workspaceId, id);
   }
 
   // --- Transactions -------------------------------------------------------

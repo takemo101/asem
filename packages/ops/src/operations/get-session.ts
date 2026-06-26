@@ -1,10 +1,10 @@
 /**
  * `get_session` operation — read one Session in the current Effective Scope.
  *
- * The scoped Store lookup means a Session in another worktree is reported as
- * `session_not_found`, not leaked across the isolation boundary (ADR 0002). An
- * optional liveness pass may refresh process state without inferring work
- * outcome.
+ * The Workspace-scoped Store lookup means a Session in a sibling worktree under
+ * the same Workspace can be read, while Sessions in another Workspace are
+ * reported as `session_not_found` (ADR 0008). An optional liveness pass may
+ * refresh process state without inferring work outcome.
  *
  * For human/operator surfaces, `get_session` also surfaces an `attachHint`: the
  * attach command rendered from the Session's mux template `attach` sequence and

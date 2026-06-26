@@ -71,9 +71,9 @@ export async function resolveContext(
   });
 }
 
-/** True when two scopes refer to the same workspace + worktree. */
+/** True when two scopes refer to the same Workspace boundary. */
 export function sameScope(a: EffectiveScope, b: EffectiveScope): boolean {
-  return a.workspaceId === b.workspaceId && a.worktreeRoot === b.worktreeRoot;
+  return a.workspaceId === b.workspaceId;
 }
 
 /** A verified current Session paired with the raw token that authenticated it. */

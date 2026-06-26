@@ -116,10 +116,7 @@ function inScope(
   row: { workspaceId: string; worktreeRoot: string },
   scope: EffectiveScope,
 ): boolean {
-  return (
-    row.workspaceId === scope.workspaceId &&
-    row.worktreeRoot === scope.worktreeRoot
-  );
+  return row.workspaceId === scope.workspaceId;
 }
 
 function byCreatedThenId<T extends { createdAt: string; id: string }>(
@@ -138,10 +135,7 @@ export class FakeStore implements Store {
 
   async insertSession(session: Session): Promise<void> {
     const conflict = this.sessions.some(
-      (s) =>
-        s.workspaceId === session.workspaceId &&
-        s.worktreeRoot === session.worktreeRoot &&
-        s.name === session.name,
+      (s) => s.workspaceId === session.workspaceId && s.name === session.name,
     );
     if (conflict) {
       throw Object.assign(
@@ -177,6 +171,11 @@ export class FakeStore implements Store {
     return this.sessions
       .filter((s) => inScope(s, scope))
       .filter((s) => filter?.status === undefined || s.status === filter.status)
+      .filter(
+        (s) =>
+          filter?.worktreeRoot === undefined ||
+          s.worktreeRoot === filter.worktreeRoot,
+      )
       .filter((s) => {
         if (filter === undefined || filter.parentSessionId === undefined) {
           return true;
@@ -194,6 +193,11 @@ export class FakeStore implements Store {
     return this.sessions
       .filter((s) => s.workspaceId === workspaceId)
       .filter((s) => filter?.status === undefined || s.status === filter.status)
+      .filter(
+        (s) =>
+          filter?.worktreeRoot === undefined ||
+          s.worktreeRoot === filter.worktreeRoot,
+      )
       .filter((s) => {
         if (filter === undefined || filter.parentSessionId === undefined) {
           return true;
@@ -230,6 +234,23 @@ export class FakeStore implements Store {
     if (idx >= 0) this.sessions.splice(idx, 1);
   }
 
+  async orphanChildSessionsScoped(
+    scope: EffectiveScope,
+    parentSessionId: string,
+  ): Promise<number> {
+    let updated = 0;
+    for (const session of this.sessions) {
+      if (
+        inScope(session, scope) &&
+        session.parentSessionId === parentSessionId
+      ) {
+        session.parentSessionId = null;
+        updated += 1;
+      }
+    }
+    return updated;
+  }
+
   async deleteRelatedMessagesScoped(
     scope: EffectiveScope,
     sessionId: string,
@@ -263,6 +284,11 @@ export class FakeStore implements Store {
           filter?.toSessionId === undefined ||
           m.toSessionId === filter.toSessionId,
       )
+      .filter(
+        (m) =>
+          filter?.worktreeRoot === undefined ||
+          m.worktreeRoot === filter.worktreeRoot,
+      )
       .filter((m) => filter?.undelivered !== true || m.deliveredAt === null)
       .sort(byCreatedThenId)
       .map((m) => ({ ...m }));
@@ -278,6 +304,11 @@ export class FakeStore implements Store {
         (m) =>
           filter?.toSessionId === undefined ||
           m.toSessionId === filter.toSessionId,
+      )
+      .filter(
+        (m) =>
+          filter?.worktreeRoot === undefined ||
+          m.worktreeRoot === filter.worktreeRoot,
       )
       .filter((m) => filter?.undelivered !== true || m.deliveredAt === null)
       .sort(byCreatedThenId)

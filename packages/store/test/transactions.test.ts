@@ -8,6 +8,8 @@ import {
   scopeB,
 } from "./helpers.ts";
 
+const scopeC = { ...scopeB, workspaceId: "ws_2" };
+
 describe("withTransaction — delete_session primitives", () => {
   test("deletes a scoped Session and its related Messages atomically", async () => {
     const { store } = freshStore();
@@ -79,7 +81,7 @@ describe("withTransaction — delete_session primitives", () => {
     ).rejects.toThrow(/nesting/);
   });
 
-  test("related-message deletion stays within scope", async () => {
+  test("related-message deletion crosses worktree roots but stays within Workspace", async () => {
     const { store } = freshStore();
     await store.insertMessage(
       makeMessage({
@@ -95,12 +97,20 @@ describe("withTransaction — delete_session primitives", () => {
         worktreeRoot: scopeB.worktreeRoot,
       }),
     );
+    await store.insertMessage(
+      makeMessage({
+        id: "m_c",
+        workspaceId: scopeC.workspaceId,
+        worktreeRoot: scopeC.worktreeRoot,
+        toSessionId: "s_del",
+      }),
+    );
 
-    // Deleting related messages for s_del in scopeA must not touch scopeB.
     const removed = await store.deleteRelatedMessagesScoped(scopeA, "s_del");
-    expect(removed).toBe(1);
-    expect((await store.listMessages(scopeB)).map((m) => m.id)).toEqual([
-      "m_b",
+    expect(removed).toBe(2);
+    expect((await store.listMessages(scopeA)).map((m) => m.id)).toEqual([]);
+    expect((await store.listMessages(scopeC)).map((m) => m.id)).toEqual([
+      "m_c",
     ]);
   });
 });

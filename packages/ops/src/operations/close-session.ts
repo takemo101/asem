@@ -10,10 +10,11 @@
  * only, so close moves a live Session to `closed` and stamps `closed_at`; it does
  * not judge whether the agent finished its assignment.
  *
- * The target is resolved by scoped Store lookup, so a Session in a sibling
- * worktree is simply `session_not_found` — never closed across the isolation
- * boundary (ADR 0002). Mux `close` is invoked through `@asem/runtime` only when a
- * live pane could exist (`starting`/`running`); a Session that already `exited`,
+ * The target is resolved by Workspace-scoped Store lookup, so a Session in a
+ * sibling worktree under the same Workspace can be closed while Sessions in
+ * another Workspace remain `session_not_found` (ADR 0008). Mux `close` is
+ * invoked through `@asem/runtime` only when a live pane could exist
+ * (`starting`/`running`); a Session that already `exited`,
  * is `missing`, or is `closed` has no live pane to control, so close records the
  * truth without pretending to kill a process it did not.
  *
@@ -130,8 +131,8 @@ export async function closeSession(
   }
   const actor = actorResult.value;
 
-  // Scoped lookup enforces same-scope close: a sibling-worktree Session is not
-  // found here, never closed across the isolation boundary.
+  // Scoped lookup enforces the Workspace boundary; sibling-worktree Sessions
+  // inside the same Workspace are addressable, but other Workspaces are not.
   const session = await deps.store.getSessionById(scope, input.id);
   if (session === null) {
     return err(

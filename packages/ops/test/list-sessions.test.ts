@@ -20,11 +20,10 @@ function depsWith(store: FakeStore, overrides = {}) {
 }
 
 describe("listSessions", () => {
-  test("returns only Sessions in the current Effective Scope by default", async () => {
+  test("returns all Sessions in the Workspace by default", async () => {
     const store = new FakeStore();
     const a1 = makeSession({ name: "a1" });
     const a2 = makeSession({ name: "a2" });
-    // Same workspace, different worktree → must be isolated (ADR 0002).
     const b1 = makeSession({
       name: "b1",
       workspaceId: scopeB.workspaceId,
@@ -36,8 +35,29 @@ describe("listSessions", () => {
       await listSessions(depsWith(store), { filter: undefined }, CTX),
     );
     const ids = sessions.map((s) => s.id).sort();
-    expect(ids).toEqual([a1.id, a2.id].sort());
-    expect(ids).not.toContain(b1.id);
+    expect(ids).toEqual([a1.id, a2.id, b1.id].sort());
+  });
+
+  test("passes a worktreeRoot filter through to the Workspace query", async () => {
+    const store = new FakeStore();
+    const here = makeSession({
+      name: "here",
+      worktreeRoot: scopeA.worktreeRoot,
+    });
+    const there = makeSession({
+      name: "there",
+      worktreeRoot: scopeB.worktreeRoot,
+    });
+    store.sessions.push(here, there);
+
+    const { sessions } = expectOk(
+      await listSessions(
+        depsWith(store),
+        { filter: { worktreeRoot: scopeA.worktreeRoot } },
+        CTX,
+      ),
+    );
+    expect(sessions.map((s) => s.id)).toEqual([here.id]);
   });
 
   test("passes a status filter through to the scoped query", async () => {

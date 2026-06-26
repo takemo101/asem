@@ -63,9 +63,9 @@ describe("resolveContext", () => {
 });
 
 describe("sameScope", () => {
-  test("true only when workspace id and worktree root both match", () => {
+  test("true when the Workspace id matches, regardless of worktree root", () => {
     expect(sameScope(scopeA, { ...scopeA })).toBe(true);
-    expect(sameScope(scopeA, scopeB)).toBe(false);
+    expect(sameScope(scopeA, scopeB)).toBe(true);
     expect(
       sameScope(scopeA, {
         workspaceId: "ws_other",
@@ -106,13 +106,17 @@ describe("authenticateCurrentSession", () => {
     );
   });
 
-  test("scope_mismatch when the pointer scope differs from the resolved scope", async () => {
+  test("scope_mismatch when the pointer Workspace differs from the resolved Workspace", async () => {
     const store = new FakeStore();
     const me = makeSession({ tokenHash: hashToken(RAW) });
     store.sessions.push(me);
     expectErr(
       await authenticateCurrentSession(
-        deps(store, { sessionId: me.id, token: RAW, scope: scopeB }),
+        deps(store, {
+          sessionId: me.id,
+          token: RAW,
+          scope: { ...scopeB, workspaceId: "ws_other" },
+        }),
         scopeA,
       ),
       "scope_mismatch",
@@ -277,7 +281,7 @@ describe("resolveMutationActor", () => {
           currentSessionResolver: new FakeCurrentSessionResolver({
             sessionId: me.id,
             token: CURRENT_TOKEN,
-            scope: scopeB,
+            scope: { ...scopeB, workspaceId: "ws_other" },
           }),
         }),
         scopeA,

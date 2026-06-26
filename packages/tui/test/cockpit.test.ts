@@ -26,7 +26,7 @@ describe("loadCockpitSnapshot", () => {
     expect(snap.messages.map((m) => m.id)).toEqual(["m1"]);
   });
 
-  test("respects worktree isolation (sibling-worktree rows are excluded)", async () => {
+  test("default cockpit snapshot loads Sessions across worktree roots in the Workspace", async () => {
     const store = new FakeStore();
     const here = makeSession({ id: "here", worktreeRoot: "/repo/a" });
     const sibling = makeSession({ id: "sibling", worktreeRoot: "/repo/b" });
@@ -34,7 +34,7 @@ describe("loadCockpitSnapshot", () => {
 
     const deps = makeOpsDeps({ store });
     const snap = expectOk(await loadCockpitSnapshot(deps, CTX));
-    expect(snap.sessions.map((s) => s.id)).toEqual(["here"]);
+    expect(snap.sessions.map((s) => s.id).sort()).toEqual(["here", "sibling"]);
   });
 
   test("propagates a structured error from the underlying read", async () => {
@@ -50,6 +50,22 @@ describe("loadCockpitSnapshot", () => {
     );
     // Sanity: the happy-path deps still load fine.
     expectOk(await loadCockpitSnapshot(deps, CTX));
+  });
+
+  test("worktree mode filters Sessions and Messages to the current Worktree Root", async () => {
+    const store = new FakeStore();
+    store.sessions.push(
+      makeSession({ id: "here", worktreeRoot: "/repo/a" }),
+      makeSession({ id: "sibling", worktreeRoot: "/repo/b" }),
+    );
+    store.messages.push(
+      makeMessage({ id: "m_here", worktreeRoot: "/repo/a" }),
+      makeMessage({ id: "m_sibling", worktreeRoot: "/repo/b" }),
+    );
+    const deps = makeOpsDeps({ store });
+    const snap = expectOk(await loadCockpitSnapshot(deps, CTX, "worktree"));
+    expect(snap.sessions.map((s) => s.id)).toEqual(["here"]);
+    expect(snap.messages.map((m) => m.id)).toEqual(["m_here"]);
   });
 
   test("workspace mode loads Sessions across worktree roots", async () => {

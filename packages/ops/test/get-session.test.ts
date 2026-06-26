@@ -34,9 +34,8 @@ describe("getSession", () => {
     expect(session.name).toBe("reviewer");
   });
 
-  test("reports a Session in a sibling worktree as session_not_found", async () => {
+  test("reads a Session in a sibling worktree within the same Workspace", async () => {
     const store = new FakeStore();
-    // Registered in scopeB; the lookup runs in scopeA → must not leak (ADR 0002).
     const other = makeSession({
       name: "b",
       workspaceId: scopeB.workspaceId,
@@ -44,10 +43,11 @@ describe("getSession", () => {
     });
     store.sessions.push(other);
 
-    expectErr(
+    const { session } = expectOk(
       await getSession(depsWith(store), { id: other.id }, CTX),
-      "session_not_found",
     );
+    expect(session.id).toBe(other.id);
+    expect(session.worktreeRoot).toBe(scopeB.worktreeRoot);
   });
 
   test("returns session_not_found for an unknown id", async () => {

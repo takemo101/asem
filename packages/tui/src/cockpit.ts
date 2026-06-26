@@ -9,11 +9,9 @@
  * Session token; the destructive ones only arrive here after the view-model's
  * confirmation gate, and `delete` is sent with `force: true` accordingly.
  *
- * Scope: in `worktree` mode every read uses the worktree-isolated
- * `list_sessions` / `list_messages`. In `workspace` mode the snapshot is the
- * workspace-wide `load_workspace_snapshot`, and cross-worktree effects are run
- * against the target Session's own worktree (the caller picks the `cwd`); the
- * scope broadening stays confined to those reads (implementation principle 7).
+ * Scope: `workspace` mode is the normal cockpit view. `worktree` mode is a
+ * location filter over the same Workspace-scoped Session/Message model; it does
+ * not change parent/message/report boundaries.
  *
  * Tests exercise this with fake `@asem/ops` deps (the `@asem/ops` in-memory
  * fakes), never a real store, multiplexer, or agent.
@@ -55,17 +53,16 @@ export type SnapshotDeps = Pick<
 >;
 
 /**
- * Load the cockpit snapshot for the current scope. In `worktree` mode this is
- * the worktree-isolated `list_sessions` / `list_messages`; in `workspace` mode
- * it is the workspace-wide `load_workspace_snapshot`, whose rows the view-model
- * groups by `worktree_root`. An optional liveness pass (`ctx.refreshLiveness`)
- * refreshes process state without inferring outcome. Any structured error from
- * the underlying reads is propagated unchanged.
+ * Load the cockpit snapshot for the current scope. `workspace` mode loads the
+ * full Workspace; `worktree` mode filters that Workspace to the current
+ * Worktree Root for focused views. An optional liveness pass
+ * (`ctx.refreshLiveness`) refreshes process state without inferring outcome. Any
+ * structured error from the underlying reads is propagated unchanged.
  */
 export async function loadCockpitSnapshot(
   deps: SnapshotDeps,
   ctx: OpContext,
-  scopeMode: CockpitScopeMode = "worktree",
+  scopeMode: CockpitScopeMode = "workspace",
 ): Promise<OperationResult<CockpitSnapshot>> {
   if (scopeMode === "workspace") {
     const snapshot = await loadWorkspaceSnapshot(deps, ctx);
@@ -80,11 +77,16 @@ export async function loadCockpitSnapshot(
       : snapshot;
   }
 
-  const sessions = await listSessions(deps, { filter: undefined }, ctx);
+  const context = await resolveContext(deps, ctx.cwd);
+  if (!context.ok) {
+    return context;
+  }
+  const filter = { worktreeRoot: context.value.scope.worktreeRoot };
+  const sessions = await listSessions(deps, { filter }, ctx);
   if (!sessions.ok) {
     return sessions;
   }
-  const messages = await listMessages(deps, { filter: undefined }, ctx);
+  const messages = await listMessages(deps, { filter }, ctx);
   if (!messages.ok) {
     return messages;
   }
@@ -195,7 +197,7 @@ export async function executeCockpitEffect(
   deps: EffectDeps,
   ctx: OpContext,
   effect: CockpitEffect,
-  scopeMode: CockpitScopeMode = "worktree",
+  scopeMode: CockpitScopeMode = "workspace",
 ): Promise<OperationResult<CockpitEffectOutcome>> {
   switch (effect.kind) {
     case "send": {

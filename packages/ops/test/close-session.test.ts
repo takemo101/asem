@@ -108,22 +108,22 @@ describe("closeSession — pane control + status update", () => {
 });
 
 describe("closeSession — scoped lookup", () => {
-  test("a Session in a sibling worktree is not found (cross-worktree rejection)", async () => {
+  test("can close a Session in a sibling worktree within the same Workspace", async () => {
     const store = new FakeStore();
-    // Lives only in scopeB; we operate in scopeA.
     store.sessions.push(
       makeRunning({
         id: "s_b",
         workspaceId: scopeB.workspaceId,
         worktreeRoot: scopeB.worktreeRoot,
+        cwd: scopeB.worktreeRoot,
       }),
     );
     const d = deps({ store });
 
-    const result = await closeSession(d, { id: "s_b" }, CTX);
-    expectErr(result, "session_not_found");
-    // No pane control attempted across the boundary.
-    expect(d.runner.commands).toHaveLength(0);
+    const { session } = expectOk(await closeSession(d, { id: "s_b" }, CTX));
+    expect(session.status).toBe("closed");
+    expect(d.runner.commands).toHaveLength(1);
+    expect(d.runner.commands[0]!.cwd).toBe(scopeB.worktreeRoot);
   });
 
   test("a missing Session id is not found", async () => {

@@ -16,8 +16,8 @@ interface Migration {
 
 /**
  * Ordered schema migrations. The `sessions`/`messages` DDL, the unique Session
- * name-per-scope constraint, and the documented indexes mirror the persistence
- * model in `docs/designs/asem-session-manager-design.md`.
+ * name-per-Workspace constraint, and the documented indexes mirror the
+ * persistence model in `docs/designs/asem-session-manager-design.md`.
  */
 const MIGRATIONS: readonly Migration[] = [
   {
@@ -84,6 +84,21 @@ const MIGRATIONS: readonly Migration[] = [
     up: `
       alter table sessions add column profile text;
       alter table sessions add column profile_source text;
+    `,
+  },
+  {
+    // ADR 0008: Workspace-scoped Session tree. Session names are unique within
+    // one Workspace; worktree_root remains location metadata for grouping and
+    // filters rather than the normal relationship/communication boundary.
+    version: 4,
+    up: `
+      drop index if exists sessions_scope_name_unique;
+
+      create unique index sessions_workspace_name_unique
+        on sessions(workspace_id, name);
+
+      create index if not exists idx_sessions_workspace_worktree_created
+        on sessions(workspace_id, worktree_root, created_at desc);
     `,
   },
 ];

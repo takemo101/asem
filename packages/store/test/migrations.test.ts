@@ -34,23 +34,24 @@ describe("migrations — initialization", () => {
   test("creates the required indexes and unique constraint", () => {
     const { db } = freshStore();
     const indexes = indexNames(db);
-    expect(indexes).toContain("sessions_scope_name_unique");
+    expect(indexes).toContain("sessions_workspace_name_unique");
+    expect(indexes).toContain("idx_sessions_workspace_worktree_created");
     expect(indexes).toContain("idx_sessions_workspace_status");
     expect(indexes).toContain("idx_messages_workspace_created");
     expect(indexes).toContain("idx_messages_to_created");
     expect(indexes).toContain("idx_messages_delivery_error");
   });
 
-  test("the scope-name index is unique", () => {
+  test("the Workspace-name index is unique", () => {
     const { db } = freshStore();
     const info = db
       .query(
-        "select sql from sqlite_master where name = 'sessions_scope_name_unique'",
+        "select sql from sqlite_master where name = 'sessions_workspace_name_unique'",
       )
       .get() as { sql: string };
     expect(info.sql.toLowerCase()).toContain("unique index");
     expect(info.sql).toContain("workspace_id");
-    expect(info.sql).toContain("worktree_root");
+    expect(info.sql).not.toContain("worktree_root");
     expect(info.sql).toContain("name");
   });
 
@@ -60,7 +61,7 @@ describe("migrations — initialization", () => {
       user_version: number;
     };
     expect(row.user_version).toBe(LATEST_SCHEMA_VERSION);
-    expect(LATEST_SCHEMA_VERSION).toBe(3);
+    expect(LATEST_SCHEMA_VERSION).toBe(4);
   });
 
   test("adds the nullable sessions.model column (schema version 2)", () => {

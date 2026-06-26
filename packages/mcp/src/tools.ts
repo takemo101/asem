@@ -138,7 +138,7 @@ const toolDefinitions = {
   create_session: {
     name: "create_session",
     description:
-      "Create and launch a child Session through configured templates.",
+      "Create and launch a child Session through configured templates. Supports repo aliases from the Workspace config.",
     inputSchema: objectSchema(
       {
         name: stringSchema,
@@ -151,6 +151,7 @@ const toolDefinitions = {
         // Optional Agent Profile id; the shared schema/op resolve and apply it.
         profile: stringSchema,
         cwd: stringSchema,
+        repo: stringSchema,
         parentSessionId: stringSchema,
         root: booleanSchema,
       },

@@ -19,6 +19,7 @@ import {
 
 const CTX = { cwd: scopeA.worktreeRoot };
 const CURRENT_TOKEN = "tok-current";
+const scopeC = { ...scopeB, workspaceId: "ws_2" };
 
 function deps(
   overrides: {
@@ -120,24 +121,24 @@ describe("deleteSession — destructive removal + related cleanup", () => {
 });
 
 describe("deleteSession — scoped lookup", () => {
-  test("a Session in a sibling worktree is not found (cross-worktree rejection)", async () => {
+  test("can delete a closed Session in a sibling worktree within the same Workspace", async () => {
     const store = new FakeStore();
     store.sessions.push(
       makeSession({
         id: "s_b",
         name: "victim",
+        status: "closed",
         workspaceId: scopeB.workspaceId,
         worktreeRoot: scopeB.worktreeRoot,
       }),
     );
     const d = deps({ store });
 
-    expectErr(
+    const result = expectOk(
       await deleteSession(d, { id: "s_b", force: true }, CTX),
-      "session_not_found",
     );
-    // The sibling-worktree Session is untouched.
-    expect(await d.store.getSessionById(scopeB, "s_b")).not.toBeNull();
+    expect(result.deletedSessionId).toBe("s_b");
+    expect(await d.store.getSessionById(scopeB, "s_b")).toBeNull();
   });
 });
 
@@ -171,14 +172,12 @@ describe("deleteSession — transactional rollback", () => {
   });
 });
 
-describe("deleteSession — scope isolation of related cleanup", () => {
-  test("related-message cleanup stays within the operating scope", async () => {
+describe("deleteSession — Workspace cleanup boundary", () => {
+  test("related-message cleanup crosses worktree roots but stays within Workspace", async () => {
     const store = new FakeStore();
     store.sessions.push(
       makeSession({ id: "s_del", name: "victim", status: "closed" }),
     );
-    // A same-id Session in another worktree would relate to its own messages;
-    // here we plant a related message in scopeB and confirm it is left alone.
     store.messages.push(
       makeMessage({ id: "m_a", toSessionId: "s_del" }),
       makeMessage({
@@ -187,15 +186,46 @@ describe("deleteSession — scope isolation of related cleanup", () => {
         workspaceId: scopeB.workspaceId,
         worktreeRoot: scopeB.worktreeRoot,
       }),
+      makeMessage({
+        id: "m_c",
+        toSessionId: "s_del",
+        workspaceId: scopeC.workspaceId,
+        worktreeRoot: scopeC.worktreeRoot,
+      }),
     );
     const d = deps({ store });
 
     const result = expectOk(
       await deleteSession(d, { id: "s_del", force: true }, CTX),
     );
-    expect(result.deletedMessageCount).toBe(1);
-    const scopeBMessages = await d.store.listMessages(scopeB);
-    expect(scopeBMessages.map((m) => m.id)).toEqual(["m_b"]);
+    expect(result.deletedMessageCount).toBe(2);
+    const otherWorkspaceMessages = await d.store.listMessages(scopeC);
+    expect(otherWorkspaceMessages.map((m) => m.id)).toEqual(["m_c"]);
+  });
+});
+
+describe("deleteSession — child protection", () => {
+  test("force delete orphans children instead of cascade-deleting them", async () => {
+    const store = new FakeStore();
+    store.sessions.push(
+      makeSession({ id: "parent", name: "parent", status: "closed" }),
+      makeSession({
+        id: "child",
+        name: "child",
+        parentSessionId: "parent",
+        worktreeRoot: scopeB.worktreeRoot,
+      }),
+    );
+    const d = deps({ store });
+
+    const result = expectOk(
+      await deleteSession(d, { id: "parent", force: true }, CTX),
+    );
+    expect(result.deletedSessionId).toBe("parent");
+    expect(await d.store.getSessionById(scopeA, "parent")).toBeNull();
+    const child = await d.store.getSessionById(scopeA, "child");
+    expect(child).not.toBeNull();
+    expect(child?.parentSessionId).toBeNull();
   });
 });
 

@@ -18,15 +18,19 @@ A Report is a child Session's summary sent to its parent Session. Reports are Me
 
 ## Workspace
 
-A Workspace is a logical project id. It lets related Worktree Roots share a project identity without requiring remote tenancy.
+A Workspace is a logical project id and the normal boundary for Session visibility, parent-child relationships, Messages, and Reports. It lets related Worktree Roots share a project identity without requiring remote tenancy.
 
 ## Worktree Root
 
-The Worktree Root is the filesystem root for the current checkout. asem uses it with Workspace to isolate normal visibility.
+The Worktree Root is the filesystem root for a checkout or Session `cwd`. asem stores it as location metadata for launch files, cleanup, grouping, and explicit filters; it is not the normal parent/message/report boundary.
 
 ## Effective Scope
 
-The Effective Scope is `workspace_id + worktree_root`. Normal Session visibility and messaging are scoped by this pair.
+The Effective Scope is the resolved Workspace plus any explicit location filter, such as worktree or repo. Normal Session visibility and messaging use the Workspace; Worktree Root narrows views only when requested.
+
+## Repo Alias
+
+A Repo Alias is a named `cwd` shortcut configured under a Workspace root. `asem session create --repo <alias>` launches the child Session from that directory while preserving same-Workspace parent and Report behavior.
 
 ## Multiplexer
 

@@ -40,8 +40,8 @@ asem tui
 
 ## What it provides
 
-- **Local Sessions**: create and inspect child agent Sessions in a Workspace and Worktree Root.
-- **Messages and Reports**: keep durable local communication history between parent and child Sessions.
+- **Local Sessions**: create and inspect child agent Sessions in a Workspace, with Worktree Root kept as location metadata.
+- **Messages and Reports**: keep durable local communication history between parent and child Sessions in the same Workspace.
 - **Multiplexer Templates**: launch through tmux, zellij, herdr, rmux, or project-local Templates.
 - **Agent Profiles**: shape child prompts with explicit Profiles such as `reviewer`, `worker`, and `planner`.
 - **TUI Cockpit**: inspect Sessions and local activity from a keyboard-first terminal surface.
@@ -49,6 +49,10 @@ asem tui
 - **Integration Target setup**: register MCP or install Skill guidance for supported external AI clients.
 
 asem is intentionally small. It is not a task board, scheduler, hosted service, workflow engine, or result evaluator.
+
+## Workspace parent/report behavior
+
+Normal Session relationships and communication are Workspace-scoped. `--repo <alias>` is a named `cwd` shortcut for creating a Session under a repo directory; it does not split the parent/report tree. A repo child Session can still send `asem report parent` to its Workspace parent.
 
 ## Built-in Agent Templates
 

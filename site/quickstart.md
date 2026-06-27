@@ -40,7 +40,7 @@ asem session list
 asem message list
 ```
 
-Messages and Reports are scoped by Workspace and Worktree Root.
+Messages and Reports are scoped by Workspace. Worktree Root is retained as Session location metadata and can be used as an explicit filter.
 
 ## 5. Open the Cockpit
 
@@ -63,5 +63,5 @@ MCP registration and Skill installation are separate. They update the selected I
 
 - `.asem.yaml` defined project defaults.
 - A child Session was created with explicit prompt shaping.
-- Session and Message history stayed local to the Effective Scope.
+- Session and Message history stayed local to the Workspace.
 - The TUI and MCP server can operate over the same local state.

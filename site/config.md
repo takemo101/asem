@@ -19,7 +19,9 @@ Exact fields can grow as Templates and local defaults are configured.
 
 ## Workspace and Worktree Root
 
-Normal visibility and messaging use the Effective Scope: Workspace id plus Worktree Root. This keeps local Sessions from different checkouts separate even when they share a Workspace name.
+Normal visibility, parent-child relationships, Messages, and Reports use the Workspace id. Worktree Root is Session location metadata for launch files, cleanup, grouping, and explicit filters.
+
+Repo aliases may point to directories under the Workspace root. `asem session create --repo <alias>` uses the alias as a named `cwd` shortcut without changing Workspace parent/report semantics.
 
 ## Templates
 

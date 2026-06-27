@@ -49,7 +49,17 @@ asem message wait
 asem report parent --body "Review complete"
 ```
 
-`report parent` sends a Report to the current Session's parent Session.
+`report parent` sends a Report to the current Session's parent Session in the same Workspace.
+
+## Repo aliases and Workspace parents
+
+When `.asem.yaml` defines repo aliases, `--repo <alias>` is a named `cwd` shortcut:
+
+```sh
+asem session create frontend-review --repo frontend --parent <workspace-parent-id> --prompt "Review frontend"
+```
+
+The repo alias chooses where the child Session runs. It does not create a separate communication boundary, so Messages and `report parent` still follow the same Workspace Session tree.
 
 ## Surfaces
 

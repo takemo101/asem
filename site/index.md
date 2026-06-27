@@ -19,7 +19,7 @@ hero:
 features:
   - icon: 🧭
     title: Scoped local Sessions
-    details: "Sessions are visible in the Effective Scope: Workspace plus Worktree Root. Local state stays tied to the project you are working in."
+    details: "Sessions, Messages, Reports, and parent links are scoped to the Workspace. Worktree Roots stay visible as Session location metadata and filters."
   - icon: 💬
     title: Messages and Reports
     details: Send durable Messages to child Sessions and collect Reports back from them. Pane delivery is best-effort; local store rows are the durable truth.

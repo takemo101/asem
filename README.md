@@ -9,7 +9,7 @@ Manual: <https://takemo101.github.io/asem/>
 AI coding sessions often need more structure than a terminal tab, but less process than a task scheduler or workflow engine. asem is meant for that middle ground:
 
 - launch and track local child Sessions from one project Workspace;
-- keep Message and Report history scoped to the current Workspace and Worktree Root;
+- keep Message and Report history scoped to the current Workspace, with Worktree Root stored as location metadata;
 - use familiar multiplexers such as tmux, zellij, herdr, or rmux through Templates;
 - launch through built-in Agent Templates for claude, codex, pi, gemini, agy, opencode, or kimi;
 - shape child prompts with explicit Agent Profiles;
@@ -59,9 +59,9 @@ asem tui
 - **Session**: a registered agent process or child process that can receive Messages and produce Reports.
 - **Message**: durable local communication addressed to a Session.
 - **Report**: a child Session's summary sent to its parent Session.
-- **Workspace**: logical project scope shared by related Sessions.
-- **Worktree Root**: filesystem root that participates in scope isolation.
-- **Effective Scope**: `workspace_id + worktree_root`, the normal boundary for visibility and messaging.
+- **Workspace**: logical project boundary for Session visibility, parent-child relationships, Messages, and Reports.
+- **Worktree Root**: filesystem root for a Session's `cwd`; used as location metadata and for explicit filters, not as the normal communication boundary.
+- **Repo Alias**: named `cwd` shortcut under a Workspace root; `--repo <alias>` chooses where a child Session runs without changing Workspace parent/report semantics.
 - **Multiplexer**: the terminal host used to launch or attach to a Session pane.
 - **Agent Template**: command template for launching a CLI agent.
 - **Agent Profile**: explicit prompt-shaping instructions and optional launch defaults.
@@ -83,13 +83,17 @@ asem report parent --body "Review complete"
 
 Run `asem --help` or `asem <command> --help` for focused help.
 
+### Workspace parent/report behavior
+
+Normal Session relationships and communication are Workspace-scoped. A Workspace-root Session can create repo-specific child Sessions with `--repo <alias>`; the alias only chooses the child Session's `cwd`. `asem report parent` follows the current Session's stored parent in the same Workspace, even when parent and child run from different Worktree Roots.
+
 ## TUI Cockpit
 
 ```sh
 asem tui
 ```
 
-The Cockpit is a keyboard-first local view of Sessions, Messages, and details in the Effective Scope. It is a human surface only; operation semantics live in shared ops code.
+The Cockpit is a keyboard-first Workspace view of Sessions, Messages, and details. It shows the Workspace Session tree with per-Session location context; operation semantics live in shared ops code.
 
 ## Agent Profiles
 

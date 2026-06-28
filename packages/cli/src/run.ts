@@ -30,6 +30,7 @@ import {
   listMessages,
   listProfiles,
   listSessions,
+  peekSession,
   reportParent,
   sendMessage,
 } from "@asem/ops";
@@ -200,6 +201,8 @@ async function dispatch(
       return runSessionList(command, env);
     case "session-get":
       return runSessionGet(command, env);
+    case "session-peek":
+      return runSessionPeek(command, env);
     case "session-attach":
       return runSessionAttach(command, env);
     case "session-close":
@@ -448,6 +451,32 @@ async function runSessionGet(
   return render(io, result, (value) => {
     if (command.json) emitJson(io, value);
     else emit(io, renderSessionDetail(value.session, value.attachHint));
+  });
+}
+
+async function runSessionPeek(
+  command: Extract<CliCommand, { type: "session-peek" }>,
+  { cwd, deps, io }: DispatchEnv,
+): Promise<number> {
+  const result = await peekSession(
+    deps,
+    {
+      id: command.id,
+      ...(command.source !== undefined ? { source: command.source } : {}),
+      ...(command.lines !== undefined ? { lines: command.lines } : {}),
+    },
+    { cwd },
+  );
+  return render(io, result, (value) => {
+    if (command.json) {
+      emitJson(io, value);
+    } else {
+      if (io.rawOut !== undefined) {
+        io.rawOut(value.content);
+      } else {
+        emit(io, value.content.replace(/\r\n/g, "\n").split("\n"));
+      }
+    }
   });
 }
 

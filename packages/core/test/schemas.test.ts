@@ -4,6 +4,7 @@ import {
   effectiveScopeSchema,
   messageSchema,
   operationErrorSchema,
+  peekSessionInputSchema,
   type Session,
   sessionSchema,
   sessionStatusSchema,
@@ -243,6 +244,35 @@ describe("effectiveScopeSchema", () => {
   });
 });
 
+describe("peekSessionInputSchema", () => {
+  test("defaults to recent-unwrapped and 80 lines", () => {
+    const parsed = peekSessionInputSchema.parse({ id: "s_1" });
+    expect(parsed).toEqual({
+      id: "s_1",
+      source: "recent-unwrapped",
+      lines: 80,
+    });
+  });
+
+  test("accepts explicit source and lines", () => {
+    const parsed = peekSessionInputSchema.parse({
+      id: "s_1",
+      source: "visible",
+      lines: 120,
+    });
+    expect(parsed).toEqual({ id: "s_1", source: "visible", lines: 120 });
+  });
+
+  test("rejects non-positive and too-large line counts", () => {
+    expect(
+      peekSessionInputSchema.safeParse({ id: "s_1", lines: 0 }).success,
+    ).toBe(false);
+    expect(
+      peekSessionInputSchema.safeParse({ id: "s_1", lines: 301 }).success,
+    ).toBe(false);
+  });
+});
+
 describe("operationErrorSchema", () => {
   test("parses a structured error with a known code", () => {
     const parsed = operationErrorSchema.safeParse({
@@ -251,6 +281,18 @@ describe("operationErrorSchema", () => {
       details: { sessionId: "s_1" },
     });
     expect(parsed.success).toBe(true);
+  });
+
+  test("parses peek-specific structured error codes", () => {
+    for (const code of [
+      "mux_peek_unsupported",
+      "unsupported_source",
+      "peek_failed",
+    ]) {
+      expect(
+        operationErrorSchema.safeParse({ code, message: "peek" }).success,
+      ).toBe(true);
+    }
   });
 
   test("rejects an unknown code", () => {

@@ -8,8 +8,10 @@ import {
 import { getSession, listProfiles, listSessions } from "@asem/ops";
 import { FakeTemplateRunner } from "@asem/runtime";
 import {
+  FakeConfigLoader,
   FakeCurrentSessionResolver,
   FakeStore,
+  makeConfig,
   makeOpsDeps,
 } from "../../ops/src/testing/fakes.ts";
 import { callMcpTool, hasMcpTool, listMcpTools } from "../src/index.ts";
@@ -99,6 +101,7 @@ describe("MCP tool registry", () => {
       "list_messages",
       "list_profiles",
       "list_sessions",
+      "peek_session",
       "report_parent",
       "send_message",
     ]);
@@ -142,6 +145,17 @@ describe("MCP tool registry", () => {
     expect(schema.properties).toHaveProperty("repo");
     expect(schema.properties.repo).toMatchObject({ type: "string" });
     expect(schema.required).not.toContain("repo");
+  });
+
+  test("peek_session input schema exposes source and lines", () => {
+    const tool = listMcpTools().find((t) => t.name === "peek_session");
+    const schema = tool?.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.required).toContain("id");
+    expect(schema.properties).toHaveProperty("source");
+    expect(schema.properties).toHaveProperty("lines");
   });
 
   test("close_session input schema exposes optional force", () => {
@@ -196,6 +210,50 @@ describe("MCP tool calls", () => {
 
     expect(result.isError).toBeUndefined();
     expect(parsed(result)).toEqual(direct.ok ? direct.value : direct.error);
+  });
+
+  test("peek_session delegates to the same agent-origin ops handler", async () => {
+    const store = new FakeStore();
+    const current = makeSession({ id: "current" });
+    const target = makeSession({ id: "target", muxRef: { pane_id: "p1" } });
+    store.sessions.push(target);
+    const deps = withCurrentSession(store, current);
+    deps.configLoader = new FakeConfigLoader({
+      kind: "found",
+      config: makeConfig({
+        mux: {
+          default: "herdr",
+          templates: {
+            herdr: {
+              peek: [
+                {
+                  type: "run",
+                  command: "peek {{pane_id}} {{peek_source}} {{peek_lines}}",
+                },
+              ],
+            },
+          },
+        },
+      }),
+      configPath: "/repo/.asem.yaml",
+    });
+    deps.templateRunner = new FakeTemplateRunner({
+      commands: [{ stdout: "snapshot" }],
+    });
+
+    const result = await callMcpTool(
+      "peek_session",
+      { id: "target", source: "visible", lines: 12 },
+      { ...ctx, deps },
+    );
+
+    expect(result.isError).toBeUndefined();
+    expect(parsed(result)).toMatchObject({
+      session: { id: "target" },
+      source: "visible",
+      lines: 12,
+      content: "snapshot",
+    });
   });
 
   test("schema parse failures return structured invalid_input without echoing raw arguments", async () => {

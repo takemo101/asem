@@ -38,6 +38,7 @@ export {
   refreshLiveness,
   refreshLivenessAll,
 } from "./operations/liveness.ts";
+export { peekSession } from "./operations/peek-session.ts";
 export {
   type GetProfileOutput,
   getProfile,

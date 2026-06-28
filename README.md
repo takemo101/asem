@@ -76,12 +76,15 @@ The CLI exposes primitive Session and Message operations:
 ```sh
 asem session list
 asem session get <id>
+asem session peek <id>
 asem message send <session-id> --body "status?"
 asem message wait
 asem report parent --body "Review complete"
 ```
 
 Run `asem --help` or `asem <command> --help` for focused help.
+
+`asem session peek <id>` reads a live Multiplexer pane snapshot without attaching. It is useful when a parent Session needs to inspect a child Session's terminal output before a Report arrives. Peek output is not durable Message history and is returned without redaction.
 
 ### Workspace parent/report behavior
 

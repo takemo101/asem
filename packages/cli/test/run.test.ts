@@ -1079,6 +1079,148 @@ describe("runCli session list/get", () => {
   });
 });
 
+describe("runCli session peek", () => {
+  function peekDeps(store: FakeStore, runner: FakeTemplateRunner) {
+    return makeOpsDeps({
+      store,
+      templateRunner: runner,
+      scopeResolver: new FakeScopeResolver(SCOPE),
+      configLoader: new FakeConfigLoader({
+        kind: "found",
+        config: makeConfig({
+          mux: {
+            default: "herdr",
+            templates: {
+              herdr: {
+                peek: [
+                  {
+                    type: "run",
+                    command: "peek {{pane_id}} {{peek_source}} {{peek_lines}}",
+                  },
+                ],
+              },
+            },
+          },
+        }),
+        configPath: "/repo/.asem.yaml",
+      }),
+    });
+  }
+
+  test("prints snapshot content only by default", async () => {
+    const store = new FakeStore();
+    const s = makeSession({ muxRef: { pane_id: "p1" } });
+    store.sessions.push(s);
+    const runner = new FakeTemplateRunner({
+      commands: [{ stdout: "child output\n" }],
+    });
+
+    const { io, code } = await run(
+      ["session", "peek", s.id],
+      peekDeps(store, runner),
+    );
+
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toBe("child output\n");
+    expect(runner.commands[0]?.command).toBe("peek p1 recent-unwrapped 80");
+  });
+
+  test("preserves content without adding a trailing newline", async () => {
+    const store = new FakeStore();
+    const s = makeSession({ muxRef: { pane_id: "p1" } });
+    store.sessions.push(s);
+    const runner = new FakeTemplateRunner({
+      commands: [{ stdout: "no trailing newline" }],
+    });
+
+    const { io, code } = await run(
+      ["session", "peek", s.id],
+      peekDeps(store, runner),
+    );
+
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toBe("no trailing newline");
+  });
+
+  test("rejects an invalid source as usage", async () => {
+    const { io, code } = await run([
+      "session",
+      "peek",
+      "s_1",
+      "--source",
+      "tail",
+    ]);
+
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("invalid_input");
+    expect(io.errText()).toContain("--source");
+  });
+
+  test("rejects an invalid lines value as usage", async () => {
+    const { io, code } = await run([
+      "session",
+      "peek",
+      "s_1",
+      "--lines",
+      "abc",
+    ]);
+
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("invalid_input");
+    expect(io.errText()).toContain("lines");
+  });
+
+  test("rejects too many lines through operation validation", async () => {
+    const store = new FakeStore();
+    const s = makeSession({ muxRef: { pane_id: "p1" } });
+    store.sessions.push(s);
+    const runner = new FakeTemplateRunner({
+      commands: [{ stdout: "should not run" }],
+    });
+
+    const { io, code } = await run(
+      ["session", "peek", s.id, "--lines", "301"],
+      peekDeps(store, runner),
+    );
+
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("invalid_input");
+    expect(runner.commands).toHaveLength(0);
+  });
+
+  test("renders structured json when requested", async () => {
+    const store = new FakeStore();
+    const s = makeSession({ muxRef: { pane_id: "p1" } });
+    store.sessions.push(s);
+    const runner = new FakeTemplateRunner({
+      commands: [{ stdout: "visible" }],
+    });
+
+    const { io, code } = await run(
+      [
+        "session",
+        "peek",
+        s.id,
+        "--source",
+        "visible",
+        "--lines",
+        "12",
+        "--json",
+      ],
+      peekDeps(store, runner),
+    );
+
+    expect(code).toBe(EXIT_OK);
+    const parsed = JSON.parse(io.outText());
+    expect(parsed).toMatchObject({
+      session: { id: s.id },
+      source: "visible",
+      lines: 12,
+      content: "visible",
+    });
+  });
+});
+
 describe("runCli session attach", () => {
   test("renders human attach guidance via get_session (no MCP attach)", async () => {
     const store = new FakeStore();

@@ -412,12 +412,13 @@ Command strings should use `_shell` variants. Template-generated non-shell files
 
 ### Mux template shape
 
-Mux templates expose five command sequences plus an optional structured attach argv template:
+Mux templates expose command sequences plus an optional structured attach argv template:
 
 ```yaml
 create: []          # create mux session/window/tab/pane and capture refs
 run_in_pane: []     # execute launch script/command in target pane
 send: []            # inject text into pane
+peek: []            # read a live pane snapshot; final foreground run stdout is returned
 attach: []          # legacy shell attach hint for humans
 attach_command: []  # argv form preferred by CLI/TUI attach runners
 close: []           # close pane/session process
@@ -557,6 +558,7 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 | Get Profile | `asem profile get <id>` | `get_profile` | human local trust | current Workspace/location | reads one resolved Agent Profile definition |
 | List Sessions | `asem session list` | `list_sessions` | human or verified current Session | Workspace, optional location filters | reads Session rows, may update liveness |
 | Get Session | `asem session get` | `get_session` | human or verified current Session | Workspace | reads one Session, may include `attach_hint` and `attach_command` |
+| Peek Session | `asem session peek` | `peek_session` | human or verified current Session | Workspace lookup, target location | reads live mux pane snapshot; does not persist transcript or mutate status |
 | Attach Session | `asem session attach` | — | human local trust | Workspace lookup, target location | attaches to external mux |
 | Close Session | `asem session close` | `close_session` | human or verified current Session | Workspace lookup, target location | closes pane/process, sets `closed` |
 | Delete Session | `asem session delete` | `delete_session` | human or verified current Session | Workspace lookup | deletes Session and related messages; protects children |

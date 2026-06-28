@@ -24,10 +24,13 @@ asem doctor
 asem session create reviewer-1 --profile reviewer --prompt "Review this branch"
 asem session list
 asem session get <session-id>
+asem session peek <session-id>
 asem session attach <session-id>
 asem session close <session-id>
 asem session delete <session-id>
 ```
+
+`session peek` reads a live Multiplexer pane snapshot without attaching. It is not durable Message history and is returned without redaction, so use it only inside the Workspace trust boundary.
 
 `delete` is destructive and refuses to remove a live Session. Close live Sessions first.
 

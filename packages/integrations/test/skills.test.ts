@@ -113,6 +113,7 @@ describe("installSkillForTarget", () => {
       "create_session",
       "send_message",
       "list_messages",
+      "peek_session",
       "report_parent",
       "close_session",
     ]) {
@@ -122,6 +123,7 @@ describe("installSkillForTarget", () => {
       "asem session create",
       "asem message send",
       "asem message wait",
+      "asem session peek",
       "asem report parent",
       "asem session close",
       "asem workspace repo list",
@@ -135,6 +137,8 @@ describe("installSkillForTarget", () => {
     expect(skillDocument).toMatch(/Wait for its Report/i);
     expect(skillDocument).toMatch(/Create a separate reviewer Session/i);
     expect(skillDocument).toMatch(/send the worker a Message/i);
+    expect(skillDocument).toMatch(/peek_session/i);
+    expect(skillDocument).toMatch(/live pane snapshot/i);
     expect(skillDocument).toMatch(/Close child Sessions/i);
     expect(skillDocument).toMatch(/do not delete history/i);
   });

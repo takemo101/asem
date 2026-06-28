@@ -78,6 +78,19 @@ describe("createTemplateRegistry", () => {
     });
   });
 
+  test("a mux template may declare a peek sequence", () => {
+    const registry = createTemplateRegistry({
+      muxTemplates: {
+        custom: {
+          peek: [{ type: "run", command: "peek {{peek_lines_shell}}" }],
+        },
+      },
+    });
+    expect(registry.getMuxTemplate("custom")?.peek).toEqual([
+      { type: "run", command: "peek {{peek_lines_shell}}" },
+    ]);
+  });
+
   test("project-local templates override builtins of the same name", () => {
     const registry = createTemplateRegistry({
       agentTemplates: {

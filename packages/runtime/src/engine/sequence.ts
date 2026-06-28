@@ -64,8 +64,17 @@ export interface SequenceEngineDeps {
 }
 
 type StepOutcome =
-  | { ok: true; vars: Record<string, string>; backgroundHandles: string[] }
+  | {
+      ok: true;
+      vars: Record<string, string>;
+      backgroundHandles: string[];
+      stdout?: string;
+    }
   | { ok: false; error: OperationError };
+
+export interface FinalStdoutRunResult {
+  stdout: string;
+}
 
 export class SequenceEngine {
   private readonly runner: TemplateRunner;
@@ -116,6 +125,46 @@ export class SequenceEngine {
     }
 
     return ok({ captures, backgroundHandles });
+  }
+
+  async runForFinalStdout(
+    steps: CommandSequence,
+    context: SequenceContext = {},
+  ): Promise<OperationResult<FinalStdoutRunResult>> {
+    const vars: Record<string, string> = { ...(context.variables ?? {}) };
+    let stdout = "";
+
+    for (let index = 0; index < steps.length; index += 1) {
+      const step = steps[index] as SequenceStep;
+      const outcome = await this.executeStep(step, context, vars);
+
+      if (!outcome.ok) {
+        if (step.on_error === "ignore") {
+          this.logger?.debug("sequence step failed; ignored per on_error", {
+            stepIndex: index,
+            type: step.type,
+            code: outcome.error.code,
+          });
+          continue;
+        }
+        this.logger?.error("sequence step failed", {
+          stepIndex: index,
+          type: step.type,
+          code: outcome.error.code,
+          message: outcome.error.message,
+        });
+        return err(outcome.error);
+      }
+
+      for (const [name, value] of Object.entries(outcome.vars)) {
+        vars[name] = value;
+      }
+      if (outcome.stdout !== undefined) {
+        stdout = outcome.stdout;
+      }
+    }
+
+    return ok({ stdout });
   }
 
   private async executeStep(
@@ -204,7 +253,12 @@ export class SequenceEngine {
       background && result.backgroundHandle !== undefined
         ? [result.backgroundHandle]
         : [];
-    return { ok: true, vars: newVars, backgroundHandles: handles };
+    return {
+      ok: true,
+      vars: newVars,
+      backgroundHandles: handles,
+      ...(background ? {} : { stdout: result.stdout }),
+    };
   }
 
   private async executeWriteFile(

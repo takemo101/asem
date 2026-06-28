@@ -18,6 +18,7 @@ import {
   listSessionsInputSchema,
   type OperationError,
   type OperationResult,
+  peekSessionInputSchema,
   reportParentInputSchema,
   sendMessageInputSchema,
 } from "@asem/core";
@@ -32,6 +33,7 @@ import {
   listProfiles,
   listSessions,
   type OpsDeps,
+  peekSession,
   reportParent,
   sendMessage,
 } from "@asem/ops";
@@ -97,6 +99,7 @@ const objectSchema = (
 
 const stringSchema = { type: "string" };
 const booleanSchema = { type: "boolean" };
+const numberSchema = { type: "number" };
 const muxRefSchema = {
   type: "object",
   additionalProperties: true,
@@ -178,6 +181,22 @@ const toolDefinitions = {
     name: "get_session",
     description: "Get one Session in the current effective scope.",
     inputSchema: objectSchema({ id: stringSchema }, ["id"]),
+  },
+  peek_session: {
+    name: "peek_session",
+    description:
+      "Read a live Multiplexer pane snapshot for one Session in the current Workspace.",
+    inputSchema: objectSchema(
+      {
+        id: stringSchema,
+        source: {
+          type: "string",
+          enum: ["visible", "recent", "recent-unwrapped"],
+        },
+        lines: numberSchema,
+      },
+      ["id"],
+    ),
   },
   close_session: {
     name: "close_session",
@@ -321,6 +340,15 @@ const tools = {
       parsed(getSessionInputSchema, args, async (input) =>
         operationResult(
           await getSession(deps, input, { cwd, origin: "agent" }),
+        ),
+      ),
+  },
+  peek_session: {
+    definition: toolDefinitions.peek_session,
+    handler: (args, { cwd, deps }) =>
+      parsed(peekSessionInputSchema, args, async (input) =>
+        operationResult(
+          await peekSession(deps, input, { cwd, origin: "agent" }),
         ),
       ),
   },

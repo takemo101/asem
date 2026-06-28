@@ -9,6 +9,8 @@
 /** Where rendered CLI lines are written. `out` is stdout; `err` is stderr. */
 export interface CliIo {
   out(line: string): void;
+  /** Write exact stdout bytes for commands whose payload is already rendered. */
+  rawOut?(text: string): void;
   err(line: string): void;
 }
 
@@ -19,6 +21,10 @@ export class BufferIo implements CliIo {
 
   out(line: string): void {
     this.stdout.push(line);
+  }
+
+  rawOut(text: string): void {
+    this.stdout.push(text);
   }
 
   err(line: string): void {
@@ -40,6 +46,9 @@ export class BufferIo implements CliIo {
 export const processIo: CliIo = {
   out(line: string): void {
     process.stdout.write(`${line}\n`);
+  },
+  rawOut(text: string): void {
+    process.stdout.write(text);
   },
   err(line: string): void {
     process.stderr.write(`${line}\n`);

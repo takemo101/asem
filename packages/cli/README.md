@@ -42,6 +42,7 @@ asem tui
 
 - **Local Sessions**: create and inspect child agent Sessions in a Workspace, with Worktree Root kept as location metadata.
 - **Messages and Reports**: keep durable local communication history between parent and child Sessions in the same Workspace.
+- **Live peek**: inspect a child Session's current Multiplexer pane output without attaching.
 - **Multiplexer Templates**: launch through tmux, zellij, herdr, rmux, or project-local Templates.
 - **Agent Profiles**: shape child prompts with explicit Profiles such as `reviewer`, `worker`, and `planner`.
 - **TUI Cockpit**: inspect Sessions and local activity from a keyboard-first terminal surface.

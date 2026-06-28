@@ -83,6 +83,13 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
           "herdr --session {{herdr_session_shell}} pane run {{pane_id_shell}} {{message_shell}}",
       },
     ],
+    peek: [
+      {
+        type: "run",
+        command:
+          "herdr --session {{herdr_session_shell}} pane read {{pane_id_shell}} --source {{peek_source_shell}} --lines {{peek_lines_shell}}",
+      },
+    ],
     attach: [
       {
         type: "run",
@@ -144,6 +151,13 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
         command: "tmux send-keys -t {{tmux_session_name_shell}} Enter",
       },
     ],
+    peek: [
+      {
+        type: "run",
+        command:
+          "case {{peek_source_shell}} in visible) tmux capture-pane -p -t {{tmux_session_name_shell}} ;; recent) tmux capture-pane -p -S -{{peek_lines_shell}} -t {{tmux_session_name_shell}} ;; recent-unwrapped) tmux capture-pane -J -p -S -{{peek_lines_shell}} -t {{tmux_session_name_shell}} ;; *) printf '%s\\n' 'unsupported source' >&2; exit 42 ;; esac",
+      },
+    ],
     attach: [
       {
         type: "run",
@@ -203,6 +217,13 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
         command: "rmux send-keys -t {{rmux_session_name_shell}} Enter",
       },
     ],
+    peek: [
+      {
+        type: "run",
+        command:
+          "case {{peek_source_shell}} in visible) rmux capture-pane -p -t {{rmux_session_name_shell}} ;; recent) rmux capture-pane -p -S -{{peek_lines_shell}} -t {{rmux_session_name_shell}} ;; recent-unwrapped) rmux capture-pane -J -p -S -{{peek_lines_shell}} -t {{rmux_session_name_shell}} ;; *) printf '%s\\n' 'unsupported source' >&2; exit 42 ;; esac",
+      },
+    ],
     attach: [
       {
         type: "run",
@@ -256,6 +277,13 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
         type: "run",
         command:
           'ZELLIJ_SOCKET_DIR="${ZELLIJ_SOCKET_DIR:-/tmp/zellij}" zellij --session {{zellij_session_name_shell}} action write --pane-id terminal_0 13',
+      },
+    ],
+    peek: [
+      {
+        type: "run",
+        command:
+          "case {{peek_source_shell}} in visible) ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij --session {{zellij_session_name_shell}} action dump-screen --pane-id terminal_0 ;; recent) ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij --session {{zellij_session_name_shell}} action dump-screen --pane-id terminal_0 --full | tail -n {{peek_lines_shell}} ;; recent-unwrapped) printf '%s\\n' 'recent-unwrapped unsupported for zellij' >&2; exit 42 ;; *) printf '%s\\n' 'unsupported source' >&2; exit 42 ;; esac",
       },
     ],
     attach: [

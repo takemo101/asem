@@ -185,6 +185,38 @@ export interface GetSessionOutput {
   attachCommand?: AttachCommand;
 }
 
+// --- peek ----------------------------------------------------------------
+
+export const peekSourceSchema = z.enum([
+  "visible",
+  "recent",
+  "recent-unwrapped",
+]);
+export type PeekSource = z.infer<typeof peekSourceSchema>;
+
+export const PEEK_SESSION_DEFAULT_LINES = 80;
+export const PEEK_SESSION_MAX_LINES = 300;
+
+export const peekSessionInputSchema = z
+  .object({
+    id: nonEmptyString,
+    source: peekSourceSchema.default("recent-unwrapped"),
+    lines: z
+      .number()
+      .int()
+      .positive()
+      .max(PEEK_SESSION_MAX_LINES)
+      .default(PEEK_SESSION_DEFAULT_LINES),
+  })
+  .strict();
+export type PeekSessionInput = z.input<typeof peekSessionInputSchema>;
+export interface PeekSessionOutput {
+  session: Session;
+  source: PeekSource;
+  lines: number;
+  content: string;
+}
+
 // --- close / delete -------------------------------------------------------
 
 export const closeSessionInputSchema = z

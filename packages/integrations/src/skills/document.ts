@@ -35,6 +35,7 @@ Prefer MCP tools when available:
 - \`create_session\`
 - \`send_message\`
 - \`list_messages\`
+- \`peek_session\`
 - \`report_parent\`
 - \`close_session\`
 
@@ -43,6 +44,7 @@ Fallback CLI commands:
 - \`asem session create\`
 - \`asem message send\`
 - \`asem message wait\`
+- \`asem session peek\`
 - \`asem report parent\`
 - \`asem session close\`
 - \`asem workspace repo list\`
@@ -51,10 +53,11 @@ Fallback CLI commands:
 
 1. Create a bounded worker Session.
 2. Wait for its Report.
-3. For non-trivial work, create a separate reviewer Session.
-4. If review blocks, send the worker a Message with repair instructions.
-5. Repeat until acceptable.
-6. Close child Sessions; do not delete history unless explicitly asked.
+3. Use \`peek_session\` or \`asem session peek <id>\` when you need a live pane snapshot before the child reports.
+4. For non-trivial work, create a separate reviewer Session.
+5. If review blocks, send the worker a Message with repair instructions.
+6. Repeat until acceptable.
+7. Close child Sessions; do not delete history unless explicitly asked.
 
 ## Workspace repo aliases
 
@@ -90,6 +93,10 @@ report_parent({ body: "frontend report" });
 \`\`\`
 
 Repo parent Sessions create their own repo-local child Sessions. Use \`asem tui --scope workspace\` when a human needs to inspect multiple repos together.
+
+## Live pane snapshots
+
+Use \`peek_session\` (or \`asem session peek <id>\`) to inspect a Session's live terminal output without attaching. Peek output is not durable Message history and is returned without redaction, so use it only inside the Workspace trust boundary.
 
 ## Boundaries
 

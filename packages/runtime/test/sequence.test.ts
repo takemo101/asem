@@ -110,6 +110,39 @@ describe("SequenceEngine — interpolation", () => {
   });
 });
 
+describe("SequenceEngine — final stdout", () => {
+  test("returns the last foreground run stdout", async () => {
+    const runner = new FakeTemplateRunner({
+      commands: [{ stdout: "first" }, { stdout: "snapshot\n" }],
+    });
+    const result = await engine(runner).runForFinalStdout(
+      [
+        { type: "run", command: "prepare" },
+        { type: "run", command: "peek {{peek_lines}}" },
+      ],
+      {
+        variables: { peek_lines: "80" },
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.stdout).toBe("snapshot\n");
+    }
+    expect(runner.commands[1]?.command).toBe("peek 80");
+  });
+
+  test("ignores background run stdout when selecting final stdout", async () => {
+    const runner = new FakeTemplateRunner({
+      commands: [{ stdout: "visible" }, { stdout: "background" }],
+    });
+    const result = await engine(runner).runForFinalStdout([
+      { type: "run", command: "visible" },
+      { type: "run", command: "bg", background: true },
+    ]);
+    expect(result.ok && result.value.stdout).toBe("visible");
+  });
+});
+
 describe("SequenceEngine — capture", () => {
   test("captures regex output and forwards it to later steps", async () => {
     const runner = new FakeTemplateRunner({

@@ -110,6 +110,7 @@ export const muxTemplateSchema = z
     create: commandSequenceSchema.default([]),
     run_in_pane: commandSequenceSchema.default([]),
     send: commandSequenceSchema.default([]),
+    peek: commandSequenceSchema.default([]),
     attach: commandSequenceSchema.default([]),
     attach_command: attachCommandTemplateSchema,
     close: commandSequenceSchema.default([]),

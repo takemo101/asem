@@ -11,6 +11,7 @@ import {
   type MessageListFilter,
   type OperationError,
   operationError,
+  type PeekSource,
   type SessionListFilter,
 } from "@asem/core";
 
@@ -57,6 +58,13 @@ export type CliCommand =
       json: boolean;
     }
   | { type: "session-get"; id: string; refresh: boolean; json: boolean }
+  | {
+      type: "session-peek";
+      id: string;
+      source?: PeekSource;
+      lines?: number;
+      json: boolean;
+    }
   | { type: "session-attach"; id: string; json: boolean }
   | { type: "session-close"; id: string; force: boolean; json: boolean }
   | { type: "session-delete"; id: string; force: boolean; json: boolean }
@@ -469,6 +477,51 @@ function parseSessionGet(args: string[]): ParseResult {
   };
 }
 
+function parseSessionPeek(args: string[]): ParseResult {
+  const flags = parseFlags(args, {
+    booleans: ["json"],
+    values: ["source", "lines"],
+  });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { positionals, booleans, values } = flags.value;
+
+  const id = positionals[0];
+  if (id === undefined || id.length === 0) {
+    return invalid("session id is required (use `asem session peek <id>`)");
+  }
+  if (positionals.length > 1) {
+    return invalid("unexpected extra arguments", {
+      extra: positionals.slice(1),
+    });
+  }
+
+  const source = values.get("source");
+  if (
+    source !== undefined &&
+    source !== "visible" &&
+    source !== "recent" &&
+    source !== "recent-unwrapped"
+  ) {
+    return invalid(
+      "option --source must be visible, recent, or recent-unwrapped",
+    );
+  }
+
+  const lines = parsePositiveInt(values.get("lines"), "lines");
+  if (!lines.ok) return { kind: "error", error: lines.error };
+
+  return {
+    kind: "command",
+    command: {
+      type: "session-peek",
+      id,
+      ...(source !== undefined ? { source } : {}),
+      ...(lines.value === 0 ? {} : { lines: lines.value }),
+      json: booleans.has("json"),
+    },
+  };
+}
+
 function parseSessionAttach(args: string[]): ParseResult {
   const flags = parseFlags(args, { booleans: ["json"], values: [] });
   if (!flags.ok) return { kind: "error", error: flags.error };
@@ -553,7 +606,7 @@ function parseSession(args: string[]): ParseResult {
   switch (sub) {
     case undefined:
       return invalid(
-        "missing session subcommand (create | list | get | attach | close | delete)",
+        "missing session subcommand (create | list | get | peek | attach | close | delete)",
       );
     case "create":
       return parseSessionCreate(rest);
@@ -561,6 +614,8 @@ function parseSession(args: string[]): ParseResult {
       return parseSessionList(rest);
     case "get":
       return parseSessionGet(rest);
+    case "peek":
+      return parseSessionPeek(rest);
     case "attach":
       return parseSessionAttach(rest);
     case "close":
@@ -569,7 +624,15 @@ function parseSession(args: string[]): ParseResult {
       return parseSessionDelete(rest);
     default:
       return invalid(`unknown session subcommand: ${sub}`, {
-        expected: ["create", "list", "get", "attach", "close", "delete"],
+        expected: [
+          "create",
+          "list",
+          "get",
+          "peek",
+          "attach",
+          "close",
+          "delete",
+        ],
       });
   }
 }

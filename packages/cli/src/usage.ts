@@ -35,6 +35,7 @@ const ROOT_USAGE = [
   "  session create  create and launch a child Session",
   "  session list    list Sessions in the Effective Scope",
   "  session get     show one Session",
+  "  session peek    read a live pane snapshot for one Session",
   "  session attach  attach to a Session's Multiplexer pane (human only)",
   "  session close   close a Session's pane/process and mark it closed",
   "  session delete  delete a Session and its Messages (destructive)",
@@ -76,6 +77,7 @@ const SESSION_GROUP_USAGE = [
   "  create   create and launch a child Session",
   "  list     list Sessions in the Effective Scope",
   "  get      show one Session",
+  "  peek     read a live pane snapshot for one Session",
   "  attach   attach to a Session's Multiplexer pane (human only)",
   "  close    close a Session's pane/process and mark it closed",
   "  delete   delete a Session and its Messages (destructive)",
@@ -330,6 +332,28 @@ const SESSION_GET_USAGE = [
   "  asem session get s_1 --refresh --json",
 ];
 
+const SESSION_PEEK_USAGE = [
+  "asem session peek — read a live pane snapshot for one Session",
+  "",
+  "usage:",
+  "  asem session peek <id> [options]",
+  "",
+  "required:",
+  "  <id>          Session id",
+  "",
+  "options:",
+  "  --source <source>  visible, recent, or recent-unwrapped (default)",
+  "  --lines <n>        number of lines to read (default 80, max 300)",
+  "  --json             print the snapshot as JSON",
+  "",
+  "examples:",
+  "  asem session peek s_1",
+  "  asem session peek s_1 --source visible --lines 20",
+  "",
+  "notes:",
+  "  Reads live Multiplexer pane text without attaching and without redaction.",
+];
+
 const SESSION_ATTACH_USAGE = [
   "asem session attach — attach to a Session's Multiplexer pane (human only)",
   "",
@@ -573,6 +597,7 @@ const PAGES: Record<string, string[]> = {
   "session create": SESSION_CREATE_USAGE,
   "session list": SESSION_LIST_USAGE,
   "session get": SESSION_GET_USAGE,
+  "session peek": SESSION_PEEK_USAGE,
   "session attach": SESSION_ATTACH_USAGE,
   "session close": SESSION_CLOSE_USAGE,
   "session delete": SESSION_DELETE_USAGE,

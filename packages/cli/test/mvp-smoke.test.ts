@@ -306,6 +306,7 @@ const ALL_TOOL_NAMES = [
   "list_messages",
   "list_profiles",
   "list_sessions",
+  "peek_session",
   "report_parent",
   "send_message",
 ];

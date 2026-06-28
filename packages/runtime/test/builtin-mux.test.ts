@@ -70,6 +70,19 @@ async function runWithRefsOnly(
   expect(result.ok).toBe(true);
 }
 
+async function runPeek(
+  template: MuxTemplate,
+  runner: FakeTemplateRunner,
+  refs: Record<string, string>,
+  source = "recent-unwrapped",
+): Promise<void> {
+  const result = await engine(runner).runForFinalStdout(template.peek, {
+    cwd: "/repo",
+    variables: { ...refs, peek_source: source, peek_lines: "80" },
+  });
+  expect(result.ok).toBe(true);
+}
+
 const commandsOf = (runner: FakeTemplateRunner): string[] =>
   runner.commands.map((c) => c.command);
 
@@ -137,6 +150,18 @@ describe("builtin mux: herdr", () => {
     expect(commandsOf(runner)).toEqual([
       "herdr --session 'asem' wait agent-status 'w-3' --status idle --timeout 30000",
       "herdr --session 'asem' pane run 'w-3' 'hi; there'",
+    ]);
+  });
+
+  test("peek reads recent pane output", async () => {
+    const template = muxTemplate("herdr");
+    const runner = new FakeTemplateRunner();
+    await runPeek(template, runner, {
+      pane_id: "w-3",
+      herdr_session: "asem",
+    });
+    expect(commandsOf(runner)).toEqual([
+      "herdr --session 'asem' pane read 'w-3' --source 'recent-unwrapped' --lines '80'",
     ]);
   });
 
@@ -224,6 +249,17 @@ describe("builtin mux: tmux", () => {
     ]);
   });
 
+  test("peek captures and joins recent pane output", async () => {
+    const template = muxTemplate("tmux");
+    const runner = new FakeTemplateRunner();
+    await runPeek(template, runner, {
+      tmux_session_name: "s_0001",
+    });
+    expect(commandsOf(runner)).toEqual([
+      "case 'recent-unwrapped' in visible) tmux capture-pane -p -t 's_0001' ;; recent) tmux capture-pane -p -S -'80' -t 's_0001' ;; recent-unwrapped) tmux capture-pane -J -p -S -'80' -t 's_0001' ;; *) printf '%s\\n' 'unsupported source' >&2; exit 42 ;; esac",
+    ]);
+  });
+
   test("attach attaches by tmux session name", async () => {
     const template = muxTemplate("tmux");
     const runner = new FakeTemplateRunner();
@@ -298,6 +334,17 @@ describe("builtin mux: rmux", () => {
     expect(commandsOf(runner)).toEqual([
       "rmux send-keys -t 's_0001' -l 'hi; there'",
       "rmux send-keys -t 's_0001' Enter",
+    ]);
+  });
+
+  test("peek captures and joins recent pane output", async () => {
+    const template = muxTemplate("rmux");
+    const runner = new FakeTemplateRunner();
+    await runPeek(template, runner, {
+      rmux_session_name: "s_0001",
+    });
+    expect(commandsOf(runner)).toEqual([
+      "case 'recent-unwrapped' in visible) rmux capture-pane -p -t 's_0001' ;; recent) rmux capture-pane -p -S -'80' -t 's_0001' ;; recent-unwrapped) rmux capture-pane -J -p -S -'80' -t 's_0001' ;; *) printf '%s\\n' 'unsupported source' >&2; exit 42 ;; esac",
     ]);
   });
 
@@ -395,6 +442,17 @@ describe("builtin mux: zellij", () => {
     expect(commandsOf(runner)).toEqual([
       "ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij --session 's_0001' action write-chars --pane-id terminal_0 'hi; there'",
       "ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij --session 's_0001' action write --pane-id terminal_0 13",
+    ]);
+  });
+
+  test("peek dumps recent pane output and explicitly rejects unwrapped output", async () => {
+    const template = muxTemplate("zellij");
+    const runner = new FakeTemplateRunner();
+    await runPeek(template, runner, {
+      zellij_session_name: "s_0001",
+    });
+    expect(commandsOf(runner)).toEqual([
+      "case 'recent-unwrapped' in visible) ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij --session 's_0001' action dump-screen --pane-id terminal_0 ;; recent) ZELLIJ_SOCKET_DIR=\"${ZELLIJ_SOCKET_DIR:-/tmp/zellij}\" zellij --session 's_0001' action dump-screen --pane-id terminal_0 --full | tail -n '80' ;; recent-unwrapped) printf '%s\\n' 'recent-unwrapped unsupported for zellij' >&2; exit 42 ;; *) printf '%s\\n' 'unsupported source' >&2; exit 42 ;; esac",
     ]);
   });
 

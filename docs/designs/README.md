@@ -11,6 +11,7 @@ Use these notes for current product shape and implementation reference. Use `doc
 - [`asem-tui-workspace-live-cockpit-design.md`](./asem-tui-workspace-live-cockpit-design.md) — refined TUI design for a workspace-wide OpenTUI live cockpit with auto-refresh and in-memory activity.
 - [`init-wizard-design.md`](./init-wizard-design.md) — opt-in interactive `asem init` setup flow for choosing default Agent/Multiplexer templates and materializing selected builtin Templates into `.asem.yaml`.
 - [`integration-targets-design.md`](./integration-targets-design.md) — CLI-only Integration Target setup for installing asem MCP registration and Skills into supported external AI clients.
+- [`session-peek-design.md`](./session-peek-design.md) — read-only live pane snapshot design for inspecting child Session output through CLI and MCP without durable transcript state.
 
 ## When to add here
 

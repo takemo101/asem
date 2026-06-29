@@ -64,6 +64,26 @@ describe("materializeInitConfig", () => {
     });
   });
 
+  test("materializes mux peek sequences", () => {
+    const result = materializeInitConfig({
+      workspaceId: "ws_1",
+      agent: "claude",
+      mux: "herdr",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+
+    expect(result.value.mux.templates.herdr).toMatchObject({
+      peek: [
+        {
+          type: "run",
+          command: expect.stringContaining("pane read"),
+        },
+      ],
+    });
+  });
+
   test("materializes opencode with --prompt and no paste flow", () => {
     const result = materializeInitConfig({
       workspaceId: "ws_1",

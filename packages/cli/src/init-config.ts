@@ -61,6 +61,9 @@ function cleanMuxTemplate(template: MuxTemplate): Record<string, unknown> {
   if (template.send.length > 0) {
     result.send = template.send;
   }
+  if (template.peek.length > 0) {
+    result.peek = template.peek;
+  }
   if (template.attach.length > 0) {
     result.attach = template.attach;
   }

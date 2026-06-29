@@ -45,8 +45,8 @@ jobs:
 
       - name: Verify CLI version
         run: |
-          test "$(bun packages/cli/src/index.ts --version)" = "0.1.1"
-          test "$(bun packages/cli/src/index.ts -v)" = "0.1.1"
+          test "$(bun packages/cli/src/index.ts --version)" = "0.1.2"
+          test "$(bun packages/cli/src/index.ts -v)" = "0.1.2"
 
       - name: Verify publish package contents
         run: |
@@ -64,7 +64,7 @@ jobs:
           if (cliPackage.name !== '@takemo101/asem') {
             throw new Error(`Unexpected package name ${cliPackage.name}`);
           }
-          if (cliPackage.version !== '0.1.1') {
+          if (cliPackage.version !== '0.1.2') {
             throw new Error(`Unexpected package version ${cliPackage.version}`);
           }
           const deps = {
@@ -119,7 +119,7 @@ jobs:
           console.log(`loaded ${native}`);
           BUN
           ./node_modules/.bin/asem --help
-          test "$(./node_modules/.bin/asem --version)" = "0.1.1"
+          test "$(./node_modules/.bin/asem --version)" = "0.1.2"
 
       - name: Check whether this version is already published
         id: package-status

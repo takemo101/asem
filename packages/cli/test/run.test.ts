@@ -70,14 +70,14 @@ describe("runCli help & usage", () => {
   test("--version prints the package version and exits 0", async () => {
     const { io, code } = await run(["--version"]);
     expect(code).toBe(EXIT_OK);
-    expect(io.outText()).toBe("0.1.3");
+    expect(io.outText()).toBe("0.1.4");
     expect(io.errText()).toBe("");
   });
 
   test("-v prints the package version and exits 0", async () => {
     const { io, code } = await run(["-v"]);
     expect(code).toBe(EXIT_OK);
-    expect(io.outText()).toBe("0.1.3");
+    expect(io.outText()).toBe("0.1.4");
     expect(io.errText()).toBe("");
   });
 

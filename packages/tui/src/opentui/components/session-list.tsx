@@ -3,7 +3,9 @@
  * Session rows with status glyph/color, selection marker, ephemeral badge, and
  * new-Session marker — all read from the pure {@link LeftPaneView} rows.
  */
-import type { ReactNode } from "react";
+import type { MouseEvent, ScrollBoxRenderable } from "@opentui/core";
+import { type ReactNode, type Ref, useEffect, useRef } from "react";
+import type { KeyEvent } from "../../keymap.ts";
 import type { LeftPaneView, LeftRow } from "../../view.ts";
 import { statusAccent, theme } from "../theme.ts";
 
@@ -17,23 +19,6 @@ export function sessionListWidthForTerminal(totalWidth: number): number {
     SESSION_LIST_MAX_WIDTH,
     Math.max(SESSION_LIST_MIN_WIDTH, proportional),
   );
-}
-
-/** Window a list around the selected index so the selection stays visible. */
-export function listWindow(
-  length: number,
-  selectedIndex: number,
-  maxVisible: number,
-): { start: number; end: number } {
-  if (length <= maxVisible || maxVisible <= 0) {
-    return { start: 0, end: length };
-  }
-  const half = Math.floor(maxVisible / 2);
-  const start = Math.min(
-    Math.max(0, selectedIndex - half),
-    length - maxVisible,
-  );
-  return { start, end: start + maxVisible };
 }
 
 /** Compact location label (the worktree root's last path segment). */
@@ -69,21 +54,130 @@ function rowBackground(row: LeftRow, index: number): string {
   return index % 2 === 0 ? theme.rowAlt : theme.row;
 }
 
+export function rowElementId(row: LeftRow): string {
+  return row.kind === "group"
+    ? `session-list-group:${row.worktreeRoot}`
+    : `session-list-row:${row.sessionId}`;
+}
+
+export function selectedRowElementId(rows: LeftRow[]): string | null {
+  const selected = rows.find((row) => row.kind === "session" && row.selected);
+  return selected === undefined ? null : rowElementId(selected);
+}
+
+export function selectedSessionId(rows: LeftRow[]): string | null {
+  const selected = rows.find((row) => row.kind === "session" && row.selected);
+  return selected?.kind === "session" ? selected.sessionId : null;
+}
+
+export function desiredSessionListScrollTop(
+  rows: LeftRow[],
+  sessionId: string,
+  currentScrollTop: number,
+  viewportRows: number,
+): number {
+  const selectedIndex = rows.findIndex(
+    (row) => row.kind === "session" && row.sessionId === sessionId,
+  );
+  if (selectedIndex < 0) {
+    return currentScrollTop;
+  }
+
+  const visibleRows = Math.max(1, viewportRows);
+  const maxScrollTop = Math.max(0, rows.length - visibleRows);
+  const current = Math.min(Math.max(0, currentScrollTop), maxScrollTop);
+
+  if (selectedIndex < current) {
+    return selectedIndex;
+  }
+  if (selectedIndex >= current + visibleRows) {
+    return Math.min(selectedIndex - visibleRows + 1, maxScrollTop);
+  }
+  return current;
+}
+
+export function scrollDirectionToSelectionKey(
+  direction: MouseEvent["scroll"] extends { direction: infer Direction }
+    ? Direction
+    : string | undefined,
+): KeyEvent | null {
+  switch (direction) {
+    case "down":
+      return { key: "down" };
+    case "up":
+      return { key: "up" };
+    default:
+      return null;
+  }
+}
+
+export function SessionRowsScrollBox(props: {
+  rows: LeftRow[];
+  bodyRows: number;
+  scrollRef?: Ref<ScrollBoxRenderable>;
+  onScrollSelection?: (event: KeyEvent) => void;
+}): ReactNode {
+  return (
+    <scrollbox
+      ref={props.scrollRef}
+      scrollY={true}
+      scrollX={false}
+      height={props.bodyRows}
+      flexGrow={1}
+      minHeight={0}
+      viewportOptions={{ backgroundColor: theme.panel }}
+      contentOptions={{ flexDirection: "column" }}
+      onMouseScroll={(event) => {
+        const key = scrollDirectionToSelectionKey(event.scroll?.direction);
+        if (key !== null) {
+          props.onScrollSelection?.(key);
+        }
+      }}
+    >
+      {props.rows.map((row, index) => {
+        const key =
+          row.kind === "group" ? `g:${row.worktreeRoot}` : row.sessionId;
+        return (
+          <box
+            key={key}
+            id={rowElementId(row)}
+            backgroundColor={rowBackground(row, index)}
+            height={1}
+          >
+            <text fg={rowColor(row)}>{rowText(row)}</text>
+          </box>
+        );
+      })}
+    </scrollbox>
+  );
+}
+
 export function SessionList(props: {
   left: LeftPaneView;
   maxVisibleRows: number;
   width: number;
+  onScrollSelection?: (event: KeyEvent) => void;
 }): ReactNode {
   const { left } = props;
-  const selectedIndex = left.rows.findIndex(
-    (row) => row.kind === "session" && row.selected,
-  );
-  const { start, end } = listWindow(
-    left.rows.length,
-    Math.max(0, selectedIndex),
-    Math.max(1, props.maxVisibleRows),
-  );
-  const visible = left.rows.slice(start, end);
+  const bodyRows = Math.max(1, props.maxVisibleRows - 1);
+  const scrollboxRef = useRef<ScrollBoxRenderable | null>(null);
+  const selectedId = selectedSessionId(left.rows);
+
+  useEffect(() => {
+    const scrollbox = scrollboxRef.current;
+    if (scrollbox === null || selectedId === null) {
+      return;
+    }
+    const nextScrollTop = desiredSessionListScrollTop(
+      left.rows,
+      selectedId,
+      scrollbox.scrollTop,
+      bodyRows,
+    );
+    if (nextScrollTop !== scrollbox.scrollTop) {
+      scrollbox.scrollTo(nextScrollTop);
+    }
+  }, [bodyRows, left.rows, selectedId]);
   return (
     <box
       title={left.title}
@@ -104,24 +198,13 @@ export function SessionList(props: {
       {left.rows.length === 0 ? (
         <text fg={theme.muted}>No Sessions in scope.</text>
       ) : (
-        visible.map((row, visibleIndex) => {
-          const index = start + visibleIndex;
-          const key =
-            row.kind === "group" ? `g:${row.worktreeRoot}` : row.sessionId;
-          return (
-            <box
-              key={key}
-              backgroundColor={rowBackground(row, index)}
-              height={1}
-            >
-              <text fg={rowColor(row)}>{rowText(row)}</text>
-            </box>
-          );
-        })
+        <SessionRowsScrollBox
+          rows={left.rows}
+          bodyRows={bodyRows}
+          scrollRef={scrollboxRef}
+          onScrollSelection={props.onScrollSelection}
+        />
       )}
-      {end < left.rows.length ? (
-        <text fg={theme.muted}>{`… ${left.rows.length - end} more`}</text>
-      ) : null}
     </box>
   );
 }

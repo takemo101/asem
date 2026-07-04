@@ -1,14 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { Children, type ReactElement, type ReactNode } from "react";
 import { KEYBAR, type LeftRow } from "../src/index.ts";
 import {
   FOOTER_HEIGHT,
   keybarText,
 } from "../src/opentui/components/footer.tsx";
 import {
-  listWindow,
+  desiredSessionListScrollTop,
   rowText,
+  SessionRowsScrollBox,
+  scrollDirectionToSelectionKey,
+  selectedRowElementId,
   sessionListWidthForTerminal,
 } from "../src/opentui/components/session-list.tsx";
 import {
@@ -58,6 +62,14 @@ describe("opentui theme", () => {
   });
 });
 
+function reactChildren(node: ReactNode): ReactNode[] {
+  return Children.toArray(node);
+}
+
+function reactProps(element: ReactElement): { children?: ReactNode } {
+  return element.props as { children?: ReactNode };
+}
+
 describe("session list rows", () => {
   test("renders group headers and marked session rows", () => {
     const group: LeftRow = { kind: "group", worktreeRoot: "/repo/b" };
@@ -78,13 +90,58 @@ describe("session list rows", () => {
     expect(rowText(session)).toBe("›   ● helper-2 +2 * @b");
   });
 
-  test("listWindow keeps the selection visible", () => {
-    expect(listWindow(3, 0, 10)).toEqual({ start: 0, end: 3 });
-    expect(listWindow(20, 0, 5)).toEqual({ start: 0, end: 5 });
-    expect(listWindow(20, 19, 5)).toEqual({ start: 15, end: 20 });
-    const mid = listWindow(20, 10, 5);
-    expect(mid.start).toBeLessThanOrEqual(10);
-    expect(mid.end).toBeGreaterThan(10);
+  test("renders Session rows inside a vertical scrollbox", () => {
+    const rows: LeftRow[] = Array.from({ length: 6 }, (_, index) => ({
+      kind: "session",
+      sessionId: `s${index}`,
+      name: `helper-${index}`,
+      depth: 0,
+      status: "running",
+      symbol: "●",
+      selected: index === 4,
+      badge: 0,
+      isNew: false,
+      location: "/repo/asem",
+    }));
+    const scrollbox = SessionRowsScrollBox({
+      rows,
+      bodyRows: 3,
+    }) as ReactElement;
+
+    expect(scrollbox.type).toBe("scrollbox");
+    expect(scrollbox.props).toMatchObject({ scrollY: true, scrollX: false });
+    expect(reactChildren(reactProps(scrollbox).children)).toHaveLength(
+      rows.length,
+    );
+    expect(selectedRowElementId(rows)).toBe("session-list-row:s4");
+  });
+
+  test("maps mouse scroll direction to selection movement", () => {
+    expect(scrollDirectionToSelectionKey("down")).toEqual({ key: "down" });
+    expect(scrollDirectionToSelectionKey("up")).toEqual({ key: "up" });
+    expect(scrollDirectionToSelectionKey("left")).toBeNull();
+    expect(scrollDirectionToSelectionKey("right")).toBeNull();
+  });
+
+  test("keeps keyboard selection scroll adjustments stable", () => {
+    const rows: LeftRow[] = Array.from({ length: 12 }, (_, index) => ({
+      kind: "session",
+      sessionId: `s${index}`,
+      name: `helper-${index}`,
+      depth: 0,
+      status: "running",
+      symbol: "●",
+      selected: index === 0,
+      badge: 0,
+      isNew: false,
+      location: "/repo/asem",
+    }));
+
+    expect(desiredSessionListScrollTop(rows, "s2", 0, 5)).toBe(0);
+    expect(desiredSessionListScrollTop(rows, "s5", 0, 5)).toBe(1);
+    expect(desiredSessionListScrollTop(rows, "s6", 1, 5)).toBe(2);
+    expect(desiredSessionListScrollTop(rows, "s5", 2, 5)).toBe(2);
+    expect(desiredSessionListScrollTop(rows, "s1", 2, 5)).toBe(1);
   });
 
   test("sessionListWidthForTerminal keeps narrow terminals at the old width", () => {

@@ -76,6 +76,7 @@ export function CockpitScreen(props: { store: CockpitViewStore }): ReactNode {
           left={view.left}
           maxVisibleRows={paneRows}
           width={sessionListWidth}
+          onScrollSelection={(event) => store.pushKey(event)}
         />
         <DetailPane
           tabs={view.tabs}

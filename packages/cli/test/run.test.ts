@@ -45,6 +45,14 @@ function requiredAt<T>(items: readonly T[], index: number, label: string): T {
   return item;
 }
 
+function parseJson(text: string): ReturnType<typeof JSON.parse> {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`failed to parse JSON: ${String(error)}\n${text}`);
+  }
+}
+
 const HERDR_REF = {
   pane_id: "pane-1",
   tab_id: "tab-1",
@@ -62,14 +70,14 @@ describe("runCli help & usage", () => {
   test("--version prints the package version and exits 0", async () => {
     const { io, code } = await run(["--version"]);
     expect(code).toBe(EXIT_OK);
-    expect(io.outText()).toBe("0.1.2");
+    expect(io.outText()).toBe("0.1.3");
     expect(io.errText()).toBe("");
   });
 
   test("-v prints the package version and exits 0", async () => {
     const { io, code } = await run(["-v"]);
     expect(code).toBe(EXIT_OK);
-    expect(io.outText()).toBe("0.1.2");
+    expect(io.outText()).toBe("0.1.3");
     expect(io.errText()).toBe("");
   });
 
@@ -235,7 +243,7 @@ describe("runCli doctor", () => {
     });
 
     expect(code).toBe(EXIT_OK);
-    const parsed = JSON.parse(io.outText());
+    const parsed = parseJson(io.outText());
     expect(parsed.config.kind).toBe("found");
     expect(
       parsed.multiplexers.find(
@@ -580,7 +588,7 @@ describe("runCli init-session", () => {
       io,
     });
     expect(code).toBe(EXIT_OK);
-    const parsed = JSON.parse(io.outText());
+    const parsed = parseJson(io.outText());
     expect(parsed).toMatchObject({
       workspaceId: SCOPE.workspaceId,
       worktreeRoot: SCOPE.worktreeRoot,
@@ -648,7 +656,7 @@ describe("runCli session create", () => {
       deps,
     );
     expect(code).toBe(EXIT_OK);
-    expect(JSON.parse(io.outText())).toMatchObject({ model: "sonnet" });
+    expect(parseJson(io.outText())).toMatchObject({ model: "sonnet" });
     expect(store.sessions[0]?.model).toBe("sonnet");
   });
 
@@ -669,7 +677,7 @@ describe("runCli session create", () => {
       deps,
     );
     expect(code).toBe(EXIT_OK);
-    expect(JSON.parse(io.outText())).toMatchObject({
+    expect(parseJson(io.outText())).toMatchObject({
       profile: "reviewer",
       profileSource: "builtin",
     });
@@ -740,7 +748,7 @@ describe("runCli session create", () => {
       deps,
     );
     expect(code).toBe(EXIT_OK);
-    const parsed = JSON.parse(io.outText());
+    const parsed = parseJson(io.outText());
     expect(parsed).toMatchObject({
       name: "helper-1",
       status: "running",
@@ -834,7 +842,7 @@ describe("runCli session create --repo", () => {
       deps,
     );
     expect(code).toBe(EXIT_OK);
-    const session = JSON.parse(io.outText());
+    const session = parseJson(io.outText());
     expect(session.cwd).toBe("/repo/frontend");
     // The operation persisted it with the resolved repo path as the cwd.
     expect(store.sessions).toHaveLength(1);
@@ -928,7 +936,7 @@ describe("runCli workspace repo list", () => {
       listDeps(),
     );
     expect(code).toBe(EXIT_OK);
-    const parsed = JSON.parse(io.outText());
+    const parsed = parseJson(io.outText());
     expect(parsed).toEqual([
       {
         alias: "frontend",
@@ -985,7 +993,7 @@ describe("runCli profile list/get", () => {
   test("profile list --json returns the resolved profiles", async () => {
     const { io, code } = await run(["profile", "list", "--json"]);
     expect(code).toBe(EXIT_OK);
-    const profiles = JSON.parse(io.outText());
+    const profiles = parseJson(io.outText());
     expect(Array.isArray(profiles)).toBe(true);
     expect(profiles.map((p: { id: string }) => p.id)).toContain("scout");
   });
@@ -1211,7 +1219,7 @@ describe("runCli session peek", () => {
     );
 
     expect(code).toBe(EXIT_OK);
-    const parsed = JSON.parse(io.outText());
+    const parsed = parseJson(io.outText());
     expect(parsed).toMatchObject({
       session: { id: s.id },
       source: "visible",
@@ -1461,7 +1469,7 @@ describe("runCli message wait", () => {
     );
 
     expect(code).toBe(EXIT_OK);
-    expect(JSON.parse(io.outText()).id).toBe("m_match");
+    expect(parseJson(io.outText()).id).toBe("m_match");
   });
 
   test("times out when no matching Message arrives", async () => {
@@ -1679,7 +1687,7 @@ describe("runCli integrations", () => {
     });
     expect(code).toBe(EXIT_OK);
     const path = join(home, ".config", "mcp", "mcp.json");
-    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+    expect(parseJson(readFileSync(path, "utf8"))).toEqual({
       mcpServers: { asem: { command: "asem", args: ["mcp"] } },
     });
   });

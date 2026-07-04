@@ -126,7 +126,7 @@ export function SessionRowsScrollBox(props: {
       flexGrow={1}
       minHeight={0}
       viewportOptions={{ backgroundColor: theme.panel }}
-      contentOptions={{ flexDirection: "column" }}
+      contentOptions={{ flexDirection: "column", width: "100%" }}
       onMouseScroll={(event) => {
         const key = scrollDirectionToSelectionKey(event.scroll?.direction);
         if (key !== null) {
@@ -143,8 +143,18 @@ export function SessionRowsScrollBox(props: {
             id={rowElementId(row)}
             backgroundColor={rowBackground(row, index)}
             height={1}
+            overflow="hidden"
+            width="100%"
           >
-            <text fg={rowColor(row)}>{rowText(row)}</text>
+            <text
+              fg={rowColor(row)}
+              height={1}
+              truncate={true}
+              width="100%"
+              wrapMode="none"
+            >
+              {rowText(row)}
+            </text>
           </box>
         );
       })}

@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Children, type ReactElement, type ReactNode } from "react";
+import {
+  Children,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { KEYBAR, type LeftRow } from "../src/index.ts";
 import {
   FOOTER_HEIGHT,
@@ -70,6 +75,10 @@ function reactProps(element: ReactElement): { children?: ReactNode } {
   return element.props as { children?: ReactNode };
 }
 
+function isReactElement(node: ReactNode): node is ReactElement {
+  return isValidElement(node);
+}
+
 describe("session list rows", () => {
   test("renders group headers and marked session rows", () => {
     const group: LeftRow = { kind: "group", worktreeRoot: "/repo/b" };
@@ -114,6 +123,47 @@ describe("session list rows", () => {
       rows.length,
     );
     expect(selectedRowElementId(rows)).toBe("session-list-row:s4");
+  });
+
+  test("clips long Session rows to one visible line", () => {
+    const rows: LeftRow[] = [
+      {
+        kind: "session",
+        sessionId: "s1",
+        name: "very-long-worker-name-that-would-overflow-the-left-panel",
+        depth: 0,
+        status: "running",
+        symbol: "●",
+        selected: true,
+        badge: 0,
+        isNew: false,
+        location: "/repo/bookmark-ai-extension-with-a-very-long-name",
+      },
+    ];
+    const scrollbox = SessionRowsScrollBox({
+      rows,
+      bodyRows: 1,
+    }) as ReactElement;
+    const rowBox = reactChildren(reactProps(scrollbox).children).at(0);
+    if (!isReactElement(rowBox)) {
+      throw new Error("expected a Session row box");
+    }
+    const rowTextElement = reactChildren(reactProps(rowBox).children).at(0);
+    if (!isReactElement(rowTextElement)) {
+      throw new Error("expected a Session row text element");
+    }
+
+    expect(rowBox.props).toMatchObject({
+      height: 1,
+      overflow: "hidden",
+      width: "100%",
+    });
+    expect(rowTextElement.props).toMatchObject({
+      height: 1,
+      truncate: true,
+      width: "100%",
+      wrapMode: "none",
+    });
   });
 
   test("maps mouse scroll direction to selection movement", () => {

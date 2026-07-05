@@ -433,15 +433,18 @@ describe("createSession — paste_prompt delivery (MIK-030)", () => {
     const commands = d.runner.commands.map((c) => c.command);
     // [0] herdr session capture, [1] workspace create, [2] run_in_pane (launch
     // script), then the mux `send` sequence pastes the prompt: [3] agent wait,
-    // [4] agent-aware send with the prompt as the message. before_paste
-    // (wait_ms) runs between [2] and [3] but issues no shell command.
-    expect(commands).toHaveLength(5);
+    // [4] agent-aware send with the prompt as the message, [5] explicit submit.
+    // before_paste (wait_ms) runs between [2] and [3] but issues no shell command.
+    expect(commands).toHaveLength(6);
     expect(commands[2]).toContain("launch.sh");
     expect(commands[3]).toContain("agent wait 'pane-1'");
     // Paste delivery sends the exact bytes written to prompt.md — the effective
     // prompt with the file's trailing newline — so file and paste never drift.
     expect(commands[4]).toBe(
       "herdr --session 'asem' agent send 'pane-1' 'do the thing\n'",
+    );
+    expect(commands[5]).toBe(
+      "herdr --session 'asem' pane send-keys 'pane-1' Enter",
     );
     expect(session.status).toBe("running");
     // The row is persisted only after a successful paste.
@@ -705,9 +708,10 @@ describe("createSession — Agent Profiles (MIK-041)", () => {
       } satisfies ConfigDiscovery),
     };
     expectOk(await createSession(d, { ...ROOT_INPUT, profile: "scout" }, CTX));
-    // The final mux send carries the effective prompt, which includes the
-    // profile header — not the bare user prompt.
-    const sent = d.runner.commands.at(-1)!.command;
+    // The final mux text-insertion step carries the effective prompt, which
+    // includes the profile header — not the bare user prompt. The actual final
+    // mux step submits the input with Enter.
+    const sent = d.runner.commands.at(-2)!.command;
     expect(sent).toContain("# Agent Profile");
     expect(sent).toContain("Profile: scout");
     // Paste delivery uses the exact bytes written to prompt.md (single derived

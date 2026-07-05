@@ -111,10 +111,9 @@ describe("sendMessage — same-worktree delivery", () => {
     expect(message.fromSessionId).toBeNull();
     expect(message.kind).toBe("message");
 
-    // Delivered through the herdr `send` sequence: wait for idle, then use
-    // herdr's agent-aware send path so text insertion and submit semantics are
-    // owned by herdr instead of a raw pane command.
-    expect(d.runner.commands).toHaveLength(2);
+    // Delivered through the herdr `send` sequence: wait for idle, insert text
+    // with herdr's agent-aware send path, then explicitly submit it.
+    expect(d.runner.commands).toHaveLength(3);
     expect(d.runner.commands[0]!.command).toContain(
       "herdr --session 'asem' agent wait 'pane-1' --status idle",
     );
@@ -122,6 +121,9 @@ describe("sendMessage — same-worktree delivery", () => {
       "herdr --session 'asem' agent send 'pane-1'",
     );
     expect(d.runner.commands[1]!.command).toContain("ping");
+    expect(d.runner.commands[2]!.command).toContain(
+      "herdr --session 'asem' pane send-keys 'pane-1' Enter",
+    );
 
     // Success sets delivered_at and leaves no delivery_error (no fabricated ack).
     expect(message.deliveredAt).not.toBeNull();
@@ -241,7 +243,7 @@ describe("sendMessage — auth & scope", () => {
     expect(message.toSessionId).toBe("t_b");
     expect(message.worktreeRoot).toBe(scopeB.worktreeRoot);
     expect(d.store.messages[0]!.worktreeRoot).toBe(scopeB.worktreeRoot);
-    expect(d.runner.commands).toHaveLength(2);
+    expect(d.runner.commands).toHaveLength(3);
   });
 
   test("target in another Workspace is not found", async () => {

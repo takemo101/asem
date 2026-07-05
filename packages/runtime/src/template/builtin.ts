@@ -20,7 +20,8 @@
  *   declared in the template's `refs` map instead of being re-captured from a
  *   fake echo step — captures win over a `refs` entry of the same name;
  * - `run_in_pane` — run the Session launch script in that pane;
- * - `send` — inject a Message into the pane (text, then Enter);
+ * - `send` — inject a Message into the pane through the mux's best
+ *   agent-aware delivery primitive;
  * - `attach` — a human/operator attach command (never an MCP operation);
  * - `close` — close the pane/tab.
  *
@@ -74,13 +75,18 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
       {
         type: "run",
         command:
-          "herdr --session {{herdr_session_shell}} wait agent-status {{pane_id_shell}} --status idle --timeout 30000",
+          "herdr --session {{herdr_session_shell}} agent wait {{pane_id_shell}} --status idle --timeout 30000",
         on_error: "ignore",
       },
       {
         type: "run",
         command:
-          "herdr --session {{herdr_session_shell}} pane run {{pane_id_shell}} {{message_shell}}",
+          "herdr --session {{herdr_session_shell}} agent send {{pane_id_shell}} {{message_shell}}",
+      },
+      {
+        type: "run",
+        command:
+          "herdr --session {{herdr_session_shell}} pane send-keys {{pane_id_shell}} Enter",
       },
     ],
     peek: [

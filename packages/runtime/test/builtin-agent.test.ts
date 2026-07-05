@@ -546,8 +546,8 @@ describe("paste flow: before_paste precedes a mux send after the agent starts", 
     expect(sendResult.ok).toBe(true);
 
     expect(commandsOf(runner)).toEqual([
-      "herdr --session 'asem' wait agent-status 'w-3' --status idle --timeout 30000",
-      "herdr --session 'asem' pane run 'w-3' 'do the work'",
+      "herdr --session 'asem' agent wait 'w-3' --status idle --timeout 30000",
+      "herdr --session 'asem' agent send 'w-3' 'do the work'",
     ]);
   });
 

@@ -111,13 +111,15 @@ describe("sendMessage — same-worktree delivery", () => {
     expect(message.fromSessionId).toBeNull();
     expect(message.kind).toBe("message");
 
-    // Delivered through the herdr `send` sequence: wait for idle, then inject.
+    // Delivered through the herdr `send` sequence: wait for idle, then use
+    // herdr's agent-aware send path so text insertion and submit semantics are
+    // owned by herdr instead of a raw pane command.
     expect(d.runner.commands).toHaveLength(2);
     expect(d.runner.commands[0]!.command).toContain(
-      "herdr --session 'asem' wait agent-status 'pane-1' --status idle",
+      "herdr --session 'asem' agent wait 'pane-1' --status idle",
     );
     expect(d.runner.commands[1]!.command).toContain(
-      "herdr --session 'asem' pane run 'pane-1'",
+      "herdr --session 'asem' agent send 'pane-1'",
     );
     expect(d.runner.commands[1]!.command).toContain("ping");
 

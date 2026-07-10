@@ -14,6 +14,7 @@ import {
   type InitSessionOutput,
   type Message,
   type OperationError,
+  type PublicMessage,
   type Session,
   shellEscape,
 } from "@asem/core";
@@ -300,9 +301,17 @@ export function renderMessageList(messages: readonly Message[]): string[] {
  * the second line reflects the truthful recorded state: delivered, failed, or
  * recorded-but-undelivered. No ack/read state is implied.
  */
-export function renderSentMessage(message: Message): string[] {
+export function renderSentMessage(message: Message | PublicMessage): string[] {
   const lines = [`${message.kind} ${message.id} → ${message.toSessionId}`];
-  if (message.deliveryError !== null) {
+  if ("delivery" in message) {
+    if (message.delivery.status === "failed") {
+      lines.push(`delivery failed: ${message.delivery.error}`);
+    } else if (message.delivery.status === "delivered") {
+      lines.push(`delivered at ${message.delivery.deliveredAt}`);
+    } else {
+      lines.push("recorded (undelivered)");
+    }
+  } else if (message.deliveryError !== null) {
     lines.push(`delivery failed: ${message.deliveryError}`);
   } else if (message.deliveredAt !== null) {
     lines.push(`delivered at ${message.deliveredAt}`);

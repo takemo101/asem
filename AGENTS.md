@@ -109,7 +109,7 @@ Real herdr/tmux/rmux/zellij integration tests are optional and must skip when bi
 - Store only token hashes in SQLite.
 - Keep token-bearing files mode `0600` and under ignored runtime paths such as `.asem/sessions/`, `.asem/current-session*.json`, or `.asem/tokens/`.
 - Do not put tokens in command-line args, pane labels, logs, or structured errors when avoidable.
-- Message delivery is best-effort: persist `delivered_at` on success or `delivery_error` on failure; do not fabricate ack/read state.
+- A valid, authorized Message persists before notification/template resolution and is retrieved by CLI/MCP pull; mux delivery is best-effort notification with public states `delivered` / `undelivered` / `failed`, and `delivered` does not mean Agent acceptance. Do not fabricate ack/read state. See [`docs/designs/asem-message-protocol-design.md`](docs/designs/asem-message-protocol-design.md).
 
 ## GitButler / but workflow
 

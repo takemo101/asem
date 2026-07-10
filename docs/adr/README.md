@@ -14,6 +14,7 @@ Use ADRs for durable decisions. Use `docs/designs/` for feature/subsystem design
 - [`0006-surface-specific-logger-composition.md`](./0006-surface-specific-logger-composition.md) — Logger implementations are selected by CLI/MCP/TUI surface so protocol and terminal output stay safe.
 - [`0007-agent-profiles-are-explicit-prompt-shaping.md`](./0007-agent-profiles-are-explicit-prompt-shaping.md) — Agent Profiles are explicit prompt-shaping bundles, not workflow roles or automatic selectors.
 - [`0008-workspace-scoped-session-tree.md`](./0008-workspace-scoped-session-tree.md) — normal Session relationships and communication use a Workspace-scoped Session tree; cwd/worktree root are Session location metadata.
+- [`0009-message-durability-independent-of-notification.md`](./0009-message-durability-independent-of-notification.md) — a valid, authorized Message persists before notification/template resolution and is retrieved by CLI/MCP pull; mux delivery is best-effort notification (`delivered` / `undelivered` / `failed`) without acknowledgement state or auto-wake.
 
 ## ADR rules
 

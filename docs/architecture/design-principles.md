@@ -18,10 +18,11 @@ asem は Message history を持つが、event stream を持たない。
 
 - Message は Session 間 communication の durable record。
 - Report は parent Session 宛ての Message。
-- Message delivery は best-effort。
-- ack、read receipt、durable unread state は MVP に入れない。
+- 有効で認可された Message は、notification や mux template 解決より前に必ず persist される。target Session は CLI/MCP の pull で Message を取得する。
+- Multiplexer delivery は best-effort notification。public delivery state は `delivered` / `undelivered` / `failed` で、`delivered` は Agent/model の acceptance を意味しない。
+- ack、read receipt、durable unread state、auto-wake は入れない。
 
-「何が起きたか」をすべて event 化しない。asem が扱うのは communication record です。
+「何が起きたか」をすべて event 化しない。asem が扱うのは communication record です。詳細な protocol は [`asem-message-protocol-design.md`](../designs/asem-message-protocol-design.md) と [ADR 0009](../adr/0009-message-durability-independent-of-notification.md) を参照。
 
 ## 3. Workspace is the Session Boundary
 
@@ -124,7 +125,7 @@ asem は推測で重要な境界を埋めない。
 
 - current Session は env / Workspace current-session file / explicit flag から解決する。
 - deliverable Session には stored `mux` + `mux_ref` が必要。`init-session` may safely derive those coordinates from the current process environment only when the Multiplexer already hosts that process (for example complete herdr pane env vars).
-- 明示的な `mux: none` は non-deliverable Session として扱い、real-time delivery が必要なら deliverable mux で再登録するよう案内する。
+- 明示的な `mux: none` は pull-only Session として扱う。notification 試行は行わず、その Session 宛ての新しい Message は通常 `undelivered` になる。これは正常な fallback であり、public envelope に remediation hint は載せない。
 - parent Session は `--parent <session-id>` / `--root` (`--no-parent`) / current Session で明示的に決まる。
 - `--repo <alias>` のような Repo Alias は cwd を選ぶ convenience であり、親子関係や communication semantics を変えない。
 - template command は raw value ではなく shell-escaped variable を使う。

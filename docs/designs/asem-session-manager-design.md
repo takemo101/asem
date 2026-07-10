@@ -80,7 +80,7 @@ Do not use Session status to represent task outcome.
 
 ### Message
 
-A Message is a durable SQLite record plus a best-effort delivery attempt into the target Session's multiplexer pane. `asem message wait` polls the durable Message store; it does not depend on pane delivery or agent CLI state.
+A Message is a durable SQLite record plus a best-effort notification attempt into the target Session's multiplexer pane. A valid, authorized Message is persisted before notification or mux template resolution, and the target Session retrieves it by pulling through the CLI or MCP. `asem message wait` polls the durable Message store; it does not depend on pane delivery or agent CLI state. The finalized retrieval protocol — public Message envelope, delivery states, cursor pagination, and bounded Inbox wait — is specified in the [Message Protocol Design](./asem-message-protocol-design.md).
 
 ```ts
 type MessageKind = "message" | "report";
@@ -354,12 +354,13 @@ create index idx_messages_delivery_error
 
 Message guarantees:
 
-- Persist the Message before or with the delivery result.
-- Delivery is best-effort.
+- Persist a valid, authorized Message before notification or mux template resolution; a transport/template failure cannot erase or block a valid Message.
+- Notification delivery is best-effort. The public delivery states are `delivered` (the mux `send` Command Sequence succeeded — not Agent acceptance), `undelivered` (no successful notification outcome recorded — normal for a `mux: none` target, which makes no attempt), and `failed` (a notification attempt failed, including a malformed or missing target mux Template).
 - Herdr delivery waits for the target agent pane to report `idle` before injecting input; that wait is best-effort and ignored on timeout/failure so the durable Message row remains the source of truth.
-- If target pane exists and delivery command succeeds, set `delivered_at`.
-- If delivery fails, set `delivery_error`.
+- If the notification attempt succeeds, set `delivered_at`; if it fails, set `delivery_error`. Notification failure is represented on the Message envelope, not as an operation-level failure.
 - No ack, read receipt, or durable unread state.
+
+The public Message envelope, internal sequence column, cursor pagination, and bounded Inbox wait are specified in the [Message Protocol Design](./asem-message-protocol-design.md); this section keeps only the storage baseline.
 
 Close/delete rule:
 
@@ -563,8 +564,8 @@ CLI and MCP call shared operation handlers. Surface-specific code parses CLI/MCP
 | Close Session | `asem session close` | `close_session` | human or verified current Session | Workspace lookup, target location | closes pane/process, sets `closed` |
 | Delete Session | `asem session delete` | `delete_session` | human or verified current Session | Workspace lookup | deletes Session and related messages; protects children |
 | Send Message | `asem message send` | `send_message` | human or verified current Session | Workspace | inserts Message, best-effort delivery |
-| List Messages | `asem message list`, `asem message list --inbox`, `asem message list --undelivered` | `list_messages` | human or verified current Session | Workspace, optional location filters | reads Message rows |
-| Wait Message | `asem message wait --to <id> [--from <id>] [--kind message\|report]` | — | human local trust | Workspace | polls Message rows until a match or timeout |
+| List Messages | `asem message list [--inbox] [--undelivered] [--cursor <cursor\|latest>] [--limit <n>]` | `list_messages` | human or verified current Session | Workspace, optional location filters | reads Message rows as cursor-paginated pages |
+| Wait Messages | `asem message wait --cursor <cursor> [--limit <n>] [--timeout-ms <n>]` | `wait_messages` | verified current Session | Workspace | bounded long-poll of the current Session's unfiltered Inbox; timeout is a successful empty page |
 | Report Parent | `asem report parent` | `report_parent` | verified current Session | Workspace | inserts report Message to stored Parent Session |
 | Start MCP | `asem mcp` | — | local process | current config | starts stdio MCP server |
 | Start TUI | `asem tui` | — | human local trust | Workspace with filters | opens Session cockpit |
@@ -598,12 +599,12 @@ Current Multiplexer registration rules:
 | Input / environment | Stored mux behavior |
 |---|---|
 | Explicit `mux` and `muxRef` input | Use the explicit values after schema validation. This is the strongest signal. |
-| Explicit `mux: none` | Register a non-deliverable Session intentionally. Message history still works, but live pane delivery is unavailable. |
+| Explicit `mux: none` | Register a pull-only Session intentionally. Messages persist and are retrieved by CLI/MCP pull; no pane notification is attempted, so new Messages stay `undelivered`. |
 | No explicit mux + complete herdr environment (`HERDR_ENV=1`, `HERDR_SESSION`, `HERDR_WORKSPACE_ID`, `HERDR_TAB_ID`, `HERDR_PANE_ID`) | Auto-register `mux: herdr` with the current herdr pane identifiers and `asem_mux_owned = "false"`. This is safe environment discovery of the pane that already hosts the current process, not workflow inference. |
 | Herdr environment is indicated but required identifiers are incomplete | Do not silently fall back to `mux: none`; return a structured, actionable error or warning telling the caller to pass explicit mux data or intentionally choose `mux: none`. |
 | No explicit mux and no supported current-mux environment | Use the configured default only if it can produce a valid borrowed mux ref for the current process; otherwise require explicit mux input. |
 
-A Session registered with `mux: none` is valid but non-deliverable. `send_message` / `report_parent` must still persist the Message attempt, then record an actionable `delivery_error` explaining that the target Session has no live delivery Multiplexer and should be re-registered with a deliverable mux such as `herdr` when real-time delivery is desired. Do not expose only an internal template lookup failure such as `mux template not found: none`.
+A Session registered with `mux: none` is valid but pull-only. `send_message` / `report_parent` persist the Message normally and make no notification attempt, so new Messages to that Session are `undelivered`, not `failed`. This is a normal fallback for externally started Agents that asem cannot launch; it needs no remediation hint in the public envelope, and the Session receives Messages by pulling its Inbox through the CLI or MCP. Existing historical rows keep any old `delivery_error` recorded under the superseded behavior; past delivery outcomes are not rewritten.
 
 After `init-session`, print exports:
 
@@ -698,7 +699,7 @@ Important MVP errors:
 
 Create failures must not leave DB rows. Message delivery failures do leave Message rows with `delivery_error`.
 
-A malformed project-local template (a `.asem.yaml` `mux`/`agent` definition that fails the schema) is a recoverable local configuration defect, not a defect in asem: the ops boundary converts the schema error into `invalid_template` (with the template `kind`, `name`, and schema issue messages, never raw values) instead of letting it escape as an internal error. A *missing* template name is still `mux_template_not_found` / `agent_template_not_found`, and the best-effort delivery/attach paths keep their existing missing-template fallback. Template parsing happens before side effects where applicable, so an invalid template blocks a create/close/send before any pane control or Message row.
+A malformed project-local template (a `.asem.yaml` `mux`/`agent` definition that fails the schema) is a recoverable local configuration defect, not a defect in asem: the ops boundary converts the schema error into `invalid_template` (with the template `kind`, `name`, and schema issue messages, never raw values) instead of letting it escape as an internal error. A *missing* template name is still `mux_template_not_found` / `agent_template_not_found`, and the best-effort delivery/attach paths keep their existing missing-template fallback. Template parsing happens before side effects for create/close, so an invalid template blocks those operations before any pane control. For `send_message` / `report_parent`, a valid Message is persisted before mux template resolution: a malformed or missing target mux Template is a notification failure recorded on the Message (delivery state `failed`), never a reason to reject or lose the Message. See [ADR 0009](../adr/0009-message-durability-independent-of-notification.md).
 
 ## Package architecture
 
@@ -934,9 +935,9 @@ Operation test matrix:
 | Operation family | Required fake deps | Must test |
 |---|---|---|
 | `init` / config | `FileSystem`, `ConfigLoader`, `ScopeResolver` | config creation, gitignore rules, missing/invalid config errors |
-| `init_session` | `Store`, `FileSystem`, `TokenGenerator`, `Clock`, `IdGenerator` | token hash only in DB, current-session file mode/ignore coverage, herdr-env borrowed mux auto-registration, explicit `mux: none` remains non-deliverable |
+| `init_session` | `Store`, `FileSystem`, `TokenGenerator`, `Clock`, `IdGenerator` | token hash only in DB, current-session file mode/ignore coverage, herdr-env borrowed mux auto-registration, explicit `mux: none` registers a pull-only Session |
 | `create_session` | `Store`, `TemplateRegistry`, `TemplateRunner`, `FileSystem`, `CurrentSessionResolver`, `TokenGenerator`, `Logger` | sequence order, parent resolution, DB insert only after success, cleanup on failure, log path in error |
-| `send_message` / `report_parent` | `Store`, `TemplateRunner`, `CurrentSessionResolver`, `Clock` | auth/Workspace checks, formatted body, delivered_at vs delivery_error persistence, actionable non-deliverable `mux: none` failure |
+| `send_message` / `report_parent` | `Store`, `TemplateRunner`, `CurrentSessionResolver`, `Clock` | auth/Workspace checks, formatted body, persist-before-notify ordering, delivered/undelivered/failed projection, `mux: none` stays `undelivered` with no notification attempt |
 | `list/get` | `Store`, `ScopeResolver`, `LivenessProbe` | Workspace default reads, optional location filters, optional liveness update, no work-outcome inference |
 | `close/delete` | `Store`, `TemplateRunner`, `Clock` | Workspace lookup, close best-effort behavior, child protection/orphaning, operation-owned related-message cleanup |
 | CLI/MCP projection | fake `@asem/ops` result or fully faked deps | surface parsing/rendering only, no duplicated semantics |

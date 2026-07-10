@@ -13,7 +13,7 @@ The Session that launched or owns another Session. A child Session can report to
 _Avoid_: Coordinator, manager, team lead.
 
 **Message**:
-A communication from one Session to another Session. Messages are recorded for history and may also be delivered to the target Session's multiplexer pane.
+A communication from one Session to another Session. A valid, authorized Message is persisted as a durable record before any notification is attempted, and the target Session retrieves it by pulling through the CLI or MCP. Multiplexer pane delivery is best-effort notification only: it never defines whether the Message exists and never proves Agent acceptance.
 _Avoid_: Event, task event, notification, command.
 
 **Report**:
@@ -69,7 +69,9 @@ _Avoid_: Dashboard when it implies analytics; orchestrator when it implies contr
 - “Task” is intentionally not used. asem manages live agent Sessions, not units of work with outcomes.
 - “Role” is intentionally not part of the MVP. Session specialization should be expressed through Session names, prompts, Agent Profiles, and Agent Templates, not workflow roles.
 - “Workspace” does not mean herdr workspace. It is asem's logical grouping term.
-- “Inbox” is only a filtered view of Messages addressed to the current Session. It is not a durable unread queue.
+- “Inbox” is only a filtered view of Messages addressed to the current Session. It is not a durable unread queue; cursors are opaque caller-held positions, not persisted read state.
+- “Delivered” is a notification-transport outcome: the target mux `send` Command Sequence succeeded. It does not mean the Agent or model read, accepted, or acted on the Message.
+- “mux: none” is a normal pull-only fallback for externally started Agents, not an error state. New Messages to such a Session are `undelivered` and need no remediation.
 - “Report” does not close a Session and does not mean the work is done.
 - “Completion” is not a domain state. A Session may exit or be closed, but asem does not judge whether the agent accomplished its assignment.
 - “Workspace” does not imply task orchestration. It is the Session tree and communication safety boundary, not a task/workflow/team model.

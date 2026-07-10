@@ -137,16 +137,17 @@ Expected order:
 - mux cleanup を best-effort で試みる;
 - DB に failed Session row を残さない。
 
-## 6. Persist Message Attempts Truthfully
+## 6. Persist Messages Before Notification
 
-Message は delivery result と一緒に truthfully persist する。
+有効で認可された Message は、notification や mux template 解決より前に durable record として persist する。persist が成功すれば operation は成功であり、notification 失敗は operation-level failure にしない。
 
-- delivery success: set `delivered_at`.
-- delivery failure: set `delivery_error`.
+- notification success: set `delivered_at` (public state `delivered`)。Agent/model acceptance の証明ではない。
+- notification 未試行 (`mux: none` target): public state `undelivered`。正常な pull-only fallback であり remediation hint は不要。
+- notification 失敗 (malformed/missing target mux Template を含む): set `delivery_error` (public state `failed`)。Message 作成は失敗しない。
 - no ack/read receipt fabrication.
 - no durable unread state.
 
-Delivery failure は Message 作成の存在を否定しない。history として残す。
+Notification failure は Message 作成の存在を否定しない。history として残す。target Session は cursor 付き `list_messages` / bounded Inbox wait の CLI/MCP pull で Message を取得する。詳細は [`asem-message-protocol-design.md`](../designs/asem-message-protocol-design.md) を参照。
 
 ## 7. Scope Every Store Query
 

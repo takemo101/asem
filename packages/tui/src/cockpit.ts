@@ -18,8 +18,8 @@
  */
 import type {
   AttachCommand,
-  Message,
   OperationResult,
+  PublicMessage,
   Session,
 } from "@asem/core";
 import {
@@ -169,7 +169,7 @@ export async function resolveCockpitEnv(
 
 /** Outcome of carrying out a {@link CockpitEffect}. */
 export type CockpitEffectOutcome =
-  | { kind: "sent"; message: Message }
+  | { kind: "sent"; message: PublicMessage }
   | { kind: "closed"; session: Session }
   | { kind: "deleted"; deletedSessionId: string; deletedMessageCount: number }
   | { kind: "refreshed"; snapshot: CockpitSnapshot }

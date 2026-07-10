@@ -2,9 +2,12 @@ import { describe, expect, test } from "bun:test";
 import {
   configSchema,
   effectiveScopeSchema,
+  MAX_MESSAGE_BODY_BYTES,
+  messageBodySchema,
   messageSchema,
   operationErrorSchema,
   peekSessionInputSchema,
+  publicMessageSchema,
   type Session,
   sessionSchema,
   sessionStatusSchema,
@@ -135,6 +138,46 @@ describe("messageSchema", () => {
     const { toSessionId, ...withoutTarget } = baseMessage;
     void toSessionId;
     expect(messageSchema.safeParse(withoutTarget).success).toBe(false);
+  });
+
+  test("accepts a body at the UTF-8 byte limit and rejects one byte over", () => {
+    expect(
+      messageBodySchema.safeParse("a".repeat(MAX_MESSAGE_BODY_BYTES)).success,
+    ).toBe(true);
+    expect(
+      messageBodySchema.safeParse("a".repeat(MAX_MESSAGE_BODY_BYTES + 1))
+        .success,
+    ).toBe(false);
+    expect(messageBodySchema.safeParse("😀".repeat(16_384)).success).toBe(true);
+    expect(messageBodySchema.safeParse("😀".repeat(16_385)).success).toBe(
+      false,
+    );
+  });
+
+  test("public Message envelope excludes internal audit and location fields", () => {
+    expect(
+      publicMessageSchema.safeParse({
+        id: "m_1",
+        fromSessionId: null,
+        toSessionId: "s_2",
+        kind: "message",
+        body: "hello",
+        createdAt: "2026-06-05T12:00:00Z",
+        delivery: { status: "undelivered" },
+      }).success,
+    ).toBe(true);
+    expect(
+      publicMessageSchema.safeParse({
+        id: "m_1",
+        fromSessionId: null,
+        toSessionId: "s_2",
+        kind: "message",
+        body: "hello",
+        createdAt: "2026-06-05T12:00:00Z",
+        delivery: { status: "undelivered" },
+        formattedBody: "internal",
+      }).success,
+    ).toBe(false);
   });
 });
 

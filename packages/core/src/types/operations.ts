@@ -1,7 +1,12 @@
 import { z } from "zod";
 import { nonEmptyString } from "./common.ts";
 import { agentConfigSchema, muxConfigSchema } from "./config.ts";
-import { type Message, messageKindSchema } from "./message.ts";
+import {
+  type Message,
+  messageBodySchema,
+  messageKindSchema,
+  type PublicMessage,
+} from "./message.ts";
 import { muxRefSchema, type Session, sessionStatusSchema } from "./session.ts";
 
 /**
@@ -253,13 +258,13 @@ export interface DeleteSessionOutput {
 export const sendMessageInputSchema = z
   .object({
     toSessionId: nonEmptyString,
-    body: z.string(),
+    body: messageBodySchema,
     kind: messageKindSchema.optional(),
   })
   .strict();
 export type SendMessageInput = z.infer<typeof sendMessageInputSchema>;
 export interface SendMessageOutput {
-  message: Message;
+  message: PublicMessage;
 }
 
 export const listMessagesInputSchema = z
@@ -274,10 +279,10 @@ export interface ListMessagesOutput {
 
 export const reportParentInputSchema = z
   .object({
-    body: z.string(),
+    body: messageBodySchema,
   })
   .strict();
 export type ReportParentInput = z.infer<typeof reportParentInputSchema>;
 export interface ReportParentOutput {
-  message: Message;
+  message: PublicMessage;
 }

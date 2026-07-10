@@ -37,6 +37,7 @@ import {
   type OperationResult,
   ok,
   operationError,
+  type PublicMessage,
   type Redactor,
   type ReportParentInput,
   type ReportParentOutput,
@@ -57,6 +58,7 @@ import {
   resolveMutationActor,
 } from "../context.ts";
 import type { OpContext } from "../deps.ts";
+import { projectPublicMessage } from "../message-projection.ts";
 import { muxExecutionFor } from "../mux-execution.ts";
 import { muxRefVars } from "../mux-vars.ts";
 import { resolveMuxTemplate } from "../templates.ts";
@@ -233,18 +235,8 @@ async function deliver(
     token: string | null;
     templateRegistry: TemplateRegistry;
   },
-): Promise<OperationResult<{ message: Message }>> {
+): Promise<OperationResult<{ message: PublicMessage }>> {
   const { fromSession, target, kind, body, token, templateRegistry } = params;
-
-  // Resolve the target's mux template before recording the Message. A malformed
-  // project-local template is a recoverable config defect, surfaced as a
-  // structured `invalid_template` error with no side effect (no Message row),
-  // consistent with create/close/get (MIK-026). A *missing* template stays a
-  // best-effort delivery failure recorded on the Message below (principle 6).
-  const muxResult = resolveMuxTemplate(templateRegistry, target.mux);
-  if (!muxResult.ok) {
-    return err(muxResult.error);
-  }
 
   const source =
     fromSession === null
@@ -269,32 +261,38 @@ async function deliver(
     createdAt: deps.clock.nowIso(),
   };
 
-  // Persist the Message before recording the delivery result (principle 6).
+  // Persist before mux/template resolution: notification is best effort only.
   await deps.store.insertMessage(message);
+
+  // mux:none intentionally has no notification transport or failure record.
+  if (target.mux === "none") {
+    return ok({ message: projectPublicMessage(message) });
+  }
 
   // One token-scoped redactor + redacted logger + SequenceEngine for delivery,
   // so the sender's raw token is masked from every sequence error, log line, and
   // persisted `delivery_error` (principle 8).
   const { redactor, logger, engine } = muxExecutionFor(deps, token);
 
-  // Delivery uses the target Session's stored mux ref + its mux template `send`
-  // sequence, executed through @asem/runtime via the injected TemplateRunner. A
-  // missing template is a best-effort delivery failure recorded on the Message.
-  const muxTemplate = muxResult.value;
-  if (muxTemplate === undefined) {
-    // A target stored with `mux: none` is intentionally non-deliverable. Record
-    // an actionable delivery_error (not the bare internal template lookup
-    // failure) explaining how to make it deliverable (MIK-049). Any other
-    // missing template stays the generic best-effort delivery failure.
-    const deliveryError =
-      target.mux === "none"
-        ? `target Session ${target.name} (${target.id}) has no live delivery Multiplexer (mux: none); the Message was recorded but not delivered. Re-register it with a deliverable mux such as herdr (re-run \`asem init-session\` inside herdr) if real-time delivery is desired.`
-        : `mux template not found: ${target.mux}`;
+  // Template lookup now happens after persistence. Invalid project-local
+  // templates are notification failures for a valid Message, never rejection.
+  const muxResult = resolveMuxTemplate(templateRegistry, target.mux);
+  if (!muxResult.ok) {
     return recordDeliveryError(
       deps,
       scope,
       message,
-      redactor.redact(deliveryError),
+      redactor.redact(`${muxResult.error.code}: ${muxResult.error.message}`),
+      logger,
+    );
+  }
+  const muxTemplate = muxResult.value;
+  if (muxTemplate === undefined) {
+    return recordDeliveryError(
+      deps,
+      scope,
+      message,
+      redactor.redact(`mux template not found: ${target.mux}`),
       logger,
     );
   }
@@ -322,7 +320,7 @@ async function deliver(
     toSessionId: target.id,
     kind,
   });
-  return ok({ message });
+  return ok({ message: projectPublicMessage(message) });
 }
 
 /**
@@ -336,7 +334,7 @@ async function recordDeliveryError(
   message: Message,
   deliveryError: string,
   logger: Logger | undefined,
-): Promise<OperationResult<{ message: Message }>> {
+): Promise<OperationResult<{ message: PublicMessage }>> {
   await deps.store.markMessageDeliveryError(scope, message.id, deliveryError);
   message.deliveryError = deliveryError;
   logger?.warn("Message delivery failed", {
@@ -344,5 +342,5 @@ async function recordDeliveryError(
     toSessionId: message.toSessionId,
     deliveryError,
   });
-  return ok({ message });
+  return ok({ message: projectPublicMessage(message) });
 }

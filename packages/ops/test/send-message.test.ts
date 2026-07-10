@@ -125,10 +125,12 @@ describe("sendMessage — same-worktree delivery", () => {
       "herdr --session 'asem' pane send-keys 'pane-1' Enter",
     );
 
-    // Success sets delivered_at and leaves no delivery_error (no fabricated ack).
-    expect(message.deliveredAt).not.toBeNull();
-    expect(message.deliveryError).toBeNull();
-    expect(d.store.messages[0]!.deliveredAt).toBe(message.deliveredAt);
+    // Public delivery means only mux send success, never Agent acceptance.
+    expect(message.delivery.status).toBe("delivered");
+    expect(message).not.toHaveProperty("formattedBody");
+    expect(message).not.toHaveProperty("workspaceId");
+    expect(message).not.toHaveProperty("worktreeRoot");
+    expect(message).not.toHaveProperty("deliveryError");
   });
 
   test("agent-originated send verifies the current Session and attributes it", async () => {
@@ -148,7 +150,7 @@ describe("sendMessage — same-worktree delivery", () => {
       await sendMessage(d, { toSessionId: target.id, body: "from agent" }, CTX),
     );
     expect(message.fromSessionId).toBe(me.id);
-    expect(message.deliveredAt).not.toBeNull();
+    expect(message.delivery.status).toBe("delivered");
   });
 
   test("operator origin sends with no attribution even when a current Session resolves", async () => {
@@ -177,9 +179,10 @@ describe("sendMessage — same-worktree delivery", () => {
     );
     // Recorded operator-originated: no impersonation of the current Session.
     expect(message.fromSessionId).toBeNull();
-    expect(message.formattedBody).toBe("[asem message]\nfrom operator");
-    expect(d.store.messages[0]!.fromSessionId).toBeNull();
-    expect(message.deliveredAt).not.toBeNull();
+    expect(d.store.messages[0]!.formattedBody).toBe(
+      "[asem message]\nfrom operator",
+    );
+    expect(message.delivery.status).toBe("delivered");
   });
 });
 
@@ -241,7 +244,7 @@ describe("sendMessage — auth & scope", () => {
     );
 
     expect(message.toSessionId).toBe("t_b");
-    expect(message.worktreeRoot).toBe(scopeB.worktreeRoot);
+    expect(message.delivery.status).toBe("delivered");
     expect(d.store.messages[0]!.worktreeRoot).toBe(scopeB.worktreeRoot);
     expect(d.runner.commands).toHaveLength(3);
   });
@@ -263,6 +266,25 @@ describe("sendMessage — auth & scope", () => {
   });
 });
 
+describe("sendMessage — payload validation", () => {
+  test("rejects an oversized UTF-8 body before recording a Message", async () => {
+    const store = new FakeStore();
+    const target = makeTarget();
+    store.sessions.push(target);
+    const d = deps({ store });
+
+    const result = await sendMessage(
+      d,
+      { toSessionId: target.id, body: "😀".repeat(16_385) },
+      CTX,
+    );
+
+    expectErr(result, "invalid_input");
+    expect(d.store.messages).toHaveLength(0);
+    expect(d.runner.commands).toHaveLength(0);
+  });
+});
+
 describe("sendMessage — formatted body & delivery failure", () => {
   test("formatted_body carries the message header and the exact sent text", async () => {
     const store = new FakeStore();
@@ -280,12 +302,12 @@ describe("sendMessage — formatted body & delivery failure", () => {
     const { message } = expectOk(
       await sendMessage(d, { toSessionId: target.id, body: "status ok" }, CTX),
     );
-    expect(message.formattedBody).toBe(
+    // The exact formatted body stays internal and is what mux `send` injected.
+    expect(d.store.messages[0]!.formattedBody).toBe(
       `[asem message from helper-1 (cur_1)]\nstatus ok`,
     );
-    // The exact formatted body is what the mux `send` sequence injected.
     expect(d.runner.commands[1]!.command).toContain("status ok");
-    expect(d.store.messages[0]!.formattedBody).toBe(message.formattedBody);
+    expect(message).not.toHaveProperty("formattedBody");
   });
 
   test("a failed mux send persists delivery_error and keeps the Message", async () => {
@@ -301,12 +323,19 @@ describe("sendMessage — formatted body & delivery failure", () => {
       await sendMessage(d, { toSessionId: target.id, body: "ping" }, CTX),
     );
 
-    // The operation still succeeds; truthful history records the failure.
-    expect(message.deliveredAt).toBeNull();
-    expect(message.deliveryError).not.toBeNull();
-    expect(message.deliveryError).toContain("sequence_step_failed");
+    // The operation still succeeds; public failure is notification-only.
+    expect(message.delivery.status).toBe("failed");
+    if (message.delivery.status === "failed") {
+      expect(message.delivery.error).toContain("sequence_step_failed");
+    }
     expect(d.store.messages).toHaveLength(1);
-    expect(d.store.messages[0]!.deliveryError).toBe(message.deliveryError);
+    expect(d.store.messages[0]!.deliveryError).toContain(
+      "sequence_step_failed",
+    );
+    expect(message).not.toHaveProperty("deliveryError");
+    expect(message).not.toHaveProperty("formattedBody");
+    expect(message).not.toHaveProperty("workspaceId");
+    expect(message).not.toHaveProperty("worktreeRoot");
   });
 
   test("an unknown target mux template is a delivery_error, not a thrown defect", async () => {
@@ -318,11 +347,13 @@ describe("sendMessage — formatted body & delivery failure", () => {
     const { message } = expectOk(
       await sendMessage(d, { toSessionId: target.id, body: "x" }, CTX),
     );
-    expect(message.deliveredAt).toBeNull();
-    expect(message.deliveryError).toContain("mux template not found");
+    expect(message.delivery.status).toBe("failed");
+    if (message.delivery.status === "failed") {
+      expect(message.delivery.error).toContain("mux template not found");
+    }
   });
 
-  test("a stored mux: none target records an actionable delivery_error and still persists the Message", async () => {
+  test("a mux: none target persists as normal undelivered without a notification attempt", async () => {
     const store = new FakeStore();
     const target = makeTarget({ mux: "none" });
     store.sessions.push(target);
@@ -332,19 +363,17 @@ describe("sendMessage — formatted body & delivery failure", () => {
       await sendMessage(d, { toSessionId: target.id, body: "ping" }, CTX),
     );
 
-    // Durability is preserved: the Message is recorded even though the target
-    // has no live delivery Multiplexer.
     expect(d.store.messages).toHaveLength(1);
-    expect(message.deliveredAt).toBeNull();
-
-    // The delivery error is actionable, not the bare internal template lookup
-    // failure, and points at re-registering with a deliverable mux (MIK-049).
-    expect(message.deliveryError).not.toBe("mux template not found: none");
-    expect(message.deliveryError).toContain("no live delivery Multiplexer");
-    expect(message.deliveryError?.toLowerCase()).toContain("herdr");
+    expect(message.delivery).toEqual({ status: "undelivered" });
+    expect(d.store.messages[0]!.deliveryError).toBeNull();
+    expect(message).not.toHaveProperty("deliveryError");
+    expect(message).not.toHaveProperty("formattedBody");
+    expect(message).not.toHaveProperty("workspaceId");
+    expect(message).not.toHaveProperty("worktreeRoot");
+    expect(d.runner.commands).toHaveLength(0);
   });
 
-  test("a malformed target mux template returns invalid_template and records no Message", async () => {
+  test("a malformed target mux template records a failed durable Message", async () => {
     const store = new FakeStore();
     const target = makeTarget();
     store.sessions.push(target);
@@ -363,16 +392,12 @@ describe("sendMessage — formatted body & delivery failure", () => {
       } satisfies ConfigDiscovery),
     };
 
-    // A malformed project-local template is a config defect surfaced before the
-    // Message is recorded (no side effect), consistent with create/close/get —
-    // unlike a *missing* template, which is a best-effort delivery_error.
-    const error = expectErr(
+    const { message } = expectOk(
       await sendMessage(d, { toSessionId: target.id, body: "x" }, CTX),
-      "invalid_template",
     );
-    expect(error.details?.kind).toBe("mux");
-    expect(error.details?.name).toBe("herdr");
-    expect(d.store.messages).toHaveLength(0);
+    expect(message.delivery.status).toBe("failed");
+    expect(d.store.messages).toHaveLength(1);
+    expect(d.store.messages[0]!.deliveryError).toContain("invalid_template");
   });
 });
 
@@ -400,7 +425,7 @@ describe("sendMessage — token redaction", () => {
       await sendMessage(d, { toSessionId: target.id, body: "ping" }, CTX),
     );
 
-    expect(message.deliveryError).not.toContain(CURRENT_TOKEN);
+    expect(d.store.messages[0]!.deliveryError).not.toContain(CURRENT_TOKEN);
     expect(JSON.stringify(message)).not.toContain(CURRENT_TOKEN);
     expect(JSON.stringify(d.store.messages)).not.toContain(CURRENT_TOKEN);
     expect(JSON.stringify(d.logger.entries)).not.toContain(CURRENT_TOKEN);
@@ -427,10 +452,11 @@ describe("reportParent", () => {
     expect(message.kind).toBe("report");
     expect(message.fromSessionId).toBe(me.id);
     expect(message.toSessionId).toBe("p_1");
-    expect(message.formattedBody).toBe(
+    expect(d.store.messages[0]!.formattedBody).toBe(
       `[asem report from helper-1 (cur_1)]\nhalfway done`,
     );
-    expect(message.deliveredAt).not.toBeNull();
+    expect(message.delivery.status).toBe("delivered");
+    expect(message).not.toHaveProperty("formattedBody");
   });
 
   test("repo child can report to a parent in another Worktree Root within the same Workspace", async () => {
@@ -474,8 +500,9 @@ describe("reportParent", () => {
     expect(message.kind).toBe("report");
     expect(message.fromSessionId).toBe("cur_b");
     expect(message.toSessionId).toBe("p_a");
-    expect(message.worktreeRoot).toBe(scopeA.worktreeRoot);
-    expect(message.deliveredAt).not.toBeNull();
+    expect(d.store.messages[0]!.worktreeRoot).toBe(scopeA.worktreeRoot);
+    expect(message.delivery.status).toBe("delivered");
+    expect(message).not.toHaveProperty("worktreeRoot");
   });
 
   test("fails clearly when the current Session has no parent", async () => {

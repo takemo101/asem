@@ -393,6 +393,19 @@ Implement and review each slice separately.
 4. **Follow-on: `asem run` P0**
    - Implement only after the Message protocol is complete, so its bootstrap
      prompt can teach the final protocol once.
+   - `asem run` is a human-facing root-Agent launcher only. It starts a root
+     Session (`parent_session_id = null`); that root Session may later become
+     a parent by creating child Sessions.
+   - P0 adds no `asem run --parent`, no `--parent current`, no automatic
+     parent detection, and no ambient-current fallback. Child Agent launch
+     remains `asem session create`, called by a registered parent Agent. This
+     keeps the command boundary clear and avoids duplicating the detached
+     child launcher.
+   - The planned TTY attach behavior does not change this boundary:
+     `--no-attach` remains a root-launch escape hatch, not a child-launch
+     mode.
+   - Workspace / Worktree Root is location metadata, not a parent Session;
+     launching from a Workspace root never implies a parent.
 
 ## Required durable documentation updates
 

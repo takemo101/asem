@@ -101,6 +101,48 @@ const MIGRATIONS: readonly Migration[] = [
         on sessions(workspace_id, worktree_root, created_at desc);
     `,
   },
+  {
+    // MIK-060: an internal monotonic seek position; UUID id remains public.
+    version: 5,
+    up: `
+      -- Some historical test/minimal v1 databases contain only sessions.
+      create table if not exists messages (
+        id text primary key, workspace_id text not null, worktree_root text not null,
+        from_session_id text, to_session_id text not null, kind text not null,
+        body text not null, formatted_body text not null, delivered_at text,
+        delivery_error text, created_at text not null
+      );
+      alter table messages rename to messages_v4;
+      create table messages (
+        sequence integer primary key autoincrement,
+        id text unique not null,
+        workspace_id text not null,
+        worktree_root text not null,
+        from_session_id text,
+        to_session_id text not null,
+        kind text not null,
+        body text not null,
+        formatted_body text not null,
+        delivered_at text,
+        delivery_error text,
+        created_at text not null
+      );
+      insert into messages (
+        id, workspace_id, worktree_root, from_session_id, to_session_id,
+        kind, body, formatted_body, delivered_at, delivery_error, created_at
+      ) select id, workspace_id, worktree_root, from_session_id, to_session_id,
+        kind, body, formatted_body, delivered_at, delivery_error, created_at
+        from messages_v4 order by created_at asc, id asc;
+      drop table messages_v4;
+      create index idx_messages_workspace_created
+        on messages(workspace_id, worktree_root, created_at desc);
+      create index idx_messages_to_created on messages(to_session_id, created_at desc);
+      create index idx_messages_delivery_error
+        on messages(workspace_id, worktree_root, delivery_error);
+      create index idx_messages_workspace_sequence on messages(workspace_id, sequence);
+      create index idx_messages_to_sequence on messages(to_session_id, sequence);
+    `,
+  },
 ];
 
 /** The latest schema version this build of the store knows how to produce. */

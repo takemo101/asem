@@ -18,6 +18,8 @@ import type {
   EffectiveScope,
   Message,
   MessageListFilter,
+  MessagePage,
+  MessagePageQuery,
   Session,
   SessionListFilter,
   SessionUpdate,
@@ -30,6 +32,7 @@ import {
   messageInsertValues,
   parseMessageRow,
   parseSessionRow,
+  parseStoredMessageRow,
   type SessionRow,
   sessionInsertValues,
 } from "./rows.ts";
@@ -296,6 +299,44 @@ export class SqliteStore implements Store {
       )
       .all(...params) as MessageRow[];
     return rows.map(parseMessageRow);
+  }
+
+  async listMessagePage(
+    scope: EffectiveScope,
+    query: MessagePageQuery,
+  ): Promise<MessagePage> {
+    const limit = Math.min(Math.max(query.limit ?? 20, 1), 50);
+    const budget = query.bodyBudgetBytes ?? 262_144;
+    const clauses = ["workspace_id = ?", "sequence > ?"];
+    const params: SQLQueryBindings[] = [
+      scope.workspaceId,
+      query.afterSequence ?? 0,
+    ];
+    const filter = query.filter;
+    if (filter?.toSessionId !== undefined) {
+      clauses.push("to_session_id = ?");
+      params.push(filter.toSessionId);
+    }
+    if (filter?.worktreeRoot !== undefined) {
+      clauses.push("worktree_root = ?");
+      params.push(filter.worktreeRoot);
+    }
+    if (filter?.undelivered === true) clauses.push("delivered_at is null");
+    const candidates = this.db
+      .query(
+        `select * from messages where ${clauses.join(" and ")} order by sequence asc limit ?`,
+      )
+      .all(...params, limit + 1) as MessageRow[];
+    const rows = [] as MessagePage["rows"];
+    let bytes = 0;
+    for (const row of candidates.slice(0, limit)) {
+      const stored = parseStoredMessageRow(row);
+      const size = Buffer.byteLength(stored.message.body, "utf8");
+      if (rows.length > 0 && bytes + size > budget) break;
+      rows.push(stored);
+      bytes += size;
+    }
+    return { rows, hasMore: rows.length < candidates.length };
   }
 
   async listMessagesByWorkspace(

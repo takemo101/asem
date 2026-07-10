@@ -1,4 +1,3 @@
-import type { SQLQueryBindings } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import {
   isStoreError,
@@ -7,6 +6,7 @@ import {
   parseSessionRow,
   type SessionRow,
 } from "../src/index.ts";
+import { parseStoredMessageRow } from "../src/rows.ts";
 import { freshStore, makeMessage, makeSession, scopeA } from "./helpers.ts";
 
 /**
@@ -14,14 +14,6 @@ import { freshStore, makeMessage, makeSession, scopeA } from "./helpers.ts";
  * fail loudly rather than leak an untyped row to callers. These tests seed bad
  * rows directly through the raw connection to simulate DB corruption.
  */
-
-const INSERT_RAW_SESSION = `
-  insert into sessions (
-    id, workspace_id, worktree_root, name, cwd, agent, mux,
-    parent_session_id, status, mux_ref_json, session_dir, token_hash,
-    created_at, updated_at, closed_at
-  ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`;
 
 interface RawSessionFields {
   id: string | null;
@@ -39,11 +31,12 @@ interface RawSessionFields {
   created_at: string | null;
   updated_at: string | null;
   closed_at: string | null;
+  model: string | null;
+  profile: string | null;
+  profile_source: string | null;
 }
 
-function rawSessionRow(
-  overrides: Partial<RawSessionFields>,
-): SQLQueryBindings[] {
+function rawSessionRow(overrides: Partial<RawSessionFields>): SessionRow {
   const base: RawSessionFields = {
     id: "s_bad",
     workspace_id: scopeA.workspaceId,
@@ -60,25 +53,12 @@ function rawSessionRow(
     created_at: "2026-06-05T12:00:00Z",
     updated_at: "2026-06-05T12:00:00Z",
     closed_at: null,
+    model: null,
+    profile: null,
+    profile_source: null,
     ...overrides,
   };
-  return [
-    base.id,
-    base.workspace_id,
-    base.worktree_root,
-    base.name,
-    base.cwd,
-    base.agent,
-    base.mux,
-    base.parent_session_id,
-    base.status,
-    base.mux_ref_json,
-    base.session_dir,
-    base.token_hash,
-    base.created_at,
-    base.updated_at,
-    base.closed_at,
-  ];
+  return base;
 }
 
 /** A valid raw `sessions` row object (pre-parse), for field-level parse tests. */
@@ -106,41 +86,20 @@ function rawSessionRowObject(): SessionRow {
 }
 
 describe("row parse failures — sessions", () => {
-  test("invalid status value fails as row_parse_failed", async () => {
-    const { store, db } = freshStore();
-    db.query(INSERT_RAW_SESSION).run(...rawSessionRow({ status: "completed" }));
-
+  test("invalid status value fails as row_parse_failed", () => {
     let caught: unknown;
     try {
-      await store.getSessionById(scopeA, "s_bad");
+      parseSessionRow(rawSessionRow({ status: "completed" }));
     } catch (error) {
       caught = error;
     }
     expect(isStoreError(caught, "row_parse_failed")).toBe(true);
   });
 
-  test("non-JSON mux_ref_json fails as row_parse_failed", async () => {
-    const { store, db } = freshStore();
-    db.query(INSERT_RAW_SESSION).run(
-      ...rawSessionRow({ mux_ref_json: "not json" }),
-    );
-
+  test("non-JSON mux_ref_json fails as row_parse_failed", () => {
     let caught: unknown;
     try {
-      await store.getSessionById(scopeA, "s_bad");
-    } catch (error) {
-      caught = error;
-    }
-    expect(isStoreError(caught, "row_parse_failed")).toBe(true);
-  });
-
-  test("listSessions surfaces a corrupt row", async () => {
-    const { store, db } = freshStore();
-    db.query(INSERT_RAW_SESSION).run(...rawSessionRow({ status: "weird" }));
-
-    let caught: unknown;
-    try {
-      await store.listSessions(scopeA);
+      parseSessionRow(rawSessionRow({ mux_ref_json: "not json" }));
     } catch (error) {
       caught = error;
     }
@@ -159,29 +118,22 @@ describe("row parse failures — sessions", () => {
 });
 
 describe("row parse failures — messages", () => {
-  test("invalid kind value fails as row_parse_failed", async () => {
-    const { store, db } = freshStore();
-    db.query(
-      `insert into messages (
-         id, workspace_id, worktree_root, from_session_id, to_session_id,
-         kind, body, formatted_body, delivered_at, delivery_error, created_at
-       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      "m_bad",
-      scopeA.workspaceId,
-      scopeA.worktreeRoot,
-      null,
-      "s_x",
-      "broadcast", // not a valid MessageKind
-      "body",
-      "formatted",
-      null,
-      null,
-      "2026-06-05T12:00:00Z",
-    );
+  test("invalid kind value fails as row_parse_failed", () => {
     let caught: unknown;
     try {
-      await store.listMessages(scopeA);
+      parseMessageRow({
+        id: "m_bad",
+        workspace_id: scopeA.workspaceId,
+        worktree_root: scopeA.worktreeRoot,
+        from_session_id: null,
+        to_session_id: "s_x",
+        kind: "broadcast", // not a valid MessageKind
+        body: "body",
+        formatted_body: "formatted",
+        delivered_at: null,
+        delivery_error: null,
+        created_at: "2026-06-05T12:00:00Z",
+      });
     } catch (error) {
       caught = error;
     }
@@ -203,6 +155,32 @@ describe("row parse failures — messages", () => {
       created_at: "not-a-timestamp",
     } satisfies MessageRow;
     expect(() => parseMessageRow(row)).toThrow();
+  });
+
+  test("parseStoredMessageRow rejects a missing or invalid sequence", () => {
+    const row = {
+      id: "m_x",
+      workspace_id: "ws",
+      worktree_root: "/wt",
+      from_session_id: null,
+      to_session_id: "s",
+      kind: "message",
+      body: "b",
+      formatted_body: "f",
+      delivered_at: null,
+      delivery_error: null,
+      created_at: "2026-06-05T12:00:00Z",
+    } satisfies MessageRow;
+
+    for (const sequence of [undefined, 0]) {
+      let caught: unknown;
+      try {
+        parseStoredMessageRow({ ...row, sequence });
+      } catch (error) {
+        caught = error;
+      }
+      expect(isStoreError(caught, "row_parse_failed")).toBe(true);
+    }
   });
 });
 

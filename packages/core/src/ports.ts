@@ -29,6 +29,25 @@ export type SessionUpdate = Partial<
  * delete removes related messages) live in `@asem/ops`, not here; the Store only
  * exposes scoped primitives.
  */
+/** Internal durable Message position used only by Store pagination and cursors. */
+export interface StoredMessage {
+  message: Message;
+  sequence: number;
+}
+
+/** Internal Store page; operations project rows before exposing them publicly. */
+export interface MessagePage {
+  rows: StoredMessage[];
+  hasMore: boolean;
+}
+
+export interface MessagePageQuery {
+  filter?: MessageListFilter;
+  afterSequence?: number;
+  limit?: number;
+  bodyBudgetBytes?: number;
+}
+
 export interface Store {
   insertSession(session: Session): Promise<void>;
   getSessionById(scope: EffectiveScope, id: string): Promise<Session | null>;
@@ -69,6 +88,10 @@ export interface Store {
     scope: EffectiveScope,
     filter?: MessageListFilter,
   ): Promise<Message[]>;
+  listMessagePage(
+    scope: EffectiveScope,
+    query: MessagePageQuery,
+  ): Promise<MessagePage>;
   /**
    * List every Message sharing a `workspace_id`, across worktree roots. This is
    * kept as an explicit Workspace read helper for callsites that already name the

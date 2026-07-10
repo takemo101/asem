@@ -137,3 +137,41 @@ describe("Message delivery state", () => {
     expect(got?.deliveredAt).toBeNull();
   });
 });
+
+describe("internal Message pages", () => {
+  test("uses the default and maximum page limits", async () => {
+    const { store } = freshStore();
+    for (let i = 0; i < 60; i += 1) {
+      await store.insertMessage(makeMessage({ id: `m_${i}` }));
+    }
+
+    const defaultPage = await store.listMessagePage(scopeA, {});
+    expect(defaultPage.rows).toHaveLength(20);
+    expect(defaultPage.hasMore).toBe(true);
+
+    const maximumPage = await store.listMessagePage(scopeA, { limit: 999 });
+    expect(maximumPage.rows).toHaveLength(50);
+    expect(maximumPage.hasMore).toBe(true);
+  });
+
+  test("seeks in sequence order and returns one oversized first row", async () => {
+    const { store } = freshStore();
+    await store.insertMessage(makeMessage({ id: "m_2", body: "b".repeat(9) }));
+    await store.insertMessage(makeMessage({ id: "m_1", body: "a".repeat(9) }));
+
+    const first = await store.listMessagePage(scopeA, {
+      limit: 20,
+      bodyBudgetBytes: 8,
+    });
+    expect(first.rows.map((row) => row.message.id)).toEqual(["m_2"]);
+    expect(first.rows[0]?.sequence).toBe(1);
+    expect(first.hasMore).toBe(true);
+
+    const second = await store.listMessagePage(scopeA, {
+      afterSequence: first.rows[0]?.sequence,
+      bodyBudgetBytes: 8,
+    });
+    expect(second.rows.map((row) => row.message.id)).toEqual(["m_1"]);
+    expect(second.hasMore).toBe(false);
+  });
+});

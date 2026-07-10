@@ -583,6 +583,8 @@ Two entry points are required:
 
 `--root` is the preferred clear flag name for MVP. `--as-parent` may remain as an alias only if already implemented or needed for compatibility.
 
+The planned `asem run` command (P0 follow-on of the [Message Protocol Design](./asem-message-protocol-design.md)) is a human-facing root-Agent launcher only. It starts a root Session, which may later become a parent by creating child Sessions. It has no `--parent` (including `--parent current`), no automatic parent detection, and no ambient-current fallback; child Agent launch stays `asem session create`, called by a registered parent Agent, so the detached child launcher is not duplicated. Its planned TTY attach behavior does not change this boundary — `--no-attach` is a root-launch escape hatch, not a child-launch mode. Workspace / Worktree Root remains location metadata and never implies a parent Session.
+
 Parent resolution truth table:
 
 | Input | Parent behavior |

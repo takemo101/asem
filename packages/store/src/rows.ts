@@ -39,6 +39,7 @@ export interface SessionRow {
 
 /** Raw `messages` row shape as returned by SQLite. */
 export interface MessageRow {
+  sequence?: unknown;
   id: unknown;
   workspace_id: unknown;
   worktree_root: unknown;
@@ -128,6 +129,19 @@ export function parseMessageRow(row: MessageRow): Message {
     );
   }
   return parsed.data;
+}
+
+/** Parse the Store-only durable sequence alongside the internal Message. */
+export function parseStoredMessageRow(row: MessageRow): {
+  message: Message;
+  sequence: number;
+} {
+  if (!Number.isInteger(row.sequence) || (row.sequence as number) < 1) {
+    throw new StoreError("row_parse_failed", "messages.sequence is invalid", {
+      id: row.id,
+    });
+  }
+  return { message: parseMessageRow(row), sequence: row.sequence as number };
 }
 
 /** Positional values for a `sessions` insert, in column order. */

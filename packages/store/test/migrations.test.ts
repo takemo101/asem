@@ -40,6 +40,8 @@ describe("migrations — initialization", () => {
     expect(indexes).toContain("idx_messages_workspace_created");
     expect(indexes).toContain("idx_messages_to_created");
     expect(indexes).toContain("idx_messages_delivery_error");
+    expect(indexes).toContain("idx_messages_workspace_sequence");
+    expect(indexes).toContain("idx_messages_to_sequence");
   });
 
   test("the Workspace-name index is unique", () => {
@@ -61,7 +63,7 @@ describe("migrations — initialization", () => {
       user_version: number;
     };
     expect(row.user_version).toBe(LATEST_SCHEMA_VERSION);
-    expect(LATEST_SCHEMA_VERSION).toBe(4);
+    expect(LATEST_SCHEMA_VERSION).toBe(5);
   });
 
   test("adds the nullable sessions.model column (schema version 2)", () => {
@@ -149,6 +151,100 @@ describe("migrations — forward from a version-1 database", () => {
     // MIK-041: the profile columns also migrate forward as null for old rows.
     expect(session?.profile).toBeNull();
     expect(session?.profileSource).toBeNull();
+  });
+});
+
+describe("migrations — forward from a version-4 database", () => {
+  test("rebuilds Messages in deterministic order without losing legacy data", async () => {
+    const db = new Database(":memory:");
+    db.run(`
+      create table messages (
+        id text primary key, workspace_id text not null, worktree_root text not null,
+        from_session_id text, to_session_id text not null, kind text not null,
+        body text not null, formatted_body text not null, delivered_at text,
+        delivery_error text, created_at text not null
+      );
+      insert into messages values
+        ('m_b', 'ws_1', '/repo/a', null, 's_to', 'message', 'body-b', 'formatted-b', null, 'error-b', '2026-06-05T12:00:01Z'),
+        ('m_a', 'ws_1', '/repo/a', 's_from', 's_to', 'report', 'body-a', 'formatted-a', '2026-06-05T12:01:00Z', null, '2026-06-05T12:00:00Z'),
+        ('m_c', 'ws_1', '/repo/a', null, 's_to', 'message', 'body-c', 'formatted-c', null, null, '2026-06-05T12:00:00Z');
+      PRAGMA user_version = 4;
+    `);
+
+    const store = new SqliteStore(db);
+    const rows = db
+      .query(`
+      select sequence, id, from_session_id, kind, body, formatted_body,
+        delivered_at, delivery_error, created_at
+      from messages order by sequence
+    `)
+      .all() as Array<{
+      sequence: number;
+      id: string;
+      from_session_id: string | null;
+      kind: string;
+      body: string;
+      formatted_body: string;
+      delivered_at: string | null;
+      delivery_error: string | null;
+      created_at: string;
+    }>;
+    expect(rows).toEqual([
+      {
+        sequence: 1,
+        id: "m_a",
+        from_session_id: "s_from",
+        kind: "report",
+        body: "body-a",
+        formatted_body: "formatted-a",
+        delivered_at: "2026-06-05T12:01:00Z",
+        delivery_error: null,
+        created_at: "2026-06-05T12:00:00Z",
+      },
+      {
+        sequence: 2,
+        id: "m_c",
+        from_session_id: null,
+        kind: "message",
+        body: "body-c",
+        formatted_body: "formatted-c",
+        delivered_at: null,
+        delivery_error: null,
+        created_at: "2026-06-05T12:00:00Z",
+      },
+      {
+        sequence: 3,
+        id: "m_b",
+        from_session_id: null,
+        kind: "message",
+        body: "body-b",
+        formatted_body: "formatted-b",
+        delivered_at: null,
+        delivery_error: "error-b",
+        created_at: "2026-06-05T12:00:01Z",
+      },
+    ]);
+
+    await store.insertMessage({
+      id: "m_new",
+      workspaceId: "ws_1",
+      worktreeRoot: "/repo/a",
+      fromSessionId: null,
+      toSessionId: "s_to",
+      kind: "message",
+      body: "new",
+      formattedBody: "new",
+      deliveredAt: null,
+      deliveryError: null,
+      createdAt: "2026-06-05T12:00:02Z",
+    });
+    expect(
+      (
+        db.query("select sequence from messages where id = 'm_new'").get() as {
+          sequence: number;
+        }
+      ).sequence,
+    ).toBe(4);
   });
 });
 

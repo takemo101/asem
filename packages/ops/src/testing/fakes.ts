@@ -23,6 +23,8 @@ import type {
   Logger,
   Message,
   MessageListFilter,
+  MessagePage,
+  MessagePageQuery,
   Redactor,
   ScopeResolver,
   Session,
@@ -132,6 +134,8 @@ function byCreatedThenId<T extends { createdAt: string; id: string }>(
 export class FakeStore implements Store {
   readonly sessions: Session[] = [];
   readonly messages: Message[] = [];
+  private readonly messageSequences = new Map<string, number>();
+  private nextMessageSequence = 1;
 
   async insertSession(session: Session): Promise<void> {
     const conflict = this.sessions.some(
@@ -257,8 +261,9 @@ export class FakeStore implements Store {
   ): Promise<number> {
     let removed = 0;
     for (let i = this.messages.length - 1; i >= 0; i -= 1) {
-      const m = this.messages[i]!;
+      const m = this.messages[i];
       if (
+        m !== undefined &&
         inScope(m, scope) &&
         (m.fromSessionId === sessionId || m.toSessionId === sessionId)
       ) {
@@ -271,6 +276,7 @@ export class FakeStore implements Store {
 
   async insertMessage(message: Message): Promise<void> {
     this.messages.push({ ...message });
+    this.messageSequences.set(message.id, this.nextMessageSequence++);
   }
 
   async listMessages(
@@ -292,6 +298,30 @@ export class FakeStore implements Store {
       .filter((m) => filter?.undelivered !== true || m.deliveredAt === null)
       .sort(byCreatedThenId)
       .map((m) => ({ ...m }));
+  }
+
+  async listMessagePage(
+    scope: EffectiveScope,
+    query: MessagePageQuery,
+  ): Promise<MessagePage> {
+    const limit = Math.min(Math.max(query.limit ?? 20, 1), 50);
+    const budget = query.bodyBudgetBytes ?? 262_144;
+    const rows = (await this.listMessages(scope, query.filter))
+      .map((message) => ({
+        message,
+        sequence: this.messageSequences.get(message.id) ?? 0,
+      }))
+      .filter((row) => row.sequence > (query.afterSequence ?? 0))
+      .sort((a, b) => a.sequence - b.sequence);
+    const page: MessagePage["rows"] = [];
+    let bytes = 0;
+    for (const row of rows.slice(0, limit)) {
+      const size = Buffer.byteLength(row.message.body, "utf8");
+      if (page.length > 0 && bytes + size > budget) break;
+      page.push(row);
+      bytes += size;
+    }
+    return { rows: page, hasMore: page.length < rows.length };
   }
 
   async listMessagesByWorkspace(

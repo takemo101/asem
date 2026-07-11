@@ -7,7 +7,7 @@ import {
   type InstallOptions,
   integrationTargetError,
 } from "@asem/integrations";
-import { configPathFor } from "@asem/ops";
+import { configPathFor, listMessages } from "@asem/ops";
 import { FakeTemplateRunner } from "@asem/runtime";
 import {
   FakeConfigLoader,
@@ -1419,17 +1419,168 @@ describe("runCli message list", () => {
     expect(io.errText()).toContain("current_session_not_found");
   });
 
-  test("--undelivered filters to messages with no delivered_at", async () => {
+  test("--undelivered includes both undelivered and failed, never delivered", async () => {
     const store = new FakeStore();
     store.messages.push(
       makeMessage({ body: "pending", deliveredAt: null }),
+      makeMessage({
+        body: "broken",
+        deliveredAt: null,
+        deliveryError: "notification_failed: pane gone",
+      }),
       makeMessage({ body: "done", deliveredAt: "2026-06-05T12:30:00.000Z" }),
     );
     const { deps } = makeCliFixture({ store });
 
     const { io } = await run(["message", "list", "--undelivered"], deps);
     expect(io.outText()).toContain("pending");
+    expect(io.outText()).toContain("broken");
     expect(io.outText()).not.toContain("done");
+  });
+
+  test("--json prints the shared page envelope with only public Message fields", async () => {
+    const store = new FakeStore();
+    store.messages.push(
+      makeMessage({
+        body: "failed-one",
+        deliveredAt: null,
+        deliveryError: "notification_failed: pane gone",
+      }),
+    );
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(["message", "list", "--json"], deps);
+    expect(code).toBe(EXIT_OK);
+    const page = parseJson(io.outText());
+    expect(Object.keys(page).sort()).toEqual([
+      "hasMore",
+      "messages",
+      "nextCursor",
+    ]);
+    expect(page.hasMore).toBe(false);
+    expect(typeof page.nextCursor).toBe("string");
+    expect(Object.keys(page.messages[0]).sort()).toEqual([
+      "body",
+      "createdAt",
+      "delivery",
+      "fromSessionId",
+      "id",
+      "kind",
+      "toSessionId",
+    ]);
+    // Internal fields never cross the surface, in any spelling.
+    expect(io.outText()).not.toContain("formattedBody");
+    expect(io.outText()).not.toContain("workspaceId");
+    expect(io.outText()).not.toContain("worktreeRoot");
+    expect(io.outText()).not.toContain("sequence");
+  });
+
+  test("--json equals the shared ops page envelope (surface parity)", async () => {
+    const store = new FakeStore();
+    store.messages.push(makeMessage({ body: "parity" }));
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(["message", "list", "--json"], deps);
+    expect(code).toBe(EXIT_OK);
+    const direct = await listMessages(deps, {}, { cwd: CWD });
+    if (!direct.ok) throw new Error("direct listMessages failed");
+    expect(parseJson(io.outText())).toEqual(direct.value);
+  });
+
+  test("--limit pages and --cursor continues without duplicates", async () => {
+    const store = new FakeStore();
+    store.messages.push(
+      makeMessage({ id: "m_page_0", body: "body-0" }),
+      makeMessage({ id: "m_page_1", body: "body-1" }),
+      makeMessage({ id: "m_page_2", body: "body-2" }),
+    );
+    const { deps } = makeCliFixture({ store });
+
+    const first = await run(
+      ["message", "list", "--limit", "2", "--json"],
+      deps,
+    );
+    expect(first.code).toBe(EXIT_OK);
+    const page1 = parseJson(first.io.outText());
+    expect(page1.messages.map((m: { id: string }) => m.id)).toEqual([
+      "m_page_0",
+      "m_page_1",
+    ]);
+    expect(page1.hasMore).toBe(true);
+
+    const second = await run(
+      [
+        "message",
+        "list",
+        "--limit",
+        "2",
+        "--cursor",
+        page1.nextCursor,
+        "--json",
+      ],
+      deps,
+    );
+    expect(second.code).toBe(EXIT_OK);
+    const page2 = parseJson(second.io.outText());
+    expect(page2.messages.map((m: { id: string }) => m.id)).toEqual([
+      "m_page_2",
+    ]);
+    expect(page2.hasMore).toBe(false);
+  });
+
+  test("--cursor latest returns an explicit empty tail page", async () => {
+    const store = new FakeStore();
+    store.messages.push(makeMessage({ body: "old-history" }));
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(
+      ["message", "list", "--cursor", "latest", "--json"],
+      deps,
+    );
+    expect(code).toBe(EXIT_OK);
+    const page = parseJson(io.outText());
+    expect(page.messages).toEqual([]);
+    expect(page.hasMore).toBe(false);
+    expect(typeof page.nextCursor).toBe("string");
+  });
+
+  test("human output renders a pagination footer only when more pages remain", async () => {
+    const store = new FakeStore();
+    store.messages.push(
+      makeMessage({ body: "row-0" }),
+      makeMessage({ body: "row-1" }),
+      makeMessage({ body: "row-2" }),
+    );
+    const { deps } = makeCliFixture({ store });
+
+    const paged = await run(["message", "list", "--limit", "2"], deps);
+    expect(paged.code).toBe(EXIT_OK);
+    expect(paged.io.outText()).toContain("has more");
+    expect(paged.io.outText()).toContain("--cursor");
+    // The footer shows the opaque cursor only, never formatted bodies.
+    expect(paged.io.outText()).not.toContain("[asem message]");
+
+    const full = await run(["message", "list"], deps);
+    expect(full.io.outText()).not.toContain("has more");
+  });
+
+  test("--limit beyond the shared max is rejected by the shared op", async () => {
+    const { io, code } = await run(["message", "list", "--limit", "100"]);
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("invalid_input");
+  });
+
+  test("a tampered --cursor is rejected by the shared op", async () => {
+    const store = new FakeStore();
+    store.messages.push(makeMessage({ body: "row" }));
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(
+      ["message", "list", "--cursor", "not-a-real-cursor"],
+      deps,
+    );
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("invalid_input");
   });
 });
 

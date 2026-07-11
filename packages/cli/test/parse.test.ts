@@ -707,6 +707,37 @@ describe("parseArgs message", () => {
   test("a value flag without a value is invalid_input", () => {
     expect(errorCode(["message", "list", "--to"])).toBe("invalid_input");
   });
+
+  test("message list parses --cursor and --limit", () => {
+    expect(
+      command(["message", "list", "--cursor", "c_opaque", "--limit", "10"]),
+    ).toEqual({
+      type: "message-list",
+      cursor: "c_opaque",
+      limit: 10,
+      json: false,
+    });
+  });
+
+  test("message list accepts the literal latest cursor", () => {
+    expect(command(["message", "list", "--cursor", "latest"])).toEqual({
+      type: "message-list",
+      cursor: "latest",
+      json: false,
+    });
+  });
+
+  test("message list rejects a non-positive-integer --limit", () => {
+    expect(errorCode(["message", "list", "--limit", "0"])).toBe(
+      "invalid_input",
+    );
+    expect(errorCode(["message", "list", "--limit", "abc"])).toBe(
+      "invalid_input",
+    );
+    expect(errorCode(["message", "list", "--limit", "1.5"])).toBe(
+      "invalid_input",
+    );
+  });
 });
 
 describe("parseArgs message wait", () => {

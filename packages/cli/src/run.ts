@@ -59,7 +59,7 @@ import {
   renderError,
   renderInit,
   renderInitSessionExports,
-  renderMessageList,
+  renderMessagePage,
   renderProfileGet,
   renderProfileList,
   renderRepoList,
@@ -569,12 +569,18 @@ async function runMessageList(
 ): Promise<number> {
   const result = await listMessages(
     deps,
-    command.filter !== undefined ? { filter: command.filter } : {},
+    {
+      ...(command.filter !== undefined ? { filter: command.filter } : {}),
+      ...(command.cursor !== undefined ? { cursor: command.cursor } : {}),
+      ...(command.limit !== undefined ? { limit: command.limit } : {}),
+    },
     { cwd },
   );
   return render(io, result, (value) => {
-    if (command.json) emitJson(io, value.messages);
-    else emit(io, renderMessageList(value.messages));
+    // JSON is the shared page envelope — the same object shape the operation
+    // and MCP return — never a bare Message array.
+    if (command.json) emitJson(io, value);
+    else emit(io, renderMessagePage(value));
   });
 }
 

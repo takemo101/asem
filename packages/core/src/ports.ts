@@ -282,6 +282,14 @@ export interface Clock {
   nowIso(): string;
 }
 
+/**
+ * Async sleep seam for polling operations (bounded Inbox wait). Injected so
+ * fake-time tests advance a {@link Clock} instead of waiting on real timers.
+ */
+export interface Sleeper {
+  sleep(ms: number): Promise<void>;
+}
+
 /** Identifier seam for deterministic tests. */
 export interface IdGenerator {
   nextId(): string;

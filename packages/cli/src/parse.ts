@@ -78,11 +78,10 @@ export type CliCommand =
     }
   | {
       type: "message-wait";
-      toSessionId: string;
-      fromSessionId?: string;
-      kind?: "message" | "report";
-      timeoutMs: number;
-      pollMs: number;
+      /** Required Inbox cursor; the shared op rejects `latest` and mismatches. */
+      cursor: string;
+      limit?: number;
+      timeoutMs?: number;
       json: boolean;
     }
   | {
@@ -744,51 +743,46 @@ function parsePositiveInt(
   return { ok: true, value };
 }
 
+/**
+ * `asem message wait --cursor <cursor> [--limit <n>] [--timeout-ms <n>]
+ * [--json]`.
+ *
+ * One CLI wait protocol, matching MCP `wait_messages` exactly: a bounded wait
+ * on the authenticated current Session's unfiltered Inbox after a required
+ * cursor. There are no target/sender/kind filters — the shared operation owns
+ * cursor validity, the default/max timeout, and page bounds.
+ */
 function parseMessageWait(args: string[]): ParseResult {
   const flags = parseFlags(args, {
     booleans: ["json"],
-    values: ["to", "from", "kind", "timeout-ms", "poll-ms"],
+    values: ["cursor", "limit", "timeout-ms"],
   });
   if (!flags.ok) return { kind: "error", error: flags.error };
   const { values, booleans, positionals } = flags.value;
 
-  const to = values.get("to") ?? positionals[0];
-  if (to === undefined || to.length === 0) {
+  if (positionals.length > 0) {
+    return invalid("unexpected extra arguments", { extra: positionals });
+  }
+  const cursor = values.get("cursor");
+  if (cursor === undefined || cursor.length === 0) {
     return invalid(
-      "target session id is required (use `asem message wait --to <session-id>`)",
+      "an Inbox cursor is required (use `asem message wait --cursor <cursor>`; get one from `asem message list --inbox`)",
     );
   }
-  if (positionals.length > 1) {
-    return invalid("unexpected extra arguments", {
-      extra: positionals.slice(1),
-    });
-  }
 
+  const limit = parsePositiveInt(values.get("limit"), "limit");
+  if (!limit.ok) return { kind: "error", error: limit.error };
   const timeout = parsePositiveInt(values.get("timeout-ms"), "timeout-ms");
   if (!timeout.ok) return { kind: "error", error: timeout.error };
-  const poll = parsePositiveInt(values.get("poll-ms"), "poll-ms");
-  if (!poll.ok) return { kind: "error", error: poll.error };
 
-  const kindValue = values.get("kind");
-  if (
-    kindValue !== undefined &&
-    kindValue !== "message" &&
-    kindValue !== "report"
-  ) {
-    return invalid("option --kind must be message or report");
-  }
-
-  const fromSessionId = values.get("from");
   return {
     kind: "command",
     command: {
       type: "message-wait",
-      toSessionId: to,
-      timeoutMs: timeout.value === 0 ? 600_000 : timeout.value,
-      pollMs: poll.value === 0 ? 1_000 : poll.value,
+      cursor,
       json: booleans.has("json"),
-      ...(fromSessionId !== undefined ? { fromSessionId } : {}),
-      ...(kindValue !== undefined ? { kind: kindValue } : {}),
+      ...(limit.value === 0 ? {} : { limit: limit.value }),
+      ...(timeout.value === 0 ? {} : { timeoutMs: timeout.value }),
     },
   };
 }

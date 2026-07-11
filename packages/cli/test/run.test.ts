@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MESSAGE_PAGE_DEFAULT_LIMIT } from "@asem/core";
 import {
   type InstallOptions,
   integrationTargetError,
@@ -16,6 +15,7 @@ import {
   FakeFileSystem,
   FakeLivenessProbe,
   FakeScopeResolver,
+  type FakeSleeper,
   FakeStore,
   MemoryLogger,
   makeConfig,
@@ -152,13 +152,14 @@ describe("runCli help & usage", () => {
     expect(out).toContain("examples:");
   });
 
-  test("message wait help documents the wait filters and timeout", async () => {
+  test("message wait help documents the cursor-required Inbox wait", async () => {
     const { io, code } = await run(["message", "wait", "--help"]);
     expect(code).toBe(EXIT_OK);
     const out = io.outText();
-    expect(out).toContain("asem message wait --to <id>");
+    expect(out).toContain("asem message wait --cursor <cursor>");
     expect(out).toContain("--timeout-ms");
-    expect(out).toContain("--kind");
+    expect(out).not.toContain("--kind");
+    expect(out).not.toContain("--poll-ms");
   });
 
   test("doctor renders focused help", async () => {
@@ -1585,114 +1586,98 @@ describe("runCli message list", () => {
 });
 
 describe("runCli message wait", () => {
-  test("returns the first matching Message from the store", async () => {
+  /** Fixture with a registered current Session and its high-water Inbox cursor. */
+  async function waitFixture() {
     const store = new FakeStore();
-    store.messages.push(
-      makeMessage({
-        id: "m_other",
-        fromSessionId: "s_other",
-        toSessionId: "s_parent",
-        kind: "report",
-        body: "wrong",
-      }),
-      makeMessage({
-        id: "m_match",
-        fromSessionId: "s_child",
-        toSessionId: "s_parent",
-        kind: "report",
-        body: "done",
-      }),
-    );
-    const { deps } = makeCliFixture({ store });
+    const me = seedCurrentSession(store);
+    const { deps } = makeCliFixture({ store, current: { sessionId: me.id } });
+    const anchor = await run(["message", "list", "--inbox", "--json"], deps);
+    expect(anchor.code).toBe(EXIT_OK);
+    const cursor = parseJson(anchor.io.outText()).nextCursor as string;
+    return { store, me, deps, cursor, sleeper: deps.sleeper as FakeSleeper };
+  }
+
+  test("returns a delayed Inbox arrival as a successful page", async () => {
+    const { store, me, deps, cursor, sleeper } = await waitFixture();
+    sleeper.onSleep = async (_ms, count) => {
+      if (count === 2) {
+        store.messages.push(
+          makeMessage({ id: "m_late", toSessionId: me.id, body: "late" }),
+        );
+      }
+    };
 
     const { io, code } = await run(
-      [
-        "message",
-        "wait",
-        "--to",
-        "s_parent",
-        "--from",
-        "s_child",
-        "--kind",
-        "report",
-        "--json",
-      ],
+      ["message", "wait", "--cursor", cursor, "--json"],
       deps,
     );
-
     expect(code).toBe(EXIT_OK);
-    expect(parseJson(io.outText()).id).toBe("m_match");
+    const page = parseJson(io.outText());
+    expect(page.messages.map((m: { id: string }) => m.id)).toEqual(["m_late"]);
+    expect(page.timedOut).toBe(false);
   });
 
-  test("finds a match beyond the first list page instead of timing out", async () => {
-    const store = new FakeStore();
-    // Fill the first page with non-matching rows so the match lands on page 2.
-    for (let i = 0; i < MESSAGE_PAGE_DEFAULT_LIMIT; i += 1) {
-      store.messages.push(
-        makeMessage({
-          id: `m_noise_${i}`,
-          fromSessionId: "s_other",
-          toSessionId: "s_parent",
-        }),
-      );
-    }
-    store.messages.push(
-      makeMessage({
-        id: "m_match",
-        fromSessionId: "s_child",
-        toSessionId: "s_parent",
-        kind: "report",
-        body: "done",
-      }),
-    );
-    const { deps } = makeCliFixture({ store });
+  test("timeout is a successful empty page, not an error", async () => {
+    const { deps, cursor } = await waitFixture();
 
     const { io, code } = await run(
-      [
-        "message",
-        "wait",
-        "--to",
-        "s_parent",
-        "--from",
-        "s_child",
-        "--timeout-ms",
-        "1",
-        "--poll-ms",
-        "1",
-        "--json",
-      ],
+      ["message", "wait", "--cursor", cursor, "--timeout-ms", "2000", "--json"],
       deps,
     );
-
     expect(code).toBe(EXIT_OK);
-    expect(parseJson(io.outText()).id).toBe("m_match");
+    const page = parseJson(io.outText());
+    expect(page.messages).toEqual([]);
+    expect(page.hasMore).toBe(false);
+    expect(page.timedOut).toBe(true);
+    expect(page.nextCursor).toBe(cursor);
   });
 
-  test("times out when no matching Message arrives", async () => {
-    const store = new FakeStore();
-    store.messages.push(
-      makeMessage({ toSessionId: "s_parent", fromSessionId: "s_other" }),
-    );
-    const { deps } = makeCliFixture({ store });
+  test("human output renders no new Messages plus a cursor footer on timeout", async () => {
+    const { deps, cursor } = await waitFixture();
 
     const { io, code } = await run(
-      [
-        "message",
-        "wait",
-        "--to",
-        "s_parent",
-        "--from",
-        "s_child",
-        "--timeout-ms",
-        "1",
-        "--poll-ms",
-        "1",
-      ],
+      ["message", "wait", "--cursor", cursor, "--timeout-ms", "1000"],
       deps,
     );
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("no new Messages");
+    expect(io.outText()).toContain(`--cursor ${cursor}`);
+  });
 
+  test("requires a registered current Session", async () => {
+    const { cursor } = await waitFixture();
+    // Fresh deps with no current-Session pointer: the wait must not fall back
+    // to anonymous local trust or any arbitrary-history view.
+    const { deps } = makeCliFixture();
+
+    const { io, code } = await run(
+      ["message", "wait", "--cursor", cursor],
+      deps,
+    );
     expect(code).toBe(EXIT_ERROR);
-    expect(io.errText()).toContain("timeout");
+    expect(io.errText()).toContain("current_session_not_found");
+  });
+
+  test("a cursor bound to another view is rejected by the shared op", async () => {
+    const store = new FakeStore();
+    const me = seedCurrentSession(store);
+    const { deps } = makeCliFixture({ store, current: { sessionId: me.id } });
+    // A non-Inbox (unfiltered history) cursor is a different query identity.
+    const history = await run(["message", "list", "--json"], deps);
+    const cursor = parseJson(history.io.outText()).nextCursor as string;
+
+    const { io, code } = await run(
+      ["message", "wait", "--cursor", cursor],
+      deps,
+    );
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("invalid_input");
+  });
+
+  test("the legacy --to wait surface is gone", async () => {
+    const { io, code } = await run(["message", "wait", "--to", "s_parent"]);
+    expect(code).toBe(EXIT_USAGE);
+    expect(io.errText()).toContain("invalid_input");
   });
 });
 

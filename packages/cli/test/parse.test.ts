@@ -741,43 +741,65 @@ describe("parseArgs message", () => {
 });
 
 describe("parseArgs message wait", () => {
-  test("maps filters, timeout, poll interval, and json flag", () => {
+  test("maps the required cursor plus optional limit, timeout, and json flag", () => {
     expect(
       command([
         "message",
         "wait",
-        "--to",
-        "s_parent",
-        "--from",
-        "s_child",
-        "--kind",
-        "report",
+        "--cursor",
+        "c_opaque",
+        "--limit",
+        "10",
         "--timeout-ms",
-        "600000",
-        "--poll-ms",
-        "250",
+        "60000",
         "--json",
       ]),
     ).toEqual({
       type: "message-wait",
-      toSessionId: "s_parent",
-      fromSessionId: "s_child",
-      kind: "report",
-      timeoutMs: 600000,
-      pollMs: 250,
+      cursor: "c_opaque",
+      limit: 10,
+      timeoutMs: 60000,
       json: true,
     });
   });
 
-  test("requires a target Session", () => {
+  test("a bare wait omits the optional fields", () => {
+    expect(command(["message", "wait", "--cursor", "c_opaque"])).toEqual({
+      type: "message-wait",
+      cursor: "c_opaque",
+      json: false,
+    });
+  });
+
+  test("requires an Inbox cursor", () => {
+    expect(errorCode(["message", "wait"])).toBe("invalid_input");
+  });
+
+  test("the legacy arbitrary-history filters are gone", () => {
+    expect(errorCode(["message", "wait", "--to", "s_parent"])).toBe(
+      "invalid_input",
+    );
     expect(errorCode(["message", "wait", "--from", "s_child"])).toBe(
       "invalid_input",
     );
+    expect(
+      errorCode(["message", "wait", "--cursor", "c", "--kind", "report"]),
+    ).toBe("invalid_input");
+    expect(
+      errorCode(["message", "wait", "--cursor", "c", "--poll-ms", "250"]),
+    ).toBe("invalid_input");
+  });
+
+  test("rejects positional arguments", () => {
+    expect(errorCode(["message", "wait", "s_parent"])).toBe("invalid_input");
   });
 
   test("rejects invalid numeric flags", () => {
     expect(
-      errorCode(["message", "wait", "--to", "s_parent", "--timeout-ms", "0"]),
+      errorCode(["message", "wait", "--cursor", "c", "--timeout-ms", "0"]),
+    ).toBe("invalid_input");
+    expect(
+      errorCode(["message", "wait", "--cursor", "c", "--limit", "abc"]),
     ).toBe("invalid_input");
   });
 });

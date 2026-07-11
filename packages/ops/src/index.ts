@@ -50,6 +50,7 @@ export {
   reportParent,
   sendMessage,
 } from "./operations/send-message.ts";
+export { waitMessages } from "./operations/wait-messages.ts";
 export {
   loadWorkspaceSnapshot,
   type WorkspaceSnapshotOutput,

@@ -95,7 +95,7 @@ describe("installSkillForTarget", () => {
     expect(skillDocument).toContain("## Workspace repo aliases");
     expect(skillDocument).toContain("## Boundaries");
     expect(skillDocument).not.toContain("## Vocabulary");
-    expect(skillDocument.length).toBeLessThan(4_400);
+    expect(skillDocument.length).toBeLessThan(4_600);
   });
 
   test("teaches when to use asem without broadening its scope", () => {
@@ -150,6 +150,16 @@ describe("installSkillForTarget", () => {
     expect(skillDocument).toMatch(/skips history/i);
     expect(skillDocument).toMatch(/notification failure only/i);
     expect(skillDocument).toMatch(/Never resend automatically/i);
+  });
+
+  test("teaches integration clients to outlive the requested wait timeout", () => {
+    expect(skillDocument).toContain(
+      "client tool-call deadline strictly longer than the requested `timeoutMs`",
+    );
+    expect(skillDocument).toContain("(default 30s, max 60s)");
+    expect(skillDocument).toMatch(
+      /so the operation can return (that|its successful) page instead of being cancelled mid-call/i,
+    );
   });
 
   test("teaches public envelope, limits, and opaque cursors", () => {

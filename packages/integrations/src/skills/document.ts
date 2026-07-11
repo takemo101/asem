@@ -57,7 +57,7 @@ Messages are durable and pull-only; pane delivery is best-effort notification.
 
 1. On ordinary startup, drain your Inbox oldest-first: \`list_messages({ filter: { inbox: true } })\`, then follow \`nextCursor\` while \`hasMore\` is true.
 2. Retain the final \`nextCursor\`; it is your Inbox position for later list/wait calls.
-3. Wait (\`wait_messages({ cursor })\` / \`asem message wait --cursor <cursor>\`) only when the human prompt or your Agent Profile says to wait. A timeout is success — an empty page with \`timedOut: true\`; keep its cursor and decide again.
+3. Wait (\`wait_messages({ cursor })\` / \`asem message wait --cursor <cursor>\`) only when the human prompt or your Agent Profile says to wait. A timeout is success — an empty page with \`timedOut: true\`; keep its cursor and decide again. Set your client tool-call deadline strictly longer than the requested \`timeoutMs\` (default 30s, max 60s) so the operation can return that page instead of being cancelled mid-call.
 4. Use \`cursor: "latest"\` only for an explicit, intentional tail start; it skips history.
 5. \`delivery.status: "failed"\` is notification failure only; the Message is stored. Never resend automatically.
 

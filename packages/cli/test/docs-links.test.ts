@@ -78,6 +78,18 @@ describe("durable docs", () => {
     expect(broken).toEqual([]);
   });
 
+  test("site MCP page gives integration-client wait deadline guidance", () => {
+    const contents = readFileSync(
+      join(REPO_ROOT, "site", "mcp-and-skills.md"),
+      "utf8",
+    );
+    expect(contents).toContain(
+      "client tool-call deadline strictly longer than the requested `timeoutMs`",
+    );
+    expect(contents).toContain("(default 30s, max 60s)");
+    expect(contents).toContain("successful empty page with `timedOut: true`");
+  });
+
   test("no leftover placeholder markers", () => {
     const offenders: string[] = [];
     for (const rel of files) {

@@ -73,6 +73,7 @@ import {
   FakeFileSystem,
   FakeIdGenerator,
   FakeScopeResolver,
+  FakeSleeper,
   FakeStore,
   FakeTokenGenerator,
   MemoryLogger,
@@ -542,6 +543,222 @@ describe("MVP smoke — CLI surface projection", () => {
     expect(code).toBe(EXIT_OK);
     for (const name of ["root-1", "reviewer-1", "helper-1"]) {
       expect(io.outText()).toContain(name);
+    }
+  });
+});
+
+// --- durable pull-only Message protocol (MIK-064) ---------------------------
+
+/** One public Message page envelope as CLI `--json` and MCP both project it. */
+interface PublicPage {
+  messages: {
+    body: string;
+    delivery: { status: string };
+    [key: string]: unknown;
+  }[];
+  nextCursor: string;
+  hasMore: boolean;
+  timedOut?: boolean;
+}
+
+/** Point the shared resolver at one seeded Session. */
+function actAs(w: World, key: keyof World["ids"]): void {
+  w.currentSession.ref = {
+    sessionId: w.ids[key],
+    token: w.tokens[key],
+    scope: SCOPE,
+  };
+}
+
+/** Deps with a linked fake Clock/Sleeper pair so bounded waits use fake time. */
+function withFakeTime(w: World): { deps: OpsDeps; sleeper: FakeSleeper } {
+  const clock = new FakeClock();
+  const sleeper = new FakeSleeper(clock);
+  return { deps: { ...w.base, clock, sleeper }, sleeper };
+}
+
+describe("MVP smoke — durable Message protocol", () => {
+  test("cursor handoff drains the Inbox oldest-first without duplicates or skips", async () => {
+    const w = await seedWorld();
+    // Two more Messages to reviewer-1, so its Inbox is "ack", "r2", "r3".
+    actAs(w, "orch");
+    for (const body of ["r2", "r3"]) {
+      expectOk(
+        await sendMessage(w.base, { toSessionId: w.ids.reviewer, body }, CTX),
+      );
+    }
+
+    actAs(w, "reviewer");
+    const first = expectOk(
+      await listMessages(w.base, { filter: { inbox: true }, limit: 2 }, CTX),
+    );
+    expect(first.messages.map((m) => m.body)).toEqual(["ack", "r2"]);
+    expect(first.hasMore).toBe(true);
+
+    const second = expectOk(
+      await listMessages(
+        w.base,
+        { filter: { inbox: true }, cursor: first.nextCursor, limit: 2 },
+        CTX,
+      ),
+    );
+    expect(second.messages.map((m) => m.body)).toEqual(["r3"]);
+    expect(second.hasMore).toBe(false);
+
+    // The drained cursor stays valid: the next page is empty, not an error.
+    const drained = expectOk(
+      await listMessages(
+        w.base,
+        { filter: { inbox: true }, cursor: second.nextCursor },
+        CTX,
+      ),
+    );
+    expect(drained.messages).toEqual([]);
+    expect(drained.hasMore).toBe(false);
+
+    // `latest` is an explicit tail start: an empty page whose cursor skips
+    // the three existing Messages entirely.
+    const tail = expectOk(
+      await listMessages(
+        w.base,
+        { filter: { inbox: true }, cursor: "latest" },
+        CTX,
+      ),
+    );
+    expect(tail.messages).toEqual([]);
+    expect(tail.hasMore).toBe(false);
+    const afterTail = expectOk(
+      await listMessages(
+        w.base,
+        { filter: { inbox: true }, cursor: tail.nextCursor },
+        CTX,
+      ),
+    );
+    expect(afterTail.messages).toEqual([]);
+  });
+
+  test("CLI wait timeout is a successful empty page, never an auto-resend", async () => {
+    const w = await seedWorld();
+    const { deps, sleeper } = withFakeTime(w);
+    actAs(w, "reviewer");
+    const cursor = expectOk(
+      await listMessages(deps, { filter: { inbox: true } }, CTX),
+    ).nextCursor;
+    const storedBefore = w.store.messages.length;
+
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["message", "wait", "--cursor", cursor, "--json"],
+      cwd: CWD,
+      deps,
+      io,
+    });
+    expect(code).toBe(EXIT_OK);
+    const page = JSON.parse(io.outText()) as PublicPage;
+    expect(page.timedOut).toBe(true);
+    expect(page.messages).toEqual([]);
+    expect(page.hasMore).toBe(false);
+    // The anchor did not move, and the default bound is 30 one-second polls.
+    expect(page.nextCursor).toBe(cursor);
+    expect(sleeper.waits).toHaveLength(30);
+    // A timed-out wait (like a failed notification) triggers no resend: the
+    // durable store is untouched.
+    expect(w.store.messages.length).toBe(storedBefore);
+  });
+
+  test("MCP wait returns a delayed arrival and hands the cursor forward", async () => {
+    const w = await seedWorld();
+    const { deps, sleeper } = withFakeTime(w);
+    actAs(w, "reviewer");
+    const ctx = { cwd: CWD, deps };
+    const start = mcpValue<PublicPage>(
+      await callMcpTool("list_messages", { filter: { inbox: true } }, ctx),
+    ).nextCursor;
+
+    // root-1 sends while reviewer-1's wait is in flight (second poll).
+    sleeper.onSleep = async (_ms, count) => {
+      if (count !== 2) return;
+      actAs(w, "orch");
+      expectOk(
+        await sendMessage(
+          w.base,
+          { toSessionId: w.ids.reviewer, body: "late" },
+          CTX,
+        ),
+      );
+      actAs(w, "reviewer");
+    };
+
+    const page = mcpValue<PublicPage>(
+      await callMcpTool("wait_messages", { cursor: start }, ctx),
+    );
+    expect(page.timedOut).toBe(false);
+    expect(page.messages.map((m) => m.body)).toEqual(["late"]);
+    expect(sleeper.waits.slice(0, 2)).toEqual([1_000, 1_000]);
+
+    // The returned cursor continues the same Inbox view: nothing replays.
+    const after = mcpValue<PublicPage>(
+      await callMcpTool(
+        "wait_messages",
+        { cursor: page.nextCursor, timeoutMs: 1_000 },
+        ctx,
+      ),
+    );
+    expect(after.timedOut).toBe(true);
+    expect(after.messages).toEqual([]);
+  });
+
+  test("CLI and MCP project the identical redacted public page envelope", async () => {
+    const w = await seedWorld();
+    actAs(w, "reviewer");
+
+    const io = new BufferIo();
+    const code = await runCli({
+      argv: ["message", "list", "--inbox", "--json"],
+      cwd: CWD,
+      deps: w.base,
+      io,
+    });
+    expect(code).toBe(EXIT_OK);
+    const cliPage = JSON.parse(io.outText()) as PublicPage;
+    const mcpPage = mcpValue<PublicPage>(
+      await callMcpTool(
+        "list_messages",
+        { filter: { inbox: true } },
+        { cwd: CWD, deps: w.base },
+      ),
+    );
+
+    // Parity: both surfaces emit the same shared page envelope.
+    expect(cliPage).toEqual(mcpPage);
+    expect(cliPage.messages.map((m) => m.body)).toEqual(["ack"]);
+    expect(cliPage.hasMore).toBe(false);
+    expect(typeof cliPage.nextCursor).toBe("string");
+
+    // Redaction: exactly the public envelope, no internal/token fields.
+    expect(Object.keys(cliPage.messages[0]!).sort()).toEqual([
+      "body",
+      "createdAt",
+      "delivery",
+      "fromSessionId",
+      "id",
+      "kind",
+      "toSessionId",
+    ]);
+    const serialized = JSON.stringify(cliPage.messages);
+    for (const internal of [
+      "formattedBody",
+      "workspaceId",
+      "worktreeRoot",
+      "sequence",
+      "deliveryError",
+    ]) {
+      expect(serialized).not.toContain(internal);
+    }
+    for (const output of [io.outText(), JSON.stringify(mcpPage)]) {
+      for (const token of Object.values(w.tokens)) {
+        expect(output).not.toContain(token);
+      }
     }
   });
 });

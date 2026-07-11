@@ -44,7 +44,7 @@ Unsupported scopes fail clearly instead of silently falling back.
 
 The MCP server exposes primitive Session and Message operations. It does not expose Integration Target setup commands.
 
-Use the MCP surface for AI-facing local operations such as listing Sessions, peeking at live Session pane output, reading Message history, sending Messages, and reporting to a parent Session.
+Use the MCP surface for AI-facing local operations such as listing Sessions, peeking at live Session pane output, reading paginated Message history, running bounded Inbox waits, sending Messages, and reporting to a parent Session.
 
 `peek_session` returns a live Multiplexer pane snapshot for a Session in the same Workspace. It does not attach to the pane, does not persist a transcript, and does not redact terminal output.
 

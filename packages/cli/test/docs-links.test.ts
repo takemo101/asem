@@ -15,8 +15,12 @@ import { dirname, join, resolve } from "node:path";
 // packages/cli/test → repo root.
 const REPO_ROOT = resolve(import.meta.dir, "..", "..", "..");
 
-/** The durable Markdown surface this scan owns. */
-const ROOTS = ["docs", "AGENTS.md", "CONTEXT.md"];
+/**
+ * The durable Markdown surface this scan owns. `site/` is excluded because its
+ * VitePress pages use site-absolute route links (`/quickstart`), not relative
+ * file links; `bun run docs:build` validates those.
+ */
+const ROOTS = ["docs", "AGENTS.md", "CONTEXT.md", "README.md"];
 
 const PLACEHOLDER_MARKERS = ["FIXME", "TKTK", "lorem ipsum"];
 

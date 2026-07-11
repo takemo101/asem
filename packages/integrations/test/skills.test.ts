@@ -91,11 +91,11 @@ describe("installSkillForTarget", () => {
     expect(skillDocument).toContain("name: asem");
     expect(skillDocument).toContain("## When to use");
     expect(skillDocument).toContain("## Use MCP first");
-    expect(skillDocument).toContain("## Normal playbook");
+    expect(skillDocument).toContain("## Message protocol");
     expect(skillDocument).toContain("## Workspace repo aliases");
     expect(skillDocument).toContain("## Boundaries");
     expect(skillDocument).not.toContain("## Vocabulary");
-    expect(skillDocument.length).toBeLessThan(3_600);
+    expect(skillDocument.length).toBeLessThan(4_400);
   });
 
   test("teaches when to use asem without broadening its scope", () => {
@@ -113,6 +113,7 @@ describe("installSkillForTarget", () => {
       "create_session",
       "send_message",
       "list_messages",
+      "wait_messages",
       "peek_session",
       "report_parent",
       "close_session",
@@ -122,6 +123,7 @@ describe("installSkillForTarget", () => {
     for (const command of [
       "asem session create",
       "asem message send",
+      "asem message list",
       "asem message wait",
       "asem session peek",
       "asem report parent",
@@ -132,14 +134,42 @@ describe("installSkillForTarget", () => {
     }
   });
 
-  test("teaches the implementation review repair loop", () => {
-    expect(skillDocument).toMatch(/Create a bounded worker Session/i);
-    expect(skillDocument).toMatch(/Wait for its Report/i);
-    expect(skillDocument).toMatch(/Create a separate reviewer Session/i);
-    expect(skillDocument).toMatch(/send the worker a Message/i);
+  test("teaches the durable pull-only Message protocol", () => {
+    expect(skillDocument).toMatch(/durable and pull-only/i);
+    expect(skillDocument).toMatch(/drain your Inbox oldest-first/i);
+    expect(skillDocument).toMatch(/follow `nextCursor` while `hasMore`/i);
+    expect(skillDocument).toMatch(/Retain the final `nextCursor`/i);
+    expect(skillDocument).toMatch(
+      /only when the human prompt or your Agent Profile says to wait/i,
+    );
+    expect(skillDocument).toMatch(/timeout is success/i);
+    expect(skillDocument).toMatch(/`timedOut: true`/);
+    expect(skillDocument).toMatch(
+      /"latest"[^.]*only for an explicit, intentional tail start/i,
+    );
+    expect(skillDocument).toMatch(/skips history/i);
+    expect(skillDocument).toMatch(/notification failure only/i);
+    expect(skillDocument).toMatch(/Never resend automatically/i);
+  });
+
+  test("teaches public envelope, limits, and opaque cursors", () => {
+    expect(skillDocument).toMatch(/64 KiB/);
+    expect(skillDocument).toMatch(/default to 20 and cap at 50/i);
+    expect(skillDocument).toMatch(/Cursors are opaque/i);
+    expect(skillDocument).toMatch(/never grant access/i);
+  });
+
+  test("does not prescribe worker/reviewer/fan-out workflows", () => {
+    expect(skillDocument).not.toMatch(/worker Session/i);
+    expect(skillDocument).not.toMatch(/reviewer Session/i);
+    expect(skillDocument).not.toMatch(/fan[- ]?out/i);
+    expect(skillDocument).not.toContain("## Normal playbook");
+    expect(skillDocument).not.toMatch(/Repeat until acceptable/i);
+  });
+
+  test("keeps live pane snapshot guidance", () => {
     expect(skillDocument).toMatch(/peek_session/i);
     expect(skillDocument).toMatch(/live pane snapshot/i);
-    expect(skillDocument).toMatch(/Close child Sessions/i);
     expect(skillDocument).toMatch(/do not delete history/i);
   });
 

@@ -77,12 +77,15 @@ The CLI exposes primitive Session and Message operations:
 asem session list
 asem session get <id>
 asem session peek <id>
+asem message list --inbox
 asem message send <session-id> --body "status?"
-asem message wait
+asem message wait --cursor <nextCursor>
 asem report parent --body "Review complete"
 ```
 
 Run `asem --help` or `asem <command> --help` for focused help.
+
+Messages are durable and pull-based. `asem message list` returns one page — `messages`, `nextCursor`, and `hasMore` — of public Message envelopes ordered oldest to newest. `asem message wait --cursor <nextCursor>` performs one bounded wait on the current Session's Inbox after a cursor captured from a prior page; a timeout is a successful empty page, not an error. A failed pane delivery is notification-only: the Message stays stored and is never automatically resent.
 
 `asem session peek <id>` reads a live Multiplexer pane snapshot without attaching. It is useful when a parent Session needs to inspect a child Session's terminal output before a Report arrives. Peek output is not durable Message history and is returned without redaction.
 

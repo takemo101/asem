@@ -45,12 +45,21 @@ Profiles resolve project, then user, then builtin. A project or user Profile rep
 
 ## Messages and Reports
 
+Messages are durable and pull-based: the local store row is the source of truth, and pane delivery is best-effort notification.
+
 ```sh
-asem message list
+asem message list --inbox --json
+asem message list --cursor <nextCursor> --limit 50
 asem message send <session-id> --body "status?"
-asem message wait
+asem message wait --cursor <nextCursor>
 asem report parent --body "Review complete"
 ```
+
+`message list` returns one page, ordered oldest to newest, as a shared envelope: `{ messages, nextCursor, hasMore }`. Each Message carries only the public fields `id`, `fromSessionId`, `toSessionId`, `kind`, `body`, `createdAt`, and `delivery`. Pass `nextCursor` back with `--cursor` (and the same filter) to read the next page; `--cursor latest` starts at the tail with an empty page. Cursors are opaque and bound to one query; they never grant access.
+
+`message wait` performs one bounded wait on the current Session's unfiltered Inbox. It requires a concrete cursor from a prior `message list --inbox` page or a prior wait (never `latest`). A timeout (default 30 s, max 60 s) is a successful empty page with `timedOut: true`, not an error.
+
+Message bodies are capped at 65,536 UTF-8 bytes, and pages default to 20 and cap at 50 Messages. A `delivery.status` of `failed` records a notification failure only — the Message is stored and is never automatically resent.
 
 `report parent` sends a Report to the current Session's parent Session in the same Workspace.
 

@@ -304,6 +304,13 @@ export class FakeStore implements Store {
     scope: EffectiveScope,
     query: MessagePageQuery,
   ): Promise<MessagePage> {
+    // Tests commonly seed with a direct `store.messages.push(...)`; backfill
+    // sequences in array order so paged reads see those rows like SQLite would.
+    for (const message of this.messages) {
+      if (!this.messageSequences.has(message.id)) {
+        this.messageSequences.set(message.id, this.nextMessageSequence++);
+      }
+    }
     const limit = Math.min(Math.max(query.limit ?? 20, 1), 50);
     const budget = query.bodyBudgetBytes ?? 262_144;
     const rows = (await this.listMessages(scope, query.filter))

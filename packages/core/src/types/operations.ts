@@ -2,7 +2,6 @@ import { z } from "zod";
 import { nonEmptyString } from "./common.ts";
 import { agentConfigSchema, muxConfigSchema } from "./config.ts";
 import {
-  type Message,
   messageBodySchema,
   messageKindSchema,
   type PublicMessage,
@@ -267,14 +266,29 @@ export interface SendMessageOutput {
   message: PublicMessage;
 }
 
+/** Default number of Messages per page for paginated Message reads. */
+export const MESSAGE_PAGE_DEFAULT_LIMIT = 20;
+/** Maximum number of Messages per page for paginated Message reads. */
+export const MESSAGE_PAGE_MAX_LIMIT = 50;
+
 export const listMessagesInputSchema = z
   .object({
     filter: messageListFilterSchema.optional(),
+    /**
+     * Opaque page cursor from a prior response's `nextCursor`, or the literal
+     * `"latest"` to start at the tail without reading history. Cursors bind a
+     * query identity only; they never grant access.
+     */
+    cursor: nonEmptyString.optional(),
+    limit: z.number().int().min(1).max(MESSAGE_PAGE_MAX_LIMIT).optional(),
   })
   .strict();
 export type ListMessagesInput = z.infer<typeof listMessagesInputSchema>;
 export interface ListMessagesOutput {
-  messages: Message[];
+  messages: PublicMessage[];
+  /** Always present, including for an empty page; input for the next call. */
+  nextCursor: string;
+  hasMore: boolean;
 }
 
 export const reportParentInputSchema = z

@@ -7,7 +7,11 @@
  * structured error. No use-case logic (scope, auth, persistence) is duplicated
  * here — every command delegates to the operation that owns it.
  */
-import { type AttachCommand, type Message, operationError } from "@asem/core";
+import {
+  type AttachCommand,
+  operationError,
+  type PublicMessage,
+} from "@asem/core";
 import {
   type InstallOptions,
   type InstallResult,
@@ -576,7 +580,7 @@ async function runMessageList(
 
 function matchesWait(
   command: Extract<CliCommand, { type: "message-wait" }>,
-  message: Message,
+  message: PublicMessage,
 ): boolean {
   return (
     message.toSessionId === command.toSessionId &&
@@ -592,16 +596,26 @@ async function runMessageWait(
 ): Promise<number> {
   const started = Date.now();
   while (true) {
-    const result = await listMessages(
-      deps,
-      { filter: { toSessionId: command.toSessionId } },
-      { cwd },
-    );
-    if (!result.ok) return fail(io, result.error);
+    // Drain every page: a match may sit past the first page of history.
+    let cursor: string | undefined;
+    let match: PublicMessage | undefined;
+    while (true) {
+      const result = await listMessages(
+        deps,
+        {
+          filter: { toSessionId: command.toSessionId },
+          ...(cursor !== undefined ? { cursor } : {}),
+        },
+        { cwd },
+      );
+      if (!result.ok) return fail(io, result.error);
 
-    const match = result.value.messages.find((message) =>
-      matchesWait(command, message),
-    );
+      match = result.value.messages.find((message) =>
+        matchesWait(command, message),
+      );
+      if (match !== undefined || !result.value.hasMore) break;
+      cursor = result.value.nextCursor;
+    }
     if (match !== undefined) {
       if (command.json) emitJson(io, match);
       else emit(io, renderSentMessage(match));

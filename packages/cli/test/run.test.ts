@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { MESSAGE_PAGE_DEFAULT_LIMIT } from "@asem/core";
 import {
   type InstallOptions,
   integrationTargetError,
@@ -1463,6 +1464,50 @@ describe("runCli message wait", () => {
         "s_child",
         "--kind",
         "report",
+        "--json",
+      ],
+      deps,
+    );
+
+    expect(code).toBe(EXIT_OK);
+    expect(parseJson(io.outText()).id).toBe("m_match");
+  });
+
+  test("finds a match beyond the first list page instead of timing out", async () => {
+    const store = new FakeStore();
+    // Fill the first page with non-matching rows so the match lands on page 2.
+    for (let i = 0; i < MESSAGE_PAGE_DEFAULT_LIMIT; i += 1) {
+      store.messages.push(
+        makeMessage({
+          id: `m_noise_${i}`,
+          fromSessionId: "s_other",
+          toSessionId: "s_parent",
+        }),
+      );
+    }
+    store.messages.push(
+      makeMessage({
+        id: "m_match",
+        fromSessionId: "s_child",
+        toSessionId: "s_parent",
+        kind: "report",
+        body: "done",
+      }),
+    );
+    const { deps } = makeCliFixture({ store });
+
+    const { io, code } = await run(
+      [
+        "message",
+        "wait",
+        "--to",
+        "s_parent",
+        "--from",
+        "s_child",
+        "--timeout-ms",
+        "1",
+        "--poll-ms",
+        "1",
         "--json",
       ],
       deps,

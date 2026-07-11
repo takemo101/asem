@@ -15,6 +15,7 @@ import { FakeTemplateRunner } from "@asem/runtime";
 import {
   FakeConfigLoader,
   FakeCurrentSessionResolver,
+  type FakeSleeper,
   FakeStore,
   makeConfig,
   makeOpsDeps,
@@ -109,6 +110,7 @@ describe("MCP tool registry", () => {
       "peek_session",
       "report_parent",
       "send_message",
+      "wait_messages",
     ]);
     expect(hasMcpTool("attach_session")).toBe(false);
   });
@@ -187,6 +189,21 @@ describe("MCP tool registry", () => {
     expect(schema.properties.limit).toMatchObject({ type: "number" });
     expect(schema.required).not.toContain("cursor");
     expect(schema.required).not.toContain("limit");
+  });
+
+  test("wait_messages input schema requires a cursor with optional limit and timeoutMs", () => {
+    const tool = listMcpTools().find((t) => t.name === "wait_messages");
+    const schema = tool?.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.properties).toHaveProperty("cursor");
+    expect(schema.properties.cursor).toMatchObject({ type: "string" });
+    expect(schema.properties).toHaveProperty("limit");
+    expect(schema.properties).toHaveProperty("timeoutMs");
+    expect(schema.required).toContain("cursor");
+    expect(schema.required).not.toContain("limit");
+    expect(schema.required).not.toContain("timeoutMs");
   });
 
   test("get_profile requires an id", () => {
@@ -438,6 +455,82 @@ describe("MCP tool calls", () => {
     if (!direct.ok) throw new Error("direct listMessages failed");
     // JSON round-trip so the comparison sees exactly what the wire carries.
     expect(viaTool).toEqual(JSON.parse(JSON.stringify(direct.value)));
+  });
+
+  test("wait_messages returns arrivals in the current Session Inbox as a page", async () => {
+    const store = new FakeStore();
+    const current = makeSession({ id: "current" });
+    const deps = withCurrentSession(store, current);
+
+    const anchor = parsed(
+      await callMcpTool(
+        "list_messages",
+        { filter: { inbox: true } },
+        { ...ctx, deps },
+      ),
+    ) as { nextCursor: string };
+    (deps.sleeper as FakeSleeper).onSleep = async (_ms, count) => {
+      if (count === 2) {
+        store.messages.push(
+          makeMessage({ id: "m_wake", toSessionId: "current", body: "wake" }),
+        );
+      }
+    };
+
+    const result = await callMcpTool(
+      "wait_messages",
+      { cursor: anchor.nextCursor },
+      { ...ctx, deps },
+    );
+    expect(result.isError).toBeUndefined();
+    const page = parsed(result) as {
+      messages: { id: string }[];
+      timedOut: boolean;
+      hasMore: boolean;
+    };
+    expect(page.messages.map((m) => m.id)).toEqual(["m_wake"]);
+    expect(page.timedOut).toBe(false);
+    expect(page.hasMore).toBe(false);
+  });
+
+  test("wait_messages timeout is a successful empty page, not an error", async () => {
+    const store = new FakeStore();
+    const current = makeSession({ id: "current" });
+    const deps = withCurrentSession(store, current);
+
+    const anchor = parsed(
+      await callMcpTool(
+        "list_messages",
+        { filter: { inbox: true } },
+        { ...ctx, deps },
+      ),
+    ) as { nextCursor: string };
+
+    const result = await callMcpTool(
+      "wait_messages",
+      { cursor: anchor.nextCursor, timeoutMs: 2_000 },
+      { ...ctx, deps },
+    );
+    expect(result.isError).toBeUndefined();
+    const page = parsed(result) as {
+      messages: unknown[];
+      nextCursor: string;
+      hasMore: boolean;
+      timedOut: boolean;
+    };
+    expect(page.messages).toEqual([]);
+    expect(page.hasMore).toBe(false);
+    expect(page.timedOut).toBe(true);
+    expect(page.nextCursor).toBe(anchor.nextCursor);
+  });
+
+  test("wait_messages without a cursor is an invalid_input tool error", async () => {
+    const store = new FakeStore();
+    const deps = withCurrentSession(store, makeSession({ id: "current" }));
+
+    const result = await callMcpTool("wait_messages", {}, { ...ctx, deps });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain("invalid_input");
   });
 
   test("close_session force records a stale live Session closed when mux close fails", async () => {

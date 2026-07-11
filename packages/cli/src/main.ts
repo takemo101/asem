@@ -31,6 +31,7 @@ import {
   storedStatusLivenessProbe,
   systemClock,
   systemHostPaths,
+  timerSleeper,
   uuidIdGenerator,
 } from "./runtime/adapters.ts";
 import { runTuiCommand } from "./tui.ts";
@@ -63,6 +64,7 @@ export async function createRuntimeDeps(
     executableResolver: bunExecutableResolver,
     livenessProbe: storedStatusLivenessProbe,
     clock: systemClock,
+    sleeper: timerSleeper,
     idGenerator: uuidIdGenerator,
     tokenGenerator: randomTokenGenerator,
     logger: createSurfaceLogger(options.surface, {
@@ -107,6 +109,7 @@ export function createReadOnlyCliDeps(options: RuntimeDepsOptions): OpsDeps {
     executableResolver: bunExecutableResolver,
     livenessProbe: unavailablePort<OpsDeps["livenessProbe"]>("livenessProbe"),
     clock: unavailablePort<OpsDeps["clock"]>("clock"),
+    sleeper: unavailablePort<OpsDeps["sleeper"]>("sleeper"),
     idGenerator: unavailablePort<OpsDeps["idGenerator"]>("idGenerator"),
     tokenGenerator:
       unavailablePort<OpsDeps["tokenGenerator"]>("tokenGenerator"),

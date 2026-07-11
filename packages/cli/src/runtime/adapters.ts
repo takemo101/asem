@@ -46,6 +46,7 @@ import {
   type ScopeResolver,
   type Session,
   type SessionStatus,
+  type Sleeper,
   type TemplateRunner,
   type TokenGenerator,
 } from "@asem/core";
@@ -141,6 +142,11 @@ export const bunExecutableResolver: ExecutableResolver = {
 export const systemClock: Clock = {
   now: () => new Date(),
   nowIso: () => new Date().toISOString(),
+};
+
+/** Real {@link Sleeper}: timer-backed sleep for polling operations. */
+export const timerSleeper: Sleeper = {
+  sleep: (ms) => delay(ms),
 };
 
 /** UUID-based id generator; ids are opaque, just unique and non-empty. */

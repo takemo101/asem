@@ -291,6 +291,36 @@ export interface ListMessagesOutput {
   hasMore: boolean;
 }
 
+/** Default bounded Inbox wait timeout. */
+export const WAIT_MESSAGES_DEFAULT_TIMEOUT_MS = 30_000;
+/** Maximum bounded Inbox wait timeout; a larger request is invalid_input. */
+export const WAIT_MESSAGES_MAX_TIMEOUT_MS = 60_000;
+/** Fixed Store poll interval for the bounded Inbox wait. */
+export const WAIT_MESSAGES_POLL_INTERVAL_MS = 1_000;
+
+export const waitMessagesInputSchema = z
+  .object({
+    /**
+     * Required Inbox cursor from a prior `list_messages({ inbox: true })` or
+     * wait response — never the literal `latest`. It binds the current
+     * Session's unfiltered Inbox query identity only; it never grants access.
+     */
+    cursor: nonEmptyString,
+    limit: z.number().int().min(1).max(MESSAGE_PAGE_MAX_LIMIT).optional(),
+    timeoutMs: z
+      .number()
+      .int()
+      .min(1)
+      .max(WAIT_MESSAGES_MAX_TIMEOUT_MS)
+      .optional(),
+  })
+  .strict();
+export type WaitMessagesInput = z.infer<typeof waitMessagesInputSchema>;
+export interface WaitMessagesOutput extends ListMessagesOutput {
+  /** True when the bounded wait elapsed with no new Inbox Messages (success). */
+  timedOut: boolean;
+}
+
 export const reportParentInputSchema = z
   .object({
     body: messageBodySchema,

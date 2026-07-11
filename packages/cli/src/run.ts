@@ -7,11 +7,7 @@
  * structured error. No use-case logic (scope, auth, persistence) is duplicated
  * here — every command delegates to the operation that owns it.
  */
-import {
-  type AttachCommand,
-  operationError,
-  type PublicMessage,
-} from "@asem/core";
+import { type AttachCommand, operationError } from "@asem/core";
 import {
   type InstallOptions,
   type InstallResult,
@@ -37,6 +33,7 @@ import {
   peekSession,
   reportParent,
   sendMessage,
+  waitMessages,
 } from "@asem/ops";
 import packageJson from "../package.json" with { type: "json" };
 import {
@@ -66,6 +63,7 @@ import {
   renderSentMessage,
   renderSessionDetail,
   renderSessionList,
+  renderWaitPage,
 } from "./render.ts";
 import { listRepoAliases } from "./repo-alias.ts";
 import { usageFor } from "./usage.ts";
@@ -100,8 +98,6 @@ export interface RunCliOptions {
   isTty?: boolean;
   /** Test seam for interactive init prompts; defaults to Inquirer prompts. */
   prompts?: InitWizardPrompts;
-  /** Test seam for polling commands; defaults to setTimeout. */
-  sleepMs?: (ms: number) => Promise<void>;
   /** Test seam for Integration Target installers; defaults to production. */
   integrations?: IntegrationInstallers;
   /** Home directory for global Integration Target installs (defaults to OS home). */
@@ -163,9 +159,6 @@ export async function runCli(opts: RunCliOptions): Promise<number> {
     isTty: opts.isTty ?? Boolean(process.stdin.isTTY),
     attachRunner: opts.attachRunner,
     prompts: opts.prompts,
-    sleepMs:
-      opts.sleepMs ??
-      ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
     integrations: opts.integrations,
     env: opts.env ?? process.env,
     ...(opts.home !== undefined ? { home: opts.home } : {}),
@@ -179,7 +172,6 @@ type DispatchEnv = {
   isTty: boolean;
   attachRunner?: AttachRunner;
   prompts?: InitWizardPrompts;
-  sleepMs: (ms: number) => Promise<void>;
   integrations?: IntegrationInstallers;
   home?: string;
   /** Process environment forwarded to env-discovering operations (MIK-049). */
@@ -584,65 +576,29 @@ async function runMessageList(
   });
 }
 
-function matchesWait(
-  command: Extract<CliCommand, { type: "message-wait" }>,
-  message: PublicMessage,
-): boolean {
-  return (
-    message.toSessionId === command.toSessionId &&
-    (command.fromSessionId === undefined ||
-      message.fromSessionId === command.fromSessionId) &&
-    (command.kind === undefined || message.kind === command.kind)
-  );
-}
-
 async function runMessageWait(
   command: Extract<CliCommand, { type: "message-wait" }>,
-  { cwd, deps, io, sleepMs }: DispatchEnv,
+  { cwd, deps, io }: DispatchEnv,
 ): Promise<number> {
-  const started = Date.now();
-  while (true) {
-    // Drain every page: a match may sit past the first page of history.
-    let cursor: string | undefined;
-    let match: PublicMessage | undefined;
-    while (true) {
-      const result = await listMessages(
-        deps,
-        {
-          filter: { toSessionId: command.toSessionId },
-          ...(cursor !== undefined ? { cursor } : {}),
-        },
-        { cwd },
-      );
-      if (!result.ok) return fail(io, result.error);
-
-      match = result.value.messages.find((message) =>
-        matchesWait(command, message),
-      );
-      if (match !== undefined || !result.value.hasMore) break;
-      cursor = result.value.nextCursor;
-    }
-    if (match !== undefined) {
-      if (command.json) emitJson(io, match);
-      else emit(io, renderSentMessage(match));
-      return EXIT_OK;
-    }
-
-    if (Date.now() - started >= command.timeoutMs) {
-      return fail(
-        io,
-        operationError("timeout", "timed out waiting for Message", {
-          toSessionId: command.toSessionId,
-          ...(command.fromSessionId !== undefined
-            ? { fromSessionId: command.fromSessionId }
-            : {}),
-          ...(command.kind !== undefined ? { kind: command.kind } : {}),
-          timeoutMs: command.timeoutMs,
-        }),
-      );
-    }
-    await sleepMs(Math.min(command.pollMs, command.timeoutMs));
-  }
+  // Pure delegation to the shared bounded current-Inbox wait: current-Session
+  // auth, cursor binding, the 1s poll, and the 30/60s default/max timeout all
+  // live in the operation so CLI and MCP agree. A timeout is a successful
+  // empty page (`timedOut: true`), so it renders through the ok path.
+  const result = await waitMessages(
+    deps,
+    {
+      cursor: command.cursor,
+      ...(command.limit !== undefined ? { limit: command.limit } : {}),
+      ...(command.timeoutMs !== undefined
+        ? { timeoutMs: command.timeoutMs }
+        : {}),
+    },
+    { cwd },
+  );
+  return render(io, result, (value) => {
+    if (command.json) emitJson(io, value);
+    else emit(io, renderWaitPage(value));
+  });
 }
 
 async function runMessageSend(

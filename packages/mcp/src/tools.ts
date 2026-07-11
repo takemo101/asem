@@ -21,6 +21,7 @@ import {
   peekSessionInputSchema,
   reportParentInputSchema,
   sendMessageInputSchema,
+  waitMessagesInputSchema,
 } from "@asem/core";
 import {
   closeSession,
@@ -36,6 +37,7 @@ import {
   peekSession,
   reportParent,
   sendMessage,
+  waitMessages,
 } from "@asem/ops";
 
 interface ParseSchema<T> {
@@ -243,6 +245,29 @@ const toolDefinitions = {
       },
     }),
   },
+  wait_messages: {
+    name: "wait_messages",
+    description:
+      "Bounded wait for new Messages in the current Session's Inbox after a cursor. Timeout is a successful empty page with timedOut true.",
+    inputSchema: objectSchema(
+      {
+        cursor: {
+          type: "string",
+          description:
+            'nextCursor from a prior list_messages/wait_messages response; never "latest".',
+        },
+        limit: {
+          type: "number",
+          description: "Messages per page (default 20, max 50).",
+        },
+        timeoutMs: {
+          type: "number",
+          description: "Wait bound in milliseconds (default 30000, max 60000).",
+        },
+      },
+      ["cursor"],
+    ),
+  },
 } satisfies Record<string, McpToolDefinition>;
 
 function jsonContent(value: unknown, isError = false): McpToolResult {
@@ -406,6 +431,15 @@ const tools = {
       parsed(listMessagesInputSchema, args, async (input) =>
         operationResult(
           await listMessages(deps, input, { cwd, origin: "agent" }),
+        ),
+      ),
+  },
+  wait_messages: {
+    definition: toolDefinitions.wait_messages,
+    handler: (args, { cwd, deps }) =>
+      parsed(waitMessagesInputSchema, args, async (input) =>
+        operationResult(
+          await waitMessages(deps, input, { cwd, origin: "agent" }),
         ),
       ),
   },

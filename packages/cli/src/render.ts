@@ -18,6 +18,7 @@ import {
   type PublicMessage,
   type Session,
   shellEscape,
+  type WaitMessagesOutput,
 } from "@asem/core";
 import type { ResolvedProfile } from "@asem/ops";
 import type { RepoAliasStatus } from "./repo-alias.ts";
@@ -318,6 +319,21 @@ export function renderMessagePage(page: ListMessagesOutput): string[] {
   if (page.hasMore) {
     lines.push(`has more; continue with --cursor ${page.nextCursor}`);
   }
+  return lines;
+}
+
+/**
+ * Render one bounded Inbox wait result: arrived rows (or `no new Messages`)
+ * plus a status/cursor footer. A timeout is a successful empty page, so it
+ * renders through this path — never as an error.
+ */
+export function renderWaitPage(page: WaitMessagesOutput): string[] {
+  const lines =
+    page.messages.length === 0
+      ? ["no new Messages"]
+      : page.messages.map(messageRow);
+  const status = page.timedOut ? "timed out" : page.hasMore ? "has more" : "ok";
+  lines.push(`${status}; continue with --cursor ${page.nextCursor}`);
   return lines;
 }
 

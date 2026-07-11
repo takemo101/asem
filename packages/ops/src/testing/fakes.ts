@@ -31,6 +31,7 @@ import type {
   SessionListFilter,
   SessionStatus,
   SessionUpdate,
+  Sleeper,
   Store,
   TemplateRegistryFactory,
   TemplateRunner,
@@ -494,6 +495,30 @@ export class FakeClock implements Clock {
   nowIso(): string {
     return this.now().toISOString();
   }
+
+  /** Advance the fake time by `ms` (fake-time waits; no reads consumed). */
+  advance(ms: number): void {
+    this.current = new Date(this.current.getTime() + ms);
+  }
+}
+
+/**
+ * Recording {@link Sleeper} for fake-time polling tests. Each `sleep(ms)`
+ * advances the linked {@link FakeClock} by `ms` — so bounded waits elapse
+ * deterministically — then runs the optional `onSleep` hook, which tests use to
+ * script arrivals at a given poll count.
+ */
+export class FakeSleeper implements Sleeper {
+  readonly waits: number[] = [];
+  onSleep?: (ms: number, count: number) => void | Promise<void>;
+
+  constructor(private readonly clock?: FakeClock) {}
+
+  async sleep(ms: number): Promise<void> {
+    this.waits.push(ms);
+    this.clock?.advance(ms);
+    await this.onSleep?.(ms, this.waits.length);
+  }
 }
 
 /** Deterministic incrementing id generator. */
@@ -592,8 +617,13 @@ export function makeTemplateRunner(): TemplateRunner {
   return new FakeTemplateRunner();
 }
 
-/** Build a full {@link OpsDeps} bundle of fakes; override any port per test. */
+/**
+ * Build a full {@link OpsDeps} bundle of fakes; override any port per test.
+ * The default sleeper advances the default clock, so bounded waits terminate
+ * under fake time; a test overriding `clock` should override `sleeper` too.
+ */
 export function makeOpsDeps(overrides: Partial<OpsDeps> = {}): OpsDeps {
+  const clock = new FakeClock();
   return {
     store: new FakeStore(),
     fs: new FakeFileSystem(),
@@ -605,7 +635,8 @@ export function makeOpsDeps(overrides: Partial<OpsDeps> = {}): OpsDeps {
     hostPaths: new FakeHostPaths(),
     executableResolver: new FakeExecutableResolver(),
     livenessProbe: new FakeLivenessProbe(),
-    clock: new FakeClock(),
+    clock,
+    sleeper: new FakeSleeper(clock),
     idGenerator: new FakeIdGenerator(),
     tokenGenerator: new FakeTokenGenerator(),
     logger: new MemoryLogger(),

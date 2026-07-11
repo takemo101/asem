@@ -18,6 +18,7 @@ import type {
   Logger,
   Redactor,
   ScopeResolver,
+  Sleeper,
   Store,
   TemplateRegistryFactory,
   TemplateRunner,
@@ -46,6 +47,8 @@ export interface OpsDeps {
   executableResolver: ExecutableResolver;
   livenessProbe: LivenessProbe;
   clock: Clock;
+  /** Async sleep seam used by polling operations (bounded Inbox wait). */
+  sleeper: Sleeper;
   idGenerator: IdGenerator;
   tokenGenerator: TokenGenerator;
   logger: Logger;

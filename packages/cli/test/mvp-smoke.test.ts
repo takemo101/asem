@@ -309,6 +309,7 @@ const ALL_TOOL_NAMES = [
   "peek_session",
   "report_parent",
   "send_message",
+  "wait_messages",
 ];
 
 // --- the smoke flow -------------------------------------------------------

@@ -189,6 +189,8 @@ async function dispatch(
       return runInitSession(command, env);
     case "doctor":
       return runDoctor(command, env);
+    case "run":
+      return runRun(command, env);
     case "session-create":
       return runSessionCreate(command, env);
     case "workspace-repo-list":
@@ -372,6 +374,107 @@ async function runInitSession(
   });
 }
 
+/**
+ * The CLI-local English bootstrap prompt for `asem run` root Sessions.
+ *
+ * It teaches the launched Agent the shipped durable Message protocol once, in
+ * stable wording aligned with the shared asem Skill: durable pull-based
+ * Messages, cursor-driven Inbox reads, child creation via `session create`,
+ * and Reports as communication rather than completion. The optional user
+ * request is appended under `## User request` only when `--prompt` was given,
+ * so the bootstrap stays byte-stable for promptless launches.
+ */
+export function buildRunBootstrapPrompt(input: {
+  agent: string;
+  name: string;
+  prompt?: string;
+}): string {
+  const lines = [
+    `You are the root asem Session "${input.name}" running the "${input.agent}" Agent Template.`,
+    "",
+    "asem is a local Session manager: it records durable Messages and Reports",
+    "between Sessions, but it never judges whether work succeeded.",
+    "",
+    "- Create child Sessions with `asem session create <name> --prompt '<text>'`;",
+    "  children report back to you with `asem report parent --body '<text>'`.",
+    "- Drain your Inbox oldest-first with `asem message list --inbox`, then keep",
+    "  the final nextCursor as your Inbox position.",
+    "- Wait for new Inbox Messages with `asem message wait --cursor <cursor>`; a",
+    "  timeout is a successful empty page, not an error.",
+    "- Message pane delivery is best-effort notification only; the durable record",
+    "  is the Store, so never resend automatically.",
+    "- Session status is process state, not success/failure; close child Sessions",
+    "  with `asem session close <id>` when they are done.",
+  ];
+  if (input.prompt !== undefined) {
+    lines.push("", "## User request", "", input.prompt);
+  }
+  return lines.join("\n");
+}
+
+/**
+ * `asem run <agent>`: a thin CLI composition over the existing root
+ * `create_session` use case — never a child launcher. The exact Agent Template
+ * name is forwarded verbatim (no default fallback, no fuzzy match), the Session
+ * name defaults to the agent name, and `root: true` is fixed so no parent
+ * inference can occur. After a successful create, a TTY auto-attaches unless
+ * `--no-attach`; a failed attach leaves the created Session running and exits
+ * nonzero with the external attach exit code.
+ */
+async function runRun(
+  command: Extract<CliCommand, { type: "run" }>,
+  env: DispatchEnv,
+): Promise<number> {
+  const { cwd, deps, io, isTty, attachRunner } = env;
+  const name = command.name ?? command.agent;
+  const result = await createSession(
+    deps,
+    {
+      name,
+      agent: command.agent,
+      prompt: buildRunBootstrapPrompt({
+        agent: command.agent,
+        name,
+        ...(command.prompt !== undefined ? { prompt: command.prompt } : {}),
+      }),
+      root: true,
+    },
+    { cwd },
+  );
+  if (!result.ok) {
+    return fail(io, result.error);
+  }
+  const session = result.value.session;
+  emit(io, renderCreatedSession(session));
+
+  if (command.noAttach || !isTty || attachRunner === undefined) {
+    return EXIT_OK;
+  }
+
+  // Attach reuses get_session exactly like `asem session attach` — the CLI
+  // computes no attach command itself. Any failure past this point must not
+  // undo the create: the Session stays running and the exit code turns nonzero.
+  const attach = await getSession(deps, { id: session.id }, { cwd });
+  if (!attach.ok) {
+    for (const line of renderError(attach.error)) io.err(line);
+    io.err(`attach failed; Session ${session.id} is still running`);
+    return EXIT_ERROR;
+  }
+  if (attach.value.attachCommand === undefined) {
+    // No executable attach command for this mux: leave the human the manual
+    // guidance instead of failing a successful launch.
+    emit(io, renderAttach(attach.value.session, attach.value.attachHint));
+    return EXIT_OK;
+  }
+  const attachCode = await attachRunner(attach.value.attachCommand);
+  if (attachCode !== EXIT_OK) {
+    io.err(
+      `attach failed (exit ${attachCode}); Session ${session.id} is still running — reattach with \`asem session attach ${session.id}\``,
+    );
+  }
+  return attachCode;
+}
+
 async function runSessionCreate(
   command: Extract<CliCommand, { type: "session-create" }>,
   { cwd, deps, io }: DispatchEnv,
@@ -483,22 +586,27 @@ async function runSessionAttach(
   // Attach is a thin host-local read/execute: it reuses get_session for the
   // scoped domain lookup and either executes or renders the attach hint it
   // surfaces. The CLI does no domain lookup or attach-command computation
-  // itself, and adds no MCP attach semantics.
+  // itself, and adds no MCP attach semantics. The external attach process's
+  // exit status is this command's exit status, so a failed attach cannot
+  // masquerade as success.
   const result = await getSession(deps, { id: command.id }, { cwd });
-  return render(io, result, (value) => {
-    if (command.json) {
-      emitJson(io, {
-        session: value.session,
-        attachHint: value.attachHint ?? null,
-        attachCommand: value.attachCommand ?? null,
-      });
-      return;
-    }
-    if (value.attachCommand !== undefined && attachRunner !== undefined) {
-      return attachRunner(value.attachCommand);
-    }
-    emit(io, renderAttach(value.session, value.attachHint));
-  });
+  if (!result.ok) {
+    return fail(io, result.error);
+  }
+  const value = result.value;
+  if (command.json) {
+    emitJson(io, {
+      session: value.session,
+      attachHint: value.attachHint ?? null,
+      attachCommand: value.attachCommand ?? null,
+    });
+    return EXIT_OK;
+  }
+  if (value.attachCommand !== undefined && attachRunner !== undefined) {
+    return attachRunner(value.attachCommand);
+  }
+  emit(io, renderAttach(value.session, value.attachHint));
+  return EXIT_OK;
 }
 
 async function runSessionClose(

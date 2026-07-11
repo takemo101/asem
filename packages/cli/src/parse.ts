@@ -48,6 +48,13 @@ export type CliCommand =
       root?: boolean;
       json: boolean;
     }
+  | {
+      type: "run";
+      agent: string;
+      name?: string;
+      prompt?: string;
+      noAttach: boolean;
+    }
   | { type: "workspace-repo-list"; json: boolean }
   | { type: "profile-list"; json: boolean }
   | { type: "profile-get"; id: string; json: boolean }
@@ -373,6 +380,50 @@ function parseSessionCreate(args: string[]): ParseResult {
     ...(repo !== undefined ? { repo } : {}),
     ...(parent !== undefined ? { parentSessionId: parent } : {}),
     ...(isRoot ? { root: true } : {}),
+  };
+  return { kind: "command", command };
+}
+
+/**
+ * `asem run <agent> [--name <name>] [--prompt <text>] [--no-attach]`.
+ *
+ * Root-only human-facing Agent launcher (design "asem run P0"): the exact
+ * configured Agent Template name is the required positional, and only the three
+ * documented flags exist. There is deliberately no `--parent`, `--root`,
+ * `--json`, or `--agent` — every run-created Session is root, so any
+ * parent-selection surface here would blur the child-launch boundary that
+ * belongs to `asem session create`.
+ */
+function parseRun(args: string[]): ParseResult {
+  const flags = parseFlags(args, {
+    booleans: ["no-attach"],
+    values: ["name", "prompt"],
+  });
+  if (!flags.ok) return { kind: "error", error: flags.error };
+  const { values, booleans, positionals } = flags.value;
+
+  const agent = positionals[0];
+  if (agent === undefined || agent.length === 0) {
+    return invalid("an agent is required (use `asem run <agent>`)");
+  }
+  if (positionals.length > 1) {
+    return invalid("unexpected extra arguments", {
+      extra: positionals.slice(1),
+    });
+  }
+
+  const name = values.get("name");
+  if (name !== undefined && name.length === 0) {
+    return invalid("option --name requires a non-empty value");
+  }
+  const prompt = values.get("prompt");
+
+  const command: CliCommand = {
+    type: "run",
+    agent,
+    noAttach: booleans.has("no-attach"),
+    ...(name !== undefined ? { name } : {}),
+    ...(prompt !== undefined ? { prompt } : {}),
   };
   return { kind: "command", command };
 }
@@ -943,7 +994,7 @@ const HELP_SUBCOMMANDS: Record<string, readonly string[]> = {
 };
 
 function helpResult(command: string, rest: readonly string[]): ParseResult {
-  const directCommands = ["doctor", "init", "init-session", "tui"];
+  const directCommands = ["doctor", "init", "init-session", "run", "tui"];
   if (directCommands.includes(command)) {
     const first = rest[0];
     if (first !== undefined && !first.startsWith("-") && !isHelpFlag(first)) {
@@ -959,6 +1010,7 @@ function helpResult(command: string, rest: readonly string[]): ParseResult {
         "doctor",
         "init",
         "init-session",
+        "run",
         "session",
         "workspace",
         "profile",
@@ -1009,6 +1061,8 @@ export function parseArgs(argv: readonly string[]): ParseResult {
       return parseInitSession(rest);
     case "doctor":
       return parseDoctor(rest);
+    case "run":
+      return parseRun(rest);
     case "session":
       return parseSession(rest);
     case "workspace":
@@ -1029,6 +1083,7 @@ export function parseArgs(argv: readonly string[]): ParseResult {
           "doctor",
           "init",
           "init-session",
+          "run",
           "session",
           "workspace",
           "profile",

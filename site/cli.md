@@ -21,6 +21,8 @@ asem doctor
 ## Sessions
 
 ```sh
+asem run claude
+asem run claude --name reviewer --prompt "Review this branch"
 asem session create reviewer-1 --profile reviewer --prompt "Review this branch"
 asem session list
 asem session get <session-id>
@@ -29,6 +31,8 @@ asem session attach <session-id>
 asem session close <session-id>
 asem session delete <session-id>
 ```
+
+`run` is the human entry point: it launches a root Session (no parent) from an exact configured Agent Template name. The Session name defaults to the agent name, and the launched Agent receives an English bootstrap prompt teaching the asem Message protocol; `--prompt` appends your request under `## User request`. On a TTY, `run` attaches to the new Session unless `--no-attach`; without a TTY it never attaches. If the attach fails, the Session keeps running and the command exits nonzero. There is no `--parent` — child Sessions stay `asem session create`.
 
 `session peek` reads a live Multiplexer pane snapshot without attaching. It is not durable Message history and is returned without redaction, so use it only inside the Workspace trust boundary.
 

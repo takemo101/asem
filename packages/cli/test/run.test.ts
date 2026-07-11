@@ -896,6 +896,186 @@ describe("runCli session create --repo", () => {
   });
 });
 
+describe("runCli run", () => {
+  const HERDR_CREATE_JSON = JSON.stringify({
+    result: {
+      workspace: { workspace_id: "herdr-workspace-1" },
+      root_pane: { pane_id: "pane-1" },
+      tab: { tab_id: "tab-1" },
+    },
+  });
+
+  /** Deps whose mux `create` step yields capturable refs so a launch succeeds. */
+  function runDeps(options: { store?: FakeStore } = {}) {
+    const store = options.store ?? new FakeStore();
+    const fs = new FakeFileSystem();
+    const deps = makeOpsDeps({
+      store,
+      fs,
+      configLoader: new FakeConfigLoader(),
+      scopeResolver: new FakeScopeResolver(SCOPE),
+      currentSessionResolver: new FakeCurrentSessionResolver(null),
+      templateRunner: new FakeTemplateRunner({
+        commands: [{ stdout: "asem" }, { stdout: HERDR_CREATE_JSON }],
+      }),
+    });
+    return { deps, store, fs };
+  }
+
+  /** Run `asem run …` with explicit TTY state and an optional attach runner. */
+  async function runRun(
+    argv: string[],
+    deps: ReturnType<typeof runDeps>["deps"],
+    options: {
+      isTty?: boolean;
+      attachRunner?: (command: { argv: string[] }) => Promise<number>;
+    } = {},
+  ) {
+    const io = new BufferIo();
+    const code = await runCli({
+      argv,
+      cwd: CWD,
+      deps,
+      io,
+      isTty: options.isTty ?? false,
+      ...(options.attachRunner !== undefined
+        ? { attachRunner: options.attachRunner }
+        : {}),
+    });
+    return { io, code };
+  }
+
+  test("creates a root Session whose name defaults to the agent", async () => {
+    const { deps, store } = runDeps();
+    const { io, code } = await runRun(["run", "claude"], deps);
+    expect(code).toBe(EXIT_OK);
+    expect(io.outText()).toContain("created claude");
+    expect(store.sessions).toHaveLength(1);
+    const session = requiredAt(store.sessions, 0, "session");
+    expect(session.name).toBe("claude");
+    expect(session.agent).toBe("claude");
+    // Every run-created Session is root; there is no parent inference.
+    expect(session.parentSessionId).toBeNull();
+  });
+
+  test("--name overrides the default Session name", async () => {
+    const { deps, store } = runDeps();
+    const { code } = await runRun(["run", "claude", "--name", "helper"], deps);
+    expect(code).toBe(EXIT_OK);
+    expect(store.sessions[0]?.name).toBe("helper");
+  });
+
+  test("an unknown agent fails the exact Template lookup with no Session", async () => {
+    const { deps, store } = runDeps();
+    const { io, code } = await runRun(["run", "ghost"], deps);
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("agent_template_not_found");
+    expect(store.sessions).toHaveLength(0);
+  });
+
+  test("a duplicate default name surfaces session_name_conflict", async () => {
+    const store = new FakeStore();
+    store.sessions.push(makeSession({ name: "claude" }));
+    const { deps } = runDeps({ store });
+    const { io, code } = await runRun(["run", "claude"], deps);
+    expect(code).toBe(EXIT_ERROR);
+    expect(io.errText()).toContain("session_name_conflict");
+    expect(store.sessions).toHaveLength(1);
+  });
+
+  test("writes the English bootstrap prompt without a User request section", async () => {
+    const { deps, fs } = runDeps();
+    const { code } = await runRun(["run", "claude"], deps);
+    expect(code).toBe(EXIT_OK);
+    const prompt = fs.files.get(
+      `${SCOPE.worktreeRoot}/.asem/sessions/s_0001/prompt.md`,
+    )?.contents;
+    if (prompt === undefined) throw new Error("prompt.md not written");
+    // The bootstrap teaches the shipped Message protocol in stable English.
+    expect(prompt).toContain("root asem Session");
+    expect(prompt).toContain("asem session create");
+    expect(prompt).toContain("asem message list --inbox");
+    expect(prompt).toContain("asem message wait --cursor");
+    expect(prompt).not.toContain("## User request");
+  });
+
+  test("--prompt appends a User request section after the bootstrap", async () => {
+    const { deps, fs } = runDeps();
+    const { code } = await runRun(
+      ["run", "claude", "--prompt", "fix the flaky build"],
+      deps,
+    );
+    expect(code).toBe(EXIT_OK);
+    const prompt = fs.files.get(
+      `${SCOPE.worktreeRoot}/.asem/sessions/s_0001/prompt.md`,
+    )?.contents;
+    if (prompt === undefined) throw new Error("prompt.md not written");
+    expect(prompt).toContain("## User request");
+    expect(prompt).toContain("fix the flaky build");
+    // Bootstrap first, user request second.
+    expect(prompt.indexOf("root asem Session")).toBeLessThan(
+      prompt.indexOf("## User request"),
+    );
+  });
+
+  test("a TTY auto-attaches after a successful create", async () => {
+    const { deps } = runDeps();
+    const commands: string[][] = [];
+    const { code } = await runRun(["run", "claude"], deps, {
+      isTty: true,
+      attachRunner: async (command) => {
+        commands.push(command.argv);
+        return EXIT_OK;
+      },
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(commands).toHaveLength(1);
+  });
+
+  test("--no-attach skips the attach even on a TTY", async () => {
+    const { deps, store } = runDeps();
+    const commands: string[][] = [];
+    const { code } = await runRun(["run", "claude", "--no-attach"], deps, {
+      isTty: true,
+      attachRunner: async (command) => {
+        commands.push(command.argv);
+        return EXIT_OK;
+      },
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(commands).toHaveLength(0);
+    expect(store.sessions).toHaveLength(1);
+  });
+
+  test("a non-TTY never attaches", async () => {
+    const { deps, store } = runDeps();
+    const commands: string[][] = [];
+    const { code } = await runRun(["run", "claude"], deps, {
+      isTty: false,
+      attachRunner: async (command) => {
+        commands.push(command.argv);
+        return EXIT_OK;
+      },
+    });
+    expect(code).toBe(EXIT_OK);
+    expect(commands).toHaveLength(0);
+    expect(store.sessions).toHaveLength(1);
+  });
+
+  test("attach failure preserves the Session and returns nonzero", async () => {
+    const { deps, store } = runDeps();
+    const { io, code } = await runRun(["run", "claude"], deps, {
+      isTty: true,
+      attachRunner: async () => 3,
+    });
+    expect(code).toBe(3);
+    // The created Session must survive a failed attach.
+    expect(store.sessions).toHaveLength(1);
+    expect(store.sessions[0]?.status).toBe("running");
+    expect(io.errText()).toContain("attach");
+  });
+});
+
 describe("runCli workspace repo list", () => {
   /** Deps whose root config declares aliases; store throws if touched. */
   function listDeps() {
@@ -1287,6 +1467,25 @@ describe("runCli session attach", () => {
       "herdr --session 'asem' workspace focus 'herdr-workspace-1' >/dev/null && herdr --session 'asem' tab focus 'tab-1' >/dev/null && if [ \"$" +
         "{HERDR_ENV:-}\" = '1' ]; then :; else exec herdr session attach 'asem'; fi",
     ]);
+  });
+
+  test("propagates the attach runner's external exit code", async () => {
+    const store = new FakeStore();
+    const s = makeSession({ mux: "herdr", muxRef: HERDR_REF });
+    store.sessions.push(s);
+    const { deps } = makeCliFixture({ store });
+    const io = new BufferIo();
+
+    const code = await runCli({
+      argv: ["session", "attach", s.id],
+      cwd: CWD,
+      deps,
+      io,
+      attachRunner: async () => 5,
+    });
+
+    // The external attach process's exit status is the command's exit status.
+    expect(code).toBe(5);
   });
 
   test("attach of an unknown id surfaces session_not_found (exit 1)", async () => {

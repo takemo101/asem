@@ -499,6 +499,66 @@ describe("parseArgs session create", () => {
   });
 });
 
+describe("parseArgs run", () => {
+  test("parses the agent positional with attach defaults", () => {
+    expect(command(["run", "claude"])).toEqual({
+      type: "run",
+      agent: "claude",
+      noAttach: false,
+    });
+  });
+
+  test("parses --name, --prompt, and --no-attach", () => {
+    expect(
+      command([
+        "run",
+        "claude",
+        "--name",
+        "helper",
+        "--prompt",
+        "fix the build",
+        "--no-attach",
+      ]),
+    ).toEqual({
+      type: "run",
+      agent: "claude",
+      name: "helper",
+      prompt: "fix the build",
+      noAttach: true,
+    });
+  });
+
+  test("missing agent is invalid", () => {
+    expect(errorCode(["run"])).toBe("invalid_input");
+  });
+
+  test("empty --name is invalid", () => {
+    expect(errorCode(["run", "claude", "--name", ""])).toBe("invalid_input");
+  });
+
+  test("rejects extra positionals", () => {
+    expect(errorCode(["run", "claude", "extra"])).toBe("invalid_input");
+  });
+
+  test("rejects any parent-selection or unsupported flags", () => {
+    // Root-only launcher: only --name, --prompt, and --no-attach exist.
+    expect(errorCode(["run", "claude", "--parent", "s_1"])).toBe(
+      "invalid_input",
+    );
+    expect(errorCode(["run", "claude", "--root"])).toBe("invalid_input");
+    expect(errorCode(["run", "claude", "--json"])).toBe("invalid_input");
+    expect(errorCode(["run", "claude", "--agent", "codex"])).toBe(
+      "invalid_input",
+    );
+  });
+
+  test("run --help carries the run topic", () => {
+    const result = parseArgs(["run", "--help"]);
+    expect(result.kind).toBe("help");
+    if (result.kind === "help") expect(result.topic).toBe("run");
+  });
+});
+
 describe("parseArgs workspace repo list", () => {
   test("maps `workspace repo list` and defaults json to false", () => {
     expect(command(["workspace", "repo", "list"])).toEqual({

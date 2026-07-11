@@ -4,6 +4,7 @@ import { FakeFileSystem } from "../../ops/src/testing/fakes.ts";
 import {
   createSurfaceLogger,
   FileCurrentSessionResolver,
+  runAttachCommand,
 } from "../src/runtime/adapters.ts";
 
 const scope: EffectiveScope = {
@@ -52,6 +53,26 @@ describe("FileCurrentSessionResolver", () => {
         process.env.AS_SESSION_TOKEN = previousToken;
       }
     }
+  });
+});
+
+describe("runAttachCommand", () => {
+  test("propagates the external attach process exit code", async () => {
+    expect(await runAttachCommand({ argv: ["sh", "-c", "exit 7"] })).toBe(7);
+  });
+
+  test("returns 0 when the attach process succeeds", async () => {
+    expect(await runAttachCommand({ argv: ["sh", "-c", "exit 0"] })).toBe(0);
+  });
+
+  test("returns 1 when the program cannot be spawned", async () => {
+    expect(
+      await runAttachCommand({ argv: ["/nonexistent-asem-attach-binary"] }),
+    ).toBe(1);
+  });
+
+  test("returns 1 for an empty argv", async () => {
+    expect(await runAttachCommand({ argv: [] })).toBe(1);
   });
 });
 

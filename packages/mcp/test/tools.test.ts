@@ -5,7 +5,12 @@ import {
   type Message,
   type Session,
 } from "@asem/core";
-import { getSession, listProfiles, listSessions } from "@asem/ops";
+import {
+  getSession,
+  listMessages,
+  listProfiles,
+  listSessions,
+} from "@asem/ops";
 import { FakeTemplateRunner } from "@asem/runtime";
 import {
   FakeConfigLoader,
@@ -168,6 +173,20 @@ describe("MCP tool registry", () => {
     expect(schema.properties.force).toMatchObject({ type: "boolean" });
     expect(schema.required).toContain("id");
     expect(schema.required).not.toContain("force");
+  });
+
+  test("list_messages input schema exposes optional top-level cursor and limit", () => {
+    const tool = listMcpTools().find((t) => t.name === "list_messages");
+    const schema = tool?.inputSchema as {
+      properties: Record<string, unknown>;
+      required: string[];
+    };
+    expect(schema.properties).toHaveProperty("cursor");
+    expect(schema.properties.cursor).toMatchObject({ type: "string" });
+    expect(schema.properties).toHaveProperty("limit");
+    expect(schema.properties.limit).toMatchObject({ type: "number" });
+    expect(schema.required).not.toContain("cursor");
+    expect(schema.required).not.toContain("limit");
   });
 
   test("get_profile requires an id", () => {
@@ -337,6 +356,88 @@ describe("MCP tool calls", () => {
     expect(store.messages).toHaveLength(1);
     expect(store.messages[0]?.body).toBe("hello");
     expect(store.messages[0]?.fromSessionId).toBe("current");
+  });
+
+  test("list_messages forwards top-level cursor/limit and pages without duplicates", async () => {
+    const store = new FakeStore();
+    const current = makeSession({ id: "current" });
+    store.messages.push(
+      makeMessage({ id: "m_a", body: "first" }),
+      makeMessage({ id: "m_b", body: "second" }),
+      makeMessage({ id: "m_c", body: "third" }),
+    );
+    const deps = withCurrentSession(store, current);
+
+    const first = parsed(
+      await callMcpTool("list_messages", { limit: 2 }, { ...ctx, deps }),
+    ) as { messages: { id: string }[]; nextCursor: string; hasMore: boolean };
+    expect(first.messages.map((m) => m.id)).toEqual(["m_a", "m_b"]);
+    expect(first.hasMore).toBe(true);
+
+    const second = parsed(
+      await callMcpTool(
+        "list_messages",
+        { cursor: first.nextCursor, limit: 2 },
+        { ...ctx, deps },
+      ),
+    ) as { messages: { id: string }[]; hasMore: boolean };
+    expect(second.messages.map((m) => m.id)).toEqual(["m_c"]);
+    expect(second.hasMore).toBe(false);
+  });
+
+  test("list_messages returns the shared page envelope with only public Message fields", async () => {
+    const store = new FakeStore();
+    const current = makeSession({ id: "current" });
+    store.messages.push(
+      makeMessage({
+        id: "m_failed",
+        deliveredAt: null,
+        deliveryError: "notification_failed: pane gone",
+      }),
+    );
+    const deps = withCurrentSession(store, current);
+
+    const result = await callMcpTool("list_messages", {}, { ...ctx, deps });
+    expect(result.isError).toBeUndefined();
+    const page = parsed(result) as {
+      messages: Record<string, unknown>[];
+      nextCursor: string;
+      hasMore: boolean;
+    };
+    expect(Object.keys(page).sort()).toEqual([
+      "hasMore",
+      "messages",
+      "nextCursor",
+    ]);
+    expect(Object.keys(page.messages[0] ?? {}).sort()).toEqual([
+      "body",
+      "createdAt",
+      "delivery",
+      "fromSessionId",
+      "id",
+      "kind",
+      "toSessionId",
+    ]);
+    // Internal fields never cross the surface, in any spelling.
+    expect(text(result)).not.toContain("formattedBody");
+    expect(text(result)).not.toContain("workspaceId");
+    expect(text(result)).not.toContain("worktreeRoot");
+    expect(text(result)).not.toContain("sequence");
+  });
+
+  test("list_messages result equals the shared ops page envelope (CLI parity)", async () => {
+    const store = new FakeStore();
+    const current = makeSession({ id: "current" });
+    store.messages.push(makeMessage({ id: "m_parity", body: "parity" }));
+    const deps = withCurrentSession(store, current);
+
+    const viaTool = parsed(
+      await callMcpTool("list_messages", {}, { ...ctx, deps }),
+    );
+    const direct = await listMessages(deps, {}, { ...ctx, origin: "agent" });
+    if (!direct.ok) throw new Error("direct listMessages failed");
+    // JSON round-trip so the comparison sees exactly what the wire carries.
+    expect(viaTool).toEqual(JSON.parse(JSON.stringify(direct.value)));
   });
 
   test("close_session force records a stale live Session closed when mux close fails", async () => {

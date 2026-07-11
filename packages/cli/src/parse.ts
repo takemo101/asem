@@ -68,7 +68,14 @@ export type CliCommand =
   | { type: "session-attach"; id: string; json: boolean }
   | { type: "session-close"; id: string; force: boolean; json: boolean }
   | { type: "session-delete"; id: string; force: boolean; json: boolean }
-  | { type: "message-list"; filter?: MessageListFilter; json: boolean }
+  | {
+      type: "message-list";
+      filter?: MessageListFilter;
+      /** Opaque `nextCursor` from a prior page, or the literal `latest`. */
+      cursor?: string;
+      limit?: number;
+      json: boolean;
+    }
   | {
       type: "message-wait";
       toSessionId: string;
@@ -691,7 +698,7 @@ function parseProfile(args: string[]): ParseResult {
 function parseMessageList(args: string[]): ParseResult {
   const flags = parseFlags(args, {
     booleans: ["inbox", "undelivered", "json"],
-    values: ["to"],
+    values: ["to", "cursor", "limit"],
   });
   if (!flags.ok) return { kind: "error", error: flags.error };
   const { values, booleans } = flags.value;
@@ -707,12 +714,20 @@ function parseMessageList(args: string[]): ParseResult {
       ...(undelivered ? { undelivered: true } : {}),
     };
   }
+  // The cursor is forwarded verbatim (opaque, or the literal `latest`) and the
+  // limit as a plain positive integer; page-size bounds and cursor validity are
+  // the shared operation's contract, not the CLI's.
+  const cursor = values.get("cursor");
+  const limit = parsePositiveInt(values.get("limit"), "limit");
+  if (!limit.ok) return { kind: "error", error: limit.error };
   return {
     kind: "command",
     command: {
       type: "message-list",
       json: booleans.has("json"),
       ...(filter !== undefined ? { filter } : {}),
+      ...(cursor !== undefined ? { cursor } : {}),
+      ...(limit.value === 0 ? {} : { limit: limit.value }),
     },
   };
 }

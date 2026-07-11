@@ -68,6 +68,29 @@ describe("loadCockpitSnapshot", () => {
     expect(snap.messages.map((m) => m.id)).toEqual(["m_here"]);
   });
 
+  test("snapshot keeps the explicitly internal unbounded Message read", async () => {
+    // The cockpit needs full history, so it reads the internal Workspace
+    // snapshot rather than the public paginated list — more Messages than one
+    // public page (max 50) still all arrive in a single snapshot.
+    const { MESSAGE_PAGE_MAX_LIMIT } = await import("@asem/core");
+    const store = new FakeStore();
+    const total = MESSAGE_PAGE_MAX_LIMIT + 10;
+    for (let i = 0; i < total; i += 1) {
+      store.messages.push(makeMessage({ id: `m_bulk_${i}` }));
+    }
+    const deps = makeOpsDeps({ store });
+
+    const workspaceSnap = expectOk(
+      await loadCockpitSnapshot(deps, CTX, "workspace"),
+    );
+    expect(workspaceSnap.messages).toHaveLength(total);
+
+    const worktreeSnap = expectOk(
+      await loadCockpitSnapshot(deps, CTX, "worktree"),
+    );
+    expect(worktreeSnap.messages).toHaveLength(total);
+  });
+
   test("workspace mode loads Sessions across worktree roots", async () => {
     const store = new FakeStore();
     store.sessions.push(

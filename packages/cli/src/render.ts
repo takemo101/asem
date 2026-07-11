@@ -12,6 +12,7 @@ import {
   type DoctorOutput,
   type InitProjectOutput,
   type InitSessionOutput,
+  type ListMessagesOutput,
   type Message,
   type OperationError,
   type PublicMessage,
@@ -305,6 +306,19 @@ export function renderMessageList(
     return ["no messages in scope"];
   }
   return messages.map(messageRow);
+}
+
+/**
+ * Render one Message list page: the rows plus a pagination footer when another
+ * page is available. The footer shows only the opaque `nextCursor` for the
+ * caller to pass back with `--cursor` — never decoded cursor internals.
+ */
+export function renderMessagePage(page: ListMessagesOutput): string[] {
+  const lines = renderMessageList(page.messages);
+  if (page.hasMore) {
+    lines.push(`has more; continue with --cursor ${page.nextCursor}`);
+  }
+  return lines;
 }
 
 /**

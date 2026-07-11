@@ -228,8 +228,20 @@ const toolDefinitions = {
   },
   list_messages: {
     name: "list_messages",
-    description: "List Message history in the current effective scope.",
-    inputSchema: objectSchema({ filter: messageListFilterSchema }),
+    description:
+      "List one page of Message history in the current effective scope. Every result carries nextCursor and hasMore.",
+    inputSchema: objectSchema({
+      filter: messageListFilterSchema,
+      cursor: {
+        type: "string",
+        description:
+          'Opaque nextCursor from a prior page, or "latest" to start at the tail (returns an empty page).',
+      },
+      limit: {
+        type: "number",
+        description: "Messages per page (default 20, max 50).",
+      },
+    }),
   },
 } satisfies Record<string, McpToolDefinition>;
 

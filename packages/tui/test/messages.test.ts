@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { MESSAGE_PAGE_MAX_LIMIT } from "@asem/core";
 import {
   badgeCount,
   messageRows,
@@ -87,6 +88,20 @@ describe("messageRows", () => {
     });
     const rows = messageRows([m], "sel", []);
     expect(rows[0]!.timeLabel).toBe("10:05");
+  });
+
+  test("renders the full internal snapshot beyond one public page limit", () => {
+    // The cockpit consumes the explicitly internal Workspace snapshot, not the
+    // public paginated list, so its rows are never capped at a page size.
+    const sel = makeSession({ id: "sel" });
+    const total = MESSAGE_PAGE_MAX_LIMIT + 10;
+    const messages = Array.from({ length: total }, (_, i) =>
+      makeMessage({
+        id: `m_bulk_${String(i).padStart(3, "0")}`,
+        toSessionId: "sel",
+      }),
+    );
+    expect(messageRows(messages, "sel", [sel])).toHaveLength(total);
   });
 
   test("relatedMessages includes both sent and received", () => {

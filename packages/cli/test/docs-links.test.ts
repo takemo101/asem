@@ -15,8 +15,12 @@ import { dirname, join, resolve } from "node:path";
 // packages/cli/test → repo root.
 const REPO_ROOT = resolve(import.meta.dir, "..", "..", "..");
 
-/** The durable Markdown surface this scan owns. */
-const ROOTS = ["docs", "AGENTS.md", "CONTEXT.md"];
+/**
+ * The durable Markdown surface this scan owns. `site/` is excluded because its
+ * VitePress pages use site-absolute route links (`/quickstart`), not relative
+ * file links; `bun run docs:build` validates those.
+ */
+const ROOTS = ["docs", "AGENTS.md", "CONTEXT.md", "README.md"];
 
 const PLACEHOLDER_MARKERS = ["FIXME", "TKTK", "lorem ipsum"];
 
@@ -72,6 +76,18 @@ describe("durable docs", () => {
       }
     }
     expect(broken).toEqual([]);
+  });
+
+  test("site MCP page gives integration-client wait deadline guidance", () => {
+    const contents = readFileSync(
+      join(REPO_ROOT, "site", "mcp-and-skills.md"),
+      "utf8",
+    );
+    expect(contents).toContain(
+      "client tool-call deadline strictly longer than the requested `timeoutMs`",
+    );
+    expect(contents).toContain("(default 30s, max 60s)");
+    expect(contents).toContain("successful empty page with `timedOut: true`");
   });
 
   test("no leftover placeholder markers", () => {

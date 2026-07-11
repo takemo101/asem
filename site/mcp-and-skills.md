@@ -44,7 +44,9 @@ Unsupported scopes fail clearly instead of silently falling back.
 
 The MCP server exposes primitive Session and Message operations. It does not expose Integration Target setup commands.
 
-Use the MCP surface for AI-facing local operations such as listing Sessions, peeking at live Session pane output, reading Message history, sending Messages, and reporting to a parent Session.
+Use the MCP surface for AI-facing local operations such as listing Sessions, peeking at live Session pane output, reading paginated Message history, running bounded Inbox waits, sending Messages, and reporting to a parent Session.
+
+`wait_messages` bounds each Inbox wait with `timeoutMs` (default 30s, max 60s). Configure the Integration Target's client tool-call deadline strictly longer than the requested `timeoutMs`: an operation timeout is a successful empty page with `timedOut: true`, not a client-side failure, and cutting the call short client-side discards that page and its cursor.
 
 `peek_session` returns a live Multiplexer pane snapshot for a Session in the same Workspace. It does not attach to the pane, does not persist a transcript, and does not redact terminal output.
 

@@ -206,6 +206,22 @@ describe("MCP tool registry", () => {
     expect(schema.required).not.toContain("timeoutMs");
   });
 
+  test("wait_messages tells clients to set a tool-call deadline beyond timeoutMs", () => {
+    const tool = listMcpTools().find((t) => t.name === "wait_messages");
+    expect(tool?.description).toContain(
+      "successful empty page with timedOut true",
+    );
+    const schema = tool?.inputSchema as {
+      properties: { timeoutMs: { description: string } };
+    };
+    const timeoutMs = schema.properties.timeoutMs.description;
+    expect(timeoutMs).toContain("default 30000, max 60000");
+    expect(timeoutMs).toContain(
+      "client tool-call deadline strictly longer than this value",
+    );
+    expect(timeoutMs).toContain("successful empty page, not an error");
+  });
+
   test("get_profile requires an id", () => {
     const tool = listMcpTools().find((t) => t.name === "get_profile");
     const schema = tool?.inputSchema as { required: string[] };

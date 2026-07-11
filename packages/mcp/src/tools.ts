@@ -262,7 +262,8 @@ const toolDefinitions = {
         },
         timeoutMs: {
           type: "number",
-          description: "Wait bound in milliseconds (default 30000, max 60000).",
+          description:
+            "Wait bound in milliseconds (default 30000, max 60000). Set the client tool-call deadline strictly longer than this value; an operation timeout returns a successful empty page, not an error.",
         },
       },
       ["cursor"],

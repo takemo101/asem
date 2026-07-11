@@ -10,7 +10,13 @@ Session status is process or connection state only. It is not work outcome. A cl
 
 ## Message
 
-A Message is durable local communication addressed to a Session. The local store row is the source of truth. Multiplexer pane delivery is best-effort notification/input.
+A Message is durable local communication addressed to a Session. The local store row is the source of truth. Multiplexer pane delivery is best-effort notification/input, reported as public `delivery` state: `delivered`, `undelivered`, or `failed`. A `failed` delivery is a notification failure only; the Message is stored and is never automatically resent.
+
+Reading is pull-based. Surfaces return one page at a time as `{ messages, nextCursor, hasMore }`, ordered oldest to newest, and expose only the public envelope fields: `id`, `fromSessionId`, `toSessionId`, `kind`, `body`, `createdAt`, and `delivery`. Bodies are capped at 65,536 UTF-8 bytes; pages default to 20 and cap at 50 Messages.
+
+## Message Cursor
+
+A Message Cursor is an opaque position in one paged Message query. Every page carries a `nextCursor`; passing it back with the same filter continues without duplicates or skips. `latest` starts at the tail (an empty page) for an explicit fresh start. A bounded Inbox wait requires a concrete cursor and treats timeout as a successful empty page (`timedOut: true`). Cursors are bound to one query and never grant access.
 
 ## Report
 

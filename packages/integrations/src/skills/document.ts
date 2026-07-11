@@ -35,6 +35,7 @@ Prefer MCP tools when available:
 - \`create_session\`
 - \`send_message\`
 - \`list_messages\`
+- \`wait_messages\`
 - \`peek_session\`
 - \`report_parent\`
 - \`close_session\`
@@ -43,21 +44,24 @@ Fallback CLI commands:
 
 - \`asem session create\`
 - \`asem message send\`
+- \`asem message list\`
 - \`asem message wait\`
 - \`asem session peek\`
 - \`asem report parent\`
 - \`asem session close\`
 - \`asem workspace repo list\`
 
-## Normal playbook
+## Message protocol
 
-1. Create a bounded worker Session.
-2. Wait for its Report.
-3. Use \`peek_session\` or \`asem session peek <id>\` when you need a live pane snapshot before the child reports.
-4. For non-trivial work, create a separate reviewer Session.
-5. If review blocks, send the worker a Message with repair instructions.
-6. Repeat until acceptable.
-7. Close child Sessions; do not delete history unless explicitly asked.
+Messages are durable and pull-only; pane delivery is best-effort notification.
+
+1. On ordinary startup, drain your Inbox oldest-first: \`list_messages({ filter: { inbox: true } })\`, then follow \`nextCursor\` while \`hasMore\` is true.
+2. Retain the final \`nextCursor\`; it is your Inbox position for later list/wait calls.
+3. Wait (\`wait_messages({ cursor })\` / \`asem message wait --cursor <cursor>\`) only when the human prompt or your Agent Profile says to wait. A timeout is success — an empty page with \`timedOut: true\`; keep its cursor and decide again. Set your client tool-call deadline strictly longer than the requested \`timeoutMs\` (default 30s, max 60s) so the operation can return that page instead of being cancelled mid-call.
+4. Use \`cursor: "latest"\` only for an explicit, intentional tail start; it skips history.
+5. \`delivery.status: "failed"\` is notification failure only; the Message is stored. Never resend automatically.
+
+Public results carry only \`id\`, \`fromSessionId\`, \`toSessionId\`, \`kind\`, \`body\`, \`createdAt\`, \`delivery\`. Bodies cap at 64 KiB; pages default to 20 and cap at 50. Cursors are opaque, query-bound, and never grant access.
 
 ## Workspace repo aliases
 
@@ -104,6 +108,7 @@ Use \`peek_session\` (or \`asem session peek <id>\`) to inspect a Session's live
 - Report is communication, not completion.
 - Keep Parent/Report/Message semantics inside one Workspace; \`--repo\` is just cwd selection.
 - Agent Profiles shape prompts; they are not workflow roles.
+- Close child Sessions when done; do not delete history unless explicitly asked.
 - Do not edit .asem runtime files directly, especially \`.asem/sessions/\`, \`.asem/tokens/\`, or \`.asem/current-session*.json\`.
 `;
 

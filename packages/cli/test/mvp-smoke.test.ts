@@ -336,7 +336,9 @@ describe("MVP fake-runtime smoke flow", () => {
     // message-list: full history, self-addressed inbox, and the undelivered view.
     const all = expectOk(await listMessages(w.base, {}, CTX));
     expect(all.messages).toHaveLength(3);
-    expect(all.messages.every((m) => m.deliveredAt !== null)).toBe(true);
+    expect(all.messages.every((m) => m.delivery.status === "delivered")).toBe(
+      true,
+    );
 
     w.currentSession.ref = {
       sessionId: w.ids.reviewer,

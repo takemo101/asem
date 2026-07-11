@@ -26,7 +26,6 @@ import {
   closeSession,
   deleteSession,
   getSession,
-  listMessages,
   listSessions,
   loadWorkspaceSnapshot,
   type OpContext,
@@ -86,15 +85,18 @@ export async function loadCockpitSnapshot(
   if (!sessions.ok) {
     return sessions;
   }
-  const messages = await listMessages(deps, { filter }, ctx);
-  if (!messages.ok) {
-    return messages;
-  }
+  // The cockpit needs the full internal Message history, so it keeps the
+  // explicit Workspace snapshot read rather than the public paginated list
+  // (design "Cursor-based Message listing": snapshot reads stay internal).
+  const messages = await deps.store.listMessagesByWorkspace(
+    context.value.scope.workspaceId,
+    filter,
+  );
   return {
     ok: true,
     value: {
       sessions: sessions.value.sessions,
-      messages: messages.value.messages,
+      messages,
     },
   };
 }

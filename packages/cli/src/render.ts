@@ -277,9 +277,18 @@ export function renderRepoList(rows: readonly RepoAliasStatus[]): string[] {
 
 // --- messages --------------------------------------------------------------
 
-function messageRow(message: Message): string {
+function messageRow(message: Message | PublicMessage): string {
   const from = message.fromSessionId ?? "-";
   const base = `${message.createdAt}  ${from} → ${message.toSessionId}  [${message.kind}]  ${message.body}`;
+  if ("delivery" in message) {
+    if (message.delivery.status === "failed") {
+      return `${base}  ! ${message.delivery.error}`;
+    }
+    if (message.delivery.status === "undelivered") {
+      return `${base}  (undelivered)`;
+    }
+    return base;
+  }
   if (message.deliveryError !== null) {
     return `${base}  ! ${message.deliveryError}`;
   }
@@ -289,7 +298,9 @@ function messageRow(message: Message): string {
   return base;
 }
 
-export function renderMessageList(messages: readonly Message[]): string[] {
+export function renderMessageList(
+  messages: readonly (Message | PublicMessage)[],
+): string[] {
   if (messages.length === 0) {
     return ["no messages in scope"];
   }

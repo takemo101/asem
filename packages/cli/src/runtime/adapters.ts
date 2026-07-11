@@ -25,6 +25,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
+  type AttachCommand,
   type Clock,
   type CommandRequest,
   type CommandResult,
@@ -376,6 +377,27 @@ export class FileCurrentSessionResolver implements CurrentSessionResolver {
     }
     return ref;
   }
+}
+
+// --- AttachRunner -----------------------------------------------------------
+
+/**
+ * Real attach executor: run the operation-computed attach command with the
+ * current terminal's stdio and report the external process's exit status
+ * verbatim, so `asem session attach` / `asem run` exit exactly as the attach
+ * process did. An unspawnable or empty command is a plain failure (1) — the
+ * CLI never fabricates success for an attach that did not run.
+ */
+export function runAttachCommand(command: AttachCommand): Promise<number> {
+  const [program, ...args] = command.argv;
+  if (program === undefined) {
+    return Promise.resolve(1);
+  }
+  return new Promise((resolve) => {
+    const child = spawn(program, args, { stdio: "inherit" });
+    child.on("error", () => resolve(1));
+    child.on("close", (code) => resolve(code ?? 1));
+  });
 }
 
 // --- LivenessProbe --------------------------------------------------------

@@ -47,12 +47,13 @@ asem is currently built for Bun-based execution. The published package installs 
 cd /path/to/your/repo
 asem init --interactive
 asem doctor
+asem run claude
 asem session create reviewer-1 --prompt "Review the current diff" --profile reviewer
 asem message list
 asem tui
 ```
 
-`asem init --interactive` creates `.asem.yaml` for the current Worktree Root. `asem doctor` checks that builtin Agent and Multiplexer commands are available. `session create` launches a child Session and stores its Message history in local asem state.
+`asem init --interactive` creates `.asem.yaml` for the current Worktree Root. `asem doctor` checks that builtin Agent and Multiplexer commands are available. `asem run <agent>` launches a root Session from an exact configured Agent Template and, on a TTY, attaches to it (skip with `--no-attach`). `session create` launches a child Session and stores its Message history in local asem state.
 
 ## Core concepts
 

@@ -10,10 +10,25 @@ The Cockpit is the human terminal surface for local Sessions in the Workspace. I
 
 ## What it shows
 
-- Workspace Session tree and selected Session details.
-- Message and Report activity.
-- Attach, close, delete, and refresh actions where available.
-- Toast-style notices for operation results.
+### Session tree
+
+The left pane is the Workspace-scoped Session tree: it shows the selected Session and each Session's Worktree location context.
+
+### Session dossier
+
+The right pane is a persistent dossier for the selected Session: a fixed header plus **Messages, Detail, and Context** tabs.
+
+### Messages
+
+The Messages tab is a timeline of durable Messages and Reports. Reports always show their body; ordinary Message bodies and Detail Technical data are expanded only through local ephemeral UI state.
+
+### Activity
+
+Activity is a capped **in-memory** snapshot-delta strip. It begins after Cockpit start, is not durable history or unread state, and disappears when no activity exists.
+
+### Scrolling
+
+Messages, Detail, and Context use mouse wheel in-app scrolling for overflow; the dossier header, tabs, Activity, and global keybar remain fixed.
 
 ## Scope
 

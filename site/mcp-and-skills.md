@@ -65,6 +65,11 @@ asem skills add --for copilot-cli
 
 Skill guidance explains asem vocabulary, scope, safety rules, and the intended MCP tool usage for that Integration Target.
 
+Re-running `asem skills add --for <target>` replaces the asem-owned Skill file
+with the current guidance. It does not remove unrelated or user-authored Skills.
+Use `--no-global` again when the target supports and should use workspace-local
+configuration.
+
 ## Scope reminder
 
 An Integration Target is an external AI client whose local config can be updated. It is not the Session Agent, and it does not add teams, task lifecycle, worker pools, or workflow state to asem.

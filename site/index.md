@@ -18,11 +18,11 @@ hero:
 
 features:
   - icon: 🧭
-    title: Scoped local Sessions
-    details: "Sessions, Messages, Reports, and parent links are scoped to the Workspace. Worktree Roots stay visible as Session location metadata and filters."
+    title: Root and child Sessions
+    details: "Launch the human root Session with asem run, then create child Sessions from it. Sessions, Messages, Reports, and parent links are scoped to the Workspace, with Worktree Roots as location metadata and filters."
   - icon: 💬
     title: Messages and Reports
-    details: Send durable Messages to child Sessions and collect Reports back from them. Pane delivery is best-effort; local store rows are the durable truth.
+    details: Send durable local Messages to child Sessions and collect Reports back from them. Pane delivery is best-effort notification; the stored Message is the durable truth.
   - icon: 🖥️
     title: Multiplexer-backed launch
     details: Launch or attach through Templates for tmux, zellij, herdr, rmux, or other local multiplexers without hard-coding one terminal model.

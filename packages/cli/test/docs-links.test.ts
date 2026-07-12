@@ -90,6 +90,46 @@ describe("durable docs", () => {
     expect(contents).toContain("successful empty page with `timedOut: true`");
   });
 
+  test("site config guide uses the current configuration keys and workspace examples", () => {
+    const contents = readFileSync(join(REPO_ROOT, "site", "config.md"), "utf8");
+
+    expect(contents).toContain("workspace:\n  id: acme");
+    expect(contents).toContain("agent:\n  default: pi");
+    expect(contents).toContain("mux:\n  default: herdr");
+    expect(contents).toContain("repos:\n  frontend:\n    path: apps/frontend");
+    expect(contents).toContain("`asem workspace repo list`");
+    expect(contents).toContain("multiple Worktree Roots");
+    expect(contents).not.toMatch(/^defaults:/m);
+  });
+
+  test("README and manual home route users to current setup guidance", () => {
+    const readme = readFileSync(join(REPO_ROOT, "README.md"), "utf8");
+    const home = readFileSync(join(REPO_ROOT, "site", "index.md"), "utf8");
+
+    expect(readme).toContain("`asem run <agent>`");
+    expect(readme).toContain("Session dossier");
+    expect(readme).toContain(
+      "[Configuration](https://takemo101.github.io/asem/config)",
+    );
+    expect(home).toContain("durable local Messages");
+    expect(home).toContain("root Session");
+  });
+
+  test("manual covers the current Cockpit, root-session recovery, and Skill update behavior", () => {
+    const tui = readFileSync(join(REPO_ROOT, "site", "tui.md"), "utf8");
+    const cli = readFileSync(join(REPO_ROOT, "site", "cli.md"), "utf8");
+    const skills = readFileSync(
+      join(REPO_ROOT, "site", "mcp-and-skills.md"),
+      "utf8",
+    );
+
+    expect(tui).toContain("Messages, Detail, and Context");
+    expect(tui).toContain("in-memory");
+    expect(tui).toContain("mouse wheel");
+    expect(cli).toContain("stored mux reference is not edited in place");
+    expect(skills).toContain("Re-running `asem skills add --for <target>`");
+  });
+
   test("no leftover placeholder markers", () => {
     const offenders: string[] = [];
     for (const rel of files) {

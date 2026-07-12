@@ -38,6 +38,13 @@ asem session delete <session-id>
 
 `delete` is destructive and refuses to remove a live Session. Close live Sessions first.
 
+### Recreating a root Session after replacing a pane
+
+A Session's stored mux reference is not edited in place. If its Multiplexer pane
+was replaced, Messages remain durable but best-effort pane notification can no
+longer reach that old pane. Keep or close the old Session for history, then run
+`asem run <agent>` from the live environment to create a new root Session.
+
 ## Profiles
 
 ```sh

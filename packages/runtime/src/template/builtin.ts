@@ -83,6 +83,10 @@ export const builtinMuxTemplates: Readonly<Record<string, unknown>> = {
         command:
           "herdr --session {{herdr_session_shell}} agent send {{pane_id_shell}} {{message_shell}}",
       },
+      // herdr's agent send injects input asynchronously; without a settle
+      // delay the Enter keystroke can reach the pane before the injected
+      // text lands, leaving the prompt typed but unsubmitted (MIK-066).
+      { type: "wait_ms", ms: 200 },
       {
         type: "run",
         command:

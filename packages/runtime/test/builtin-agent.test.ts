@@ -550,6 +550,29 @@ describe("paste flow: before_paste precedes a mux send after the agent starts", 
       "herdr --session 'asem' agent send 'w-3' 'do the work'",
       "herdr --session 'asem' pane send-keys 'w-3' Enter",
     ]);
+    // Full composed order: the Kimi boot delay, then the herdr send sequence
+    // with its own settle delay between `agent send` and Enter (MIK-066) —
+    // the shared herdr delay is what keeps the pasted prompt from racing the
+    // submit keystroke.
+    expect(runner.events).toEqual([
+      { type: "wait_ms", ms: 2000 },
+      {
+        type: "run",
+        command: expect.stringContaining("agent wait"),
+        background: false,
+      },
+      {
+        type: "run",
+        command: expect.stringContaining("agent send"),
+        background: false,
+      },
+      { type: "wait_ms", ms: 200 },
+      {
+        type: "run",
+        command: expect.stringContaining("send-keys 'w-3' Enter"),
+        background: false,
+      },
+    ]);
   });
 
   test("before_paste declares a boot delay only for paste templates", () => {

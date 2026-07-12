@@ -140,7 +140,7 @@ describe("builtin mux: herdr", () => {
     );
   });
 
-  test("send waits for idle, sends via herdr's agent API, then submits", async () => {
+  test("send waits for idle, sends via herdr's agent API, waits, then submits", async () => {
     const template = muxTemplate("herdr");
     const runner = new FakeTemplateRunner();
     await runWithRefsOnly(template.send, runner, {
@@ -152,6 +152,15 @@ describe("builtin mux: herdr", () => {
       "herdr --session 'asem' agent send 'w-3' 'hi; there'",
       "herdr --session 'asem' pane send-keys 'w-3' Enter",
     ]);
+    // The delay between `agent send` and Enter lets herdr's input injection
+    // settle before the submit keystroke arrives (MIK-066).
+    expect(runner.events.map((event) => event.type)).toEqual([
+      "run",
+      "run",
+      "wait_ms",
+      "run",
+    ]);
+    expect(runner.waits).toEqual([200]);
   });
 
   test("peek reads recent pane output", async () => {

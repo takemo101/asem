@@ -84,6 +84,32 @@ describe("materializeInitConfig", () => {
     });
   });
 
+  test("materializes the herdr send sequence with the settle delay before Enter", () => {
+    const result = materializeInitConfig({
+      workspaceId: "ws_1",
+      agent: "claude",
+      mux: "herdr",
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(JSON.stringify(result.error));
+
+    // A fresh `asem init` must materialize the corrected builtin sequence:
+    // agent send → wait_ms → Enter (MIK-066).
+    const herdr = result.value.mux.templates.herdr as {
+      send: Array<Record<string, unknown>>;
+    };
+    expect(herdr.send.map((step) => step.type)).toEqual([
+      "run",
+      "run",
+      "wait_ms",
+      "run",
+    ]);
+    expect(herdr.send[1]!.command).toContain("agent send");
+    expect(herdr.send[2]).toEqual({ type: "wait_ms", ms: 200 });
+    expect(herdr.send[3]!.command).toContain("Enter");
+  });
+
   test("materializes opencode with --prompt and no paste flow", () => {
     const result = materializeInitConfig({
       workspaceId: "ws_1",

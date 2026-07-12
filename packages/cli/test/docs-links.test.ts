@@ -102,6 +102,21 @@ describe("durable docs", () => {
     expect(contents).not.toMatch(/^defaults:/m);
   });
 
+  test("manual covers the current Cockpit, root-session recovery, and Skill update behavior", () => {
+    const tui = readFileSync(join(REPO_ROOT, "site", "tui.md"), "utf8");
+    const cli = readFileSync(join(REPO_ROOT, "site", "cli.md"), "utf8");
+    const skills = readFileSync(
+      join(REPO_ROOT, "site", "mcp-and-skills.md"),
+      "utf8",
+    );
+
+    expect(tui).toContain("Messages, Detail, and Context");
+    expect(tui).toContain("in-memory");
+    expect(tui).toContain("mouse wheel");
+    expect(cli).toContain("stored mux reference is not edited in place");
+    expect(skills).toContain("Re-running `asem skills add --for <target>`");
+  });
+
   test("no leftover placeholder markers", () => {
     const offenders: string[] = [];
     for (const rel of files) {

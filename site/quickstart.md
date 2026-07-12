@@ -19,7 +19,15 @@ asem doctor
 
 Doctor prints command availability for builtin Agent and Multiplexer Templates.
 
-## 3. Create a child Session
+## 3. Launch the root Session
+
+```sh
+asem run pi
+```
+
+`run` creates the human root Session (no parent) and launches the named Agent in it. Child Sessions are created with `asem session create`.
+
+## 4. Create a child Session
 
 ```sh
 asem session create reviewer-1 --profile reviewer --prompt "Review the current diff"
@@ -33,7 +41,7 @@ If the selected Agent Template supports models, pass one explicitly:
 asem session create reviewer-2 --profile reviewer --model sonnet --prompt "Review the current diff"
 ```
 
-## 4. Inspect Sessions and Messages
+## 5. Inspect Sessions and Messages
 
 ```sh
 asem session list
@@ -42,7 +50,7 @@ asem message list
 
 Messages and Reports are scoped by Workspace. Worktree Root is retained as Session location metadata and can be used as an explicit filter.
 
-## 5. Open the Cockpit
+## 6. Open the Cockpit
 
 ```sh
 asem tui
@@ -50,7 +58,7 @@ asem tui
 
 The Cockpit provides a keyboard-first view of local Sessions and details.
 
-## 6. Register an AI client when needed
+## 7. Register an AI client when needed
 
 ```sh
 asem mcp add --for claude-code

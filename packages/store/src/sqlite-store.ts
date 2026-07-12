@@ -435,13 +435,29 @@ export interface OpenSqliteStoreOptions {
 }
 
 /**
+ * How long a connection waits on a competing writer's lock before surfacing
+ * SQLITE_BUSY. Message polling ticks every second and writes are single-row,
+ * so 5 s absorbs any normal local write-write contention while still bounding
+ * a wedged writer instead of hanging forever.
+ */
+const BUSY_TIMEOUT_MS = 5_000;
+
+/**
  * Open (or create) a SQLite database and return a migrated {@link SqliteStore}.
  * The durable asem database lives at `~/.asem/state.db` (ADR 0001); callers pass
  * that path. Tests pass `":memory:"` or a temp-file path.
+ *
+ * Concurrency (Message protocol design, slice 3): sibling CLI/MCP processes
+ * poll and send Messages against the same file, so the connection is opened in
+ * WAL mode — readers never block a writer's commit — with a bounded
+ * {@link BUSY_TIMEOUT_MS} for the remaining write-write contention. WAL is a
+ * no-op for `":memory:"` databases.
  */
 export function openSqliteStore(
   options: OpenSqliteStoreOptions = {},
 ): SqliteStore {
   const db = new Database(options.path ?? ":memory:");
+  db.run("PRAGMA journal_mode = WAL");
+  db.run(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
   return new SqliteStore(db);
 }

@@ -17,6 +17,9 @@ const ACTIVITY_MAX_ROWS = 6;
 /** Rows taken by the persistent Session dossier header when present. */
 const DOSSIER_ROWS = 2;
 
+/** Element id of the scrollable Messages/Detail body, for tests and tooling. */
+export const DETAIL_BODY_SCROLLBOX_ID = "detail-body-scrollbox";
+
 export function DetailPane(props: {
   dossier: DossierView | null;
   tabs: TabHeader[];
@@ -36,6 +39,7 @@ export function DetailPane(props: {
   const tabBar = props.tabs
     .map((tab) => (tab.active ? `[${tab.title}]` : ` ${tab.title} `))
     .join(" ");
+  const activeTab = props.tabs.find((tab) => tab.active)?.tab;
   return (
     <box
       borderStyle="single"
@@ -63,32 +67,44 @@ export function DetailPane(props: {
       <box backgroundColor={theme.panelAlt} height={1}>
         <text fg={theme.cyan}>{tabBar}</text>
       </box>
-      <box flexDirection="column" flexGrow={1} minHeight={0}>
-        {props.tabs.find((tab) => tab.active)?.tab === "messages" ? (
-          // Calm-terminal timeline treatment: green incoming, amber outgoing,
-          // red only for the durable failed-notification notice. Lines are
-          // positional view state replaced wholesale on each frame, so a
-          // position-derived key is stable for exactly as long as the line.
-          props.lines
-            .slice(0, bodyRows)
+      {
+        // All tabs scroll (MIK-069): every line is its own block element
+        // inside a vertical scrollbox, so wrapped long entries keep stable
+        // row boundaries and content beyond the pane height stays reachable
+        // by mouse wheel without touching the global key semantics.
+        <scrollbox
+          id={DETAIL_BODY_SCROLLBOX_ID}
+          scrollY={true}
+          scrollX={false}
+          height={bodyRows}
+          flexGrow={1}
+          minHeight={0}
+          viewportOptions={{ backgroundColor: theme.panel }}
+          contentOptions={{ flexDirection: "column", width: "100%" }}
+        >
+          {props.lines
+            // Lines are positional view state replaced wholesale on each
+            // frame, so a position-derived key is stable for exactly as long
+            // as the line.
             .map((line, position) => ({ line, key: `${position}:${line}` }))
             .map(({ line, key }) => {
-              const tone = timelineLineTone(line);
+              // Calm-terminal timeline treatment: green incoming, amber
+              // outgoing, red only for the durable failed-notification notice.
+              const tone =
+                activeTab === "messages" ? timelineLineTone(line) : null;
               return (
-                <text
-                  key={key}
-                  fg={tone === null ? theme.text : timelineAccent(tone)}
-                >
-                  {line}
-                </text>
+                <box key={key} width="100%" flexShrink={0}>
+                  <text
+                    fg={tone === null ? theme.text : timelineAccent(tone)}
+                    width="100%"
+                  >
+                    {line === "" ? " " : line}
+                  </text>
+                </box>
               );
-            })
-        ) : (
-          <text fg={theme.text}>
-            {props.lines.slice(0, bodyRows).join("\n")}
-          </text>
-        )}
-      </box>
+            })}
+        </scrollbox>
+      }
       <ActivityStrip activity={props.activity} maxRows={ACTIVITY_MAX_ROWS} />
     </box>
   );

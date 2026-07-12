@@ -53,7 +53,7 @@ asem message list
 asem tui
 ```
 
-`asem init --interactive` creates `.asem.yaml` for the current Worktree Root. `asem doctor` checks that builtin Agent and Multiplexer commands are available. `asem run <agent>` launches a root Session from an exact configured Agent Template and, on a TTY, attaches to it (skip with `--no-attach`). `session create` launches a child Session and stores its Message history in local asem state.
+`asem init --interactive` creates `.asem.yaml` for the current Worktree Root. `asem doctor` checks that builtin Agent and Multiplexer commands are available. `asem run <agent>` is the root human launcher: it starts a root Session from an exact configured Agent Template and, on a TTY, attaches to it (skip with `--no-attach`). `asem session create` is for child Sessions; each child stores its Message history in local asem state.
 
 ## Core concepts
 
@@ -84,7 +84,7 @@ asem message wait --cursor <nextCursor>
 asem report parent --body "Review complete"
 ```
 
-Run `asem --help` or `asem <command> --help` for focused help.
+Run `asem --help` or `asem <command> --help` for focused help, or see the [CLI reference](https://takemo101.github.io/asem/cli) in the manual.
 
 Messages are durable and pull-based. `asem message list` returns one page — `messages`, `nextCursor`, and `hasMore` — of public Message envelopes ordered oldest to newest. `asem message wait --cursor <nextCursor>` performs one bounded wait on the current Session's Inbox after a cursor captured from a prior page; a timeout is a successful empty page, not an error. A failed pane delivery is notification-only: the Message stays stored and is never automatically resent.
 
@@ -100,7 +100,7 @@ Normal Session relationships and communication are Workspace-scoped. A Workspace
 asem tui
 ```
 
-The Cockpit is a keyboard-first Workspace view of Sessions, Messages, and details. It shows the Workspace Session tree with per-Session location context; operation semantics live in shared ops code.
+The Cockpit is a keyboard-first Workspace view. It shows the Workspace Session tree with per-Session location context on the left and a selected-Session dossier on the right with Messages, Detail, and Context tabs. See [Cockpit](https://takemo101.github.io/asem/tui) in the manual for the full behavior.
 
 ## Agent Profiles
 
@@ -139,7 +139,7 @@ MCP registration and Skill installation are independent. Setup commands edit loc
 
 ## Configuration
 
-`asem init --interactive` writes `.asem.yaml`. The config selects default Workspace, Agent Template, Multiplexer Template, and optional Template settings. Runtime state and token-bearing files live under ignored `.asem/` paths.
+`asem init --interactive` writes `.asem.yaml`. The config selects default Workspace, Agent Template, Multiplexer Template, and optional Template settings. Full examples — one repository, monorepo Repo Aliases, and multiple Worktree Roots sharing one Workspace — live in the manual's [Configuration](https://takemo101.github.io/asem/config) guide. Runtime state and token-bearing files live under ignored `.asem/` paths.
 
 ## Development docs
 

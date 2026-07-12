@@ -102,6 +102,19 @@ describe("durable docs", () => {
     expect(contents).not.toMatch(/^defaults:/m);
   });
 
+  test("README and manual home route users to current setup guidance", () => {
+    const readme = readFileSync(join(REPO_ROOT, "README.md"), "utf8");
+    const home = readFileSync(join(REPO_ROOT, "site", "index.md"), "utf8");
+
+    expect(readme).toContain("`asem run <agent>`");
+    expect(readme).toContain("Session dossier");
+    expect(readme).toContain(
+      "[Configuration](https://takemo101.github.io/asem/config)",
+    );
+    expect(home).toContain("durable local Messages");
+    expect(home).toContain("root Session");
+  });
+
   test("manual covers the current Cockpit, root-session recovery, and Skill update behavior", () => {
     const tui = readFileSync(join(REPO_ROOT, "site", "tui.md"), "utf8");
     const cli = readFileSync(join(REPO_ROOT, "site", "cli.md"), "utf8");

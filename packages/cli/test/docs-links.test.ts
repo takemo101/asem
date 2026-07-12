@@ -90,6 +90,18 @@ describe("durable docs", () => {
     expect(contents).toContain("successful empty page with `timedOut: true`");
   });
 
+  test("site config guide uses the current configuration keys and workspace examples", () => {
+    const contents = readFileSync(join(REPO_ROOT, "site", "config.md"), "utf8");
+
+    expect(contents).toContain("workspace:\n  id: acme");
+    expect(contents).toContain("agent:\n  default: pi");
+    expect(contents).toContain("mux:\n  default: herdr");
+    expect(contents).toContain("repos:\n  frontend:\n    path: apps/frontend");
+    expect(contents).toContain("`asem workspace repo list`");
+    expect(contents).toContain("multiple Worktree Roots");
+    expect(contents).not.toMatch(/^defaults:/m);
+  });
+
   test("no leftover placeholder markers", () => {
     const offenders: string[] = [];
     for (const rel of files) {

@@ -1,37 +1,115 @@
 # Config
 
-`asem init --interactive` creates `.asem.yaml` in the Worktree Root.
+`.asem.yaml` lives at the Worktree Root — the top of the working copy asem manages. `asem init --interactive` creates it and materializes the initial project config; `asem doctor` reports whether the configured builtin commands are available.
 
-## Generated config
+## Minimal configuration
 
-A minimal config records the Workspace and default Templates. Generated config omits empty schema-default fields and avoids JSON-like flow-style empty collections.
+The smallest valid config names the Workspace and picks the default Agent and Multiplexer Templates:
 
 ```yaml
 workspace:
   id: acme
 
-defaults:
-  agent: pi
-  mux: tmux
+agent:
+  default: pi
+
+mux:
+  default: herdr
 ```
 
-Exact fields can grow as Templates and local defaults are configured.
+`workspace.id` is the safety boundary: normal Session visibility, parent-child relationships, Messages, and Reports are scoped to it. `agent.default` and `mux.default` name the Templates used when a command does not choose one explicitly. The optional `repos` map is covered below.
 
-## Workspace and Worktree Root
+## One repository
 
-Normal visibility, parent-child relationships, Messages, and Reports use the Workspace id. Worktree Root is Session location metadata for launch files, cleanup, grouping, and explicit filters.
+For a single repository, the minimal config above is complete. A typical first session:
 
-Repo aliases may point to directories under the Workspace root. `asem session create --repo <alias>` uses the alias as a named `cwd` shortcut without changing Workspace parent/report semantics.
+```sh
+asem doctor
+asem run pi
+```
 
-## Templates
+`asem run pi` launches the human root Session. From there, create child Sessions:
 
-Agent Templates define command sequences for AI clients. Multiplexer Templates define how a child Session is hosted and attached. Template command sequences are runtime configuration, not workflow definitions.
+```sh
+asem session create reviewer --prompt "Review the current diff"
+```
+
+Every Session created under this Worktree Root joins Workspace `acme`. Sessions in the same Workspace can see each other, exchange Messages, and children send Reports to their Parent Session. Nothing outside the Workspace participates in that traffic.
+
+## Monorepo with Repo Aliases
+
+In a monorepo, declare Repo Aliases so child Sessions start in the right subdirectory:
+
+```yaml
+workspace:
+  id: acme
+
+repos:
+  frontend:
+    path: apps/frontend
+  api:
+    path: services/api
+
+agent:
+  default: pi
+
+mux:
+  default: herdr
+```
+
+List the declared aliases with `asem workspace repo list`, then use one at Session creation:
+
+```sh
+asem session create frontend-review --repo frontend --prompt "Review the frontend diff"
+```
+
+Each `path` resolves relative to the `.asem.yaml` that declares it. A Repo Alias is only a `cwd` shortcut: `--repo` changes the child Session's working directory and nothing else. It does not create a new Workspace, a parent relationship, or any Message/Report boundary — the child is still an ordinary member of Workspace `acme`.
+
+## Multiple Worktree Roots, one Workspace
+
+One Workspace can span multiple Worktree Roots. Give each checkout its own `.asem.yaml` with the same `workspace.id`:
+
+`~/work/worktree-a/.asem.yaml`:
+
+```yaml
+workspace:
+  id: acme
+
+agent:
+  default: pi
+
+mux:
+  default: herdr
+```
+
+`~/work/worktree-b/.asem.yaml`:
+
+```yaml
+workspace:
+  id: acme
+
+repos:
+  api:
+    path: services/api
+
+agent:
+  default: pi
+
+mux:
+  default: herdr
+```
+
+The shape is: Workspace acme → worktree-a / worktree-b. Sessions launched from either root share one Session tree and one Message/Report boundary: a Session in worktree-a can be the Parent Session of a child in worktree-b, and they exchange Messages and Reports as usual. Worktree Root is location metadata — it records where a Session's files and execution context live and serves as an optional filter (for example in the Cockpit), not a communication boundary. Repo Alias paths still resolve relative to their own declaring `.asem.yaml`.
+
+If two checkouts should *not* see each other, give them different Workspace ids. Distinct ids are the intentional way to isolate checkouts; sharing an id across multiple Worktree Roots is the intentional way to supervise them together.
+
+## Templates and upgrades
+
+`agent.templates` and `mux.templates` hold project-local Template overrides layered over the builtins. `asem init` materializes Templates only when no `.asem.yaml` exists yet; it never rewrites an existing config. That means a materialized or customized template block keeps its old command sequence until you change it: to pick up refreshed builtin behavior, deliberately copy a regenerated block into your config, or remove the obsolete project override so the builtin applies again.
 
 ### Upgrading a materialized herdr template
 
-The builtin `herdr` `send` sequence now inserts a short settle delay between `agent send` and the Enter keystroke, so text injected by `herdr agent send` (including Kimi's paste-based prompt flow) lands before it is submitted.
-
-`asem init` materializes Templates only when no `.asem.yaml` exists yet; it intentionally never rewrites Template definitions in an existing config. A `mux.templates.herdr` you materialized earlier — or customized — keeps its old sequence until you change it. If your project-local template still submits Enter immediately after `agent send`, add the delay step yourself:
+One concrete materialized-template upgrade: the builtin `herdr` `send` sequence now inserts a short settle delay between `agent send` and the Enter keystroke, so text injected by `herdr agent send` (including Kimi's paste-based prompt flow) lands before it is submitted. A `mux.templates.herdr` you materialized earlier — or customized — keeps its old sequence. If your project-local template still submits Enter immediately after `agent send`, add the delay step yourself:
 
 ```yaml
 mux:

@@ -118,7 +118,12 @@ jobs:
             ['pack', '--dry-run', '--json', './packages/cli'],
             { encoding: 'utf8' },
           );
-          const [packed] = JSON.parse(pack);
+          const parsed = JSON.parse(pack);
+          // npm pack --json emits an array (npm 11), a map keyed by package
+          // name (npm 12), or a single packed object; normalize to our entry.
+          const packed = Array.isArray(parsed)
+            ? parsed[0]
+            : parsed[cliPackage.name] ?? parsed;
           if (packed.version !== cliPackage.version) {
             throw new Error(
               `Packed version ${packed.version} does not match ` +

@@ -28,6 +28,9 @@ describe("detailView", () => {
 
     const view = detailView(session, [session], "herdr attach w1:t1:p1");
     expect(view.id).toBe("s1");
+    expect(view.muxRefSummary).toBe(
+      "herdr_session=asem, herdr_workspace_id=ws_1, pane_id=pane-1, tab_id=tab-1",
+    );
     expect(view.name).toBe("reviewer-1");
     expect(view.status).toBe("running");
     expect(view.agent).toBe("claude");
@@ -104,7 +107,7 @@ describe("contextView", () => {
     expect(contextView(makeEnv(), null).relationship).toBeNull();
   });
 
-  test("builds a Workspace relationship card for a repo parent Session", () => {
+  test("builds a relationship card ordered parent → selected → children", () => {
     const root = makeSession({
       id: "root",
       name: "root",
@@ -116,17 +119,17 @@ describe("contextView", () => {
       worktreeRoot: "/workspace/frontend",
       parentSessionId: "root",
     });
-    const backend = makeSession({
-      id: "be",
-      name: "backend-parent",
-      worktreeRoot: "/workspace/backend",
-      parentSessionId: "root",
+    const leaf = makeSession({
+      id: "lf",
+      name: "leaf-worker",
+      worktreeRoot: "/workspace/frontend",
+      parentSessionId: "fe",
     });
 
     const view = contextView(
       makeEnv({ scopeMode: "workspace", worktreeRoot: "/workspace" }),
       frontend,
-      [root, frontend, backend],
+      [root, frontend, leaf],
     );
     const rel = present(view.relationship);
     // Parent name/id and parent location when present.
@@ -136,16 +139,20 @@ describe("contextView", () => {
       location: "/workspace",
     });
     expect(rel.parentSessionId).toBe("root");
-    // Current Session location.
-    expect(rel.location).toBe("/workspace/frontend");
-    // Sibling/related Sessions under the same parent (excludes self).
-    expect(rel.siblings.map((s) => s.id)).toEqual(["be"]);
-    expect(present(rel.siblings[0]).location).toBe("/workspace/backend");
+    // The selected Session itself, with its own location.
+    expect(rel.selected).toEqual({
+      id: "fe",
+      name: "frontend-parent",
+      location: "/workspace/frontend",
+    });
+    // Child Sessions supervised by the selected Session.
+    expect(rel.children.map((s) => s.id)).toEqual(["lf"]);
+    expect(present(rel.children[0]).location).toBe("/workspace/frontend");
     // Parent/report semantics are same-Workspace.
     expect(rel.scopeNote.toLowerCase()).toContain("workspace");
   });
 
-  test("relationship for a root Session has no parent or siblings", () => {
+  test("relationship for a root Session has no parent; children resolve", () => {
     const root = makeSession({ id: "root", worktreeRoot: "/workspace" });
     const child = makeSession({
       id: "c",
@@ -157,7 +164,7 @@ describe("contextView", () => {
     );
     expect(rel.parent).toBeNull();
     expect(rel.parentSessionId).toBeNull();
-    expect(rel.siblings).toEqual([]);
-    expect(rel.location).toBe("/workspace");
+    expect(rel.children.map((s) => s.id)).toEqual(["c"]);
+    expect(rel.selected.location).toBe("/workspace");
   });
 });

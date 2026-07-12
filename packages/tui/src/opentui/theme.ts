@@ -6,6 +6,7 @@
  */
 import type { SessionStatus } from "@asem/core";
 import type { ActivityRowView } from "../view/activity-row.ts";
+import type { TimelineTone } from "../view/right-pane.ts";
 
 export const theme = {
   bg: "#2b2b2b",
@@ -28,11 +29,15 @@ export const theme = {
   purple: "#b19cd9",
 } as const;
 
-/** Accent color for a Session's process/connection status. */
+/**
+ * Accent color for a Session's process/connection status. Calm-terminal
+ * palette (spec "Goal"): green for running, amber for starting; red stays a
+ * liveness signal and is otherwise reserved for notification failure.
+ */
 export function statusAccent(status: SessionStatus): string {
   switch (status) {
     case "starting":
-      return theme.cyan;
+      return theme.yellow;
     case "running":
       return theme.green;
     case "exited":
@@ -43,6 +48,26 @@ export function statusAccent(status: SessionStatus): string {
       return theme.yellow;
     default: {
       const _never: never = status;
+      return _never;
+    }
+  }
+}
+
+/**
+ * Accent color for a Messages-tab timeline line tone (spec "Goal"): green for
+ * incoming, amber for outgoing, red only for the durable failed-notification
+ * notice.
+ */
+export function timelineAccent(tone: TimelineTone): string {
+  switch (tone) {
+    case "in":
+      return theme.green;
+    case "out":
+      return theme.yellow;
+    case "failure":
+      return theme.red;
+    default: {
+      const _never: never = tone;
       return _never;
     }
   }

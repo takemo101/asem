@@ -827,7 +827,7 @@ Chosen layout: 2-pane + tabbed detail, with centered textarea send modal.
 │   ├─ reviewer-1 ● +2     │                                                       │
 │   └─ helper-1    !       │                                                       │
 └──────────────────────────┴───────────────────────────────────────────────────────┘
-[a] attach [s] send [c] close [D] delete [r] refresh [f] filter [Tab] switch [?] help [q] quit
+[a] attach [s] send [c] close [D] delete [r] refresh [e] expand [f] filter [Tab] switch [?] help [q] quit
 ```
 
 Status symbols:
@@ -840,48 +840,57 @@ Status symbols:
 × closed
 ```
 
-Messages tab row format:
+Session dossier header (persistent above the right-pane tabs for the selected
+Session; presentation only, never a work outcome):
 
 ```text
-10:05 parent → reviewer-1 [message] body...
-10:09 helper-1 → reviewer-1 [message] body... ! undelivered
+● reviewer-1 · running
+agent claude · mux herdr · profile reviewer · updated 5m ago
 ```
 
-Messages are chronological ascending for the selected Session-related messages.
+Messages tab timeline ledger format (chronological ascending for the selected
+Session-related messages; entries separated by a restrained rule):
+
+```text
+10:05 IN  message · parent
+  body preview…
+────────
+10:09 OUT report · parent
+  full report body
+```
+
+- Each entry begins with time, direction (`IN`/`OUT`), Message kind, and
+  counterpart.
+- Report bodies are expanded by default; ordinary Messages are compact
+  previews expanded through ephemeral local UI state only (never persisted,
+  never a read/unread receipt).
+- A recorded delivery error renders the durable notice
+  `Notification failed · Message is stored · no auto-resend`, which implies no
+  Agent acceptance, no Message loss, no acknowledgement, and no resend action.
 
 ### Detail tabs
 
 Messages:
 
 - default tab;
-- selected Session-related messages;
-- delivery error marker when present.
+- selected Session-related messages as the timeline ledger above.
 
-Detail:
+Detail (operational summary ordered for ordinary operator decisions):
 
-- `id`
-- `name`
-- `status`
-- `agent`
-- `mux`
-- `parent`
-- `cwd`
-- `worktree_root`
-- `session_dir`
-- `created_at`
-- `updated_at`
-- `closed_at`
-- `attach_hint`
+- `Session` section: `status`, `name`, `agent`, `mux`, `model`, optional
+  `profile` (with source), `parent`;
+- `Location` section: `cwd`, `worktree_root`;
+- `Lifecycle` section: `created_at`, `updated_at`, `closed_at`;
+- `Technical` section, collapsed by default: `id`, `session_dir`, `mux_ref`
+  summary, `attach_hint`.
 
-Context:
+Context (read-first relationship card; no inline quick actions — attach,
+send, close, and delete remain global keybar actions):
 
-- `workspace_id`
-- `worktree_root`
-- `cwd`
-- config path
-- default mux
-- default agent
-- selected Session mux ref summary
+- `Relationship` section ordered parent → selected → children, each with its
+  own location, plus the same-Workspace scope note;
+- `Workspace` section: `workspace_id`, `worktree_root`, `cwd`, config path,
+  default mux, default agent, selected Session mux ref summary.
 
 ### TUI behavior
 
@@ -891,6 +900,10 @@ Context:
 - Liveness checks may update `running` Sessions to `exited` or `missing`.
 - New-message badges are ephemeral, based on TUI start / last observed baseline.
 - `a` runs the attach command and leaves TUI temporarily; on return, TUI refreshes.
+- `e` toggles ephemeral expansion on the active tab: the selected Session's
+  ordinary Message bodies on Messages, the Technical section on Detail. The
+  state is in-memory presentation state only — never persisted and never a
+  read/unread receipt.
 - `s` opens a centered multi-line textarea modal.
 - Enter inserts newline, Ctrl+Enter sends, Esc cancels.
 - Close and delete require confirmation dialogs.

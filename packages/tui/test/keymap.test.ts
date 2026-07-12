@@ -28,6 +28,7 @@ describe("normal-mode keys", () => {
     [{ key: "c" }, "requestClose"],
     [{ key: "D" }, "requestDelete"],
     [{ key: "r" }, "refresh"],
+    [{ key: "e" }, "toggleExpand"],
     [{ key: "f" }, "cycleFilter"],
     [{ key: "?" }, "toggleHelp"],
     [{ key: "q" }, "quit"],

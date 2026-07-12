@@ -79,6 +79,7 @@ export function CockpitScreen(props: { store: CockpitViewStore }): ReactNode {
           onScrollSelection={(event) => store.pushKey(event)}
         />
         <DetailPane
+          dossier={view.dossier}
           tabs={view.tabs}
           lines={view.right}
           activity={view.activity}

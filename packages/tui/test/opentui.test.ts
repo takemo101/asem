@@ -7,7 +7,8 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { KEYBAR, type LeftRow } from "../src/index.ts";
+import { KEYBAR, type LeftRow, type TabHeader } from "../src/index.ts";
+import { DetailPane } from "../src/opentui/components/detail-pane.tsx";
 import {
   FOOTER_HEIGHT,
   keybarText,
@@ -25,7 +26,13 @@ import {
   noticeToastPayload,
   TOASTER_OPTIONS,
 } from "../src/opentui/notice-toast.tsx";
-import { activityAccent, statusAccent, theme } from "../src/opentui/theme.ts";
+import {
+  activityAccent,
+  statusAccent,
+  theme,
+  timelineAccent,
+} from "../src/opentui/theme.ts";
+import { timelineLineTone } from "../src/view/right-pane.ts";
 
 describe("opentui isolation", () => {
   test("the @asem/tui root entry never imports the OpenTUI renderer", () => {
@@ -54,7 +61,8 @@ describe("opentui theme", () => {
   test("status accents stay process-state oriented", () => {
     expect(statusAccent("running")).toBe(theme.green);
     expect(statusAccent("missing")).toBe(theme.red);
-    expect(statusAccent("starting")).toBe(theme.cyan);
+    // Calm-terminal palette: amber for starting (spec "Goal").
+    expect(statusAccent("starting")).toBe(theme.yellow);
     expect(statusAccent("exited")).toBe(theme.muted);
     expect(statusAccent("closed")).toBe(theme.yellow);
   });
@@ -65,7 +73,95 @@ describe("opentui theme", () => {
     expect(activityAccent("remove")).toBe(theme.muted);
     expect(activityAccent("info")).toBe(theme.text);
   });
+
+  test("timeline tones: green incoming, amber outgoing, red durable failure", () => {
+    expect(timelineAccent("in")).toBe(theme.green);
+    expect(timelineAccent("out")).toBe(theme.yellow);
+    expect(timelineAccent("failure")).toBe(theme.red);
+  });
 });
+
+describe("timeline line tones", () => {
+  test("classifies ledger headers, the durable notice, and body lines", () => {
+    expect(timelineLineTone("10:05 IN  message · parent")).toBe("in");
+    expect(timelineLineTone("10:09 OUT report · parent")).toBe("out");
+    expect(
+      timelineLineTone(
+        "  Notification failed · Message is stored · no auto-resend",
+      ),
+    ).toBe("failure");
+    expect(timelineLineTone("  body preview…")).toBeNull();
+    expect(timelineLineTone("────────")).toBeNull();
+  });
+
+  test("DetailPane colors Messages-tab lines by tone", () => {
+    const tabs: TabHeader[] = [
+      { tab: "messages", title: "Messages", active: true },
+      { tab: "detail", title: "Detail", active: false },
+      { tab: "context", title: "Context", active: false },
+    ];
+    const lines = [
+      "10:05 IN  message · parent",
+      "  hello",
+      "  Notification failed · Message is stored · no auto-resend",
+      "10:09 OUT report · parent",
+    ];
+    const pane = DetailPane({
+      dossier: null,
+      tabs,
+      lines,
+      activity: [],
+      maxVisibleRows: 20,
+    }) as ReactElement;
+
+    const texts = collectTexts(pane);
+    const fgFor = (content: string) =>
+      texts.find((t) => t.content === content)?.fg;
+    expect(fgFor("10:05 IN  message · parent")).toBe(theme.green);
+    expect(fgFor("  hello")).toBe(theme.text);
+    expect(
+      fgFor("  Notification failed · Message is stored · no auto-resend"),
+    ).toBe(theme.red);
+    expect(fgFor("10:09 OUT report · parent")).toBe(theme.yellow);
+  });
+
+  test("DetailPane keeps non-Messages tabs on the plain text color", () => {
+    const tabs: TabHeader[] = [
+      { tab: "messages", title: "Messages", active: false },
+      { tab: "detail", title: "Detail", active: true },
+      { tab: "context", title: "Context", active: false },
+    ];
+    const pane = DetailPane({
+      dossier: null,
+      tabs,
+      lines: ["Session", "  status:        running"],
+      activity: [],
+      maxVisibleRows: 20,
+    }) as ReactElement;
+    const texts = collectTexts(pane);
+    expect(texts.some((t) => t.content.includes("Session"))).toBe(true);
+    for (const text of texts.filter((t) => !t.content.includes("["))) {
+      expect(text.fg).toBe(theme.text);
+    }
+  });
+});
+
+/** Collect every <text> element's fg and joined string content, depth-first. */
+function collectTexts(
+  node: ReactNode,
+): Array<{ fg?: string; content: string }> {
+  if (!isValidElement(node)) {
+    return [];
+  }
+  const props = node.props as { fg?: string; children?: ReactNode };
+  if (node.type === "text") {
+    const content = Children.toArray(props.children ?? [])
+      .filter((child) => typeof child === "string")
+      .join("");
+    return [{ ...(props.fg === undefined ? {} : { fg: props.fg }), content }];
+  }
+  return Children.toArray(props.children ?? []).flatMap(collectTexts);
+}
 
 function reactChildren(node: ReactNode): ReactNode[] {
   return Children.toArray(node);

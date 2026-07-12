@@ -104,7 +104,14 @@ export interface VisibleSessionRow {
 
 // --- Tab projections ------------------------------------------------------
 
-/** One row on the Messages tab for the selected Session. */
+/** Timeline direction relative to the selected Session. */
+export type MessageDirection = "in" | "out";
+
+/**
+ * One entry on the Messages-tab timeline ledger for the selected Session.
+ * Everything beyond `message` is presentation-only projection; `message`
+ * remains the source of all delivery facts.
+ */
 export interface MessageRow {
   message: Message;
   /** `HH:MM` taken verbatim from the stored ISO timestamp (no tz math). */
@@ -114,11 +121,29 @@ export interface MessageRow {
   /** Recipient label: the Session name or its id. */
   toLabel: string;
   kind: MessageKind;
+  /** `in` when addressed to the selected Session, `out` when sent by it. */
+  direction: MessageDirection;
+  /** The other party of the exchange (sender for `in`, recipient for `out`). */
+  counterpartLabel: string;
+  /**
+   * Body vs preview mode. Reports are expanded by default; ordinary Messages
+   * expand only through ephemeral local UI state (never persisted, never a
+   * read receipt).
+   */
+  expanded: boolean;
+  /** One-line compact preview of the body for collapsed entries. */
+  previewLabel: string;
+  /**
+   * Durable failed-notification notice, or null. States only that the pane
+   * notification failed and the Message is stored — never loss, acceptance,
+   * an acknowledgement, or a resend action.
+   */
+  failedNoticeLabel: string | null;
   /** True once `delivered_at` is set. */
   delivered: boolean;
   /** Best-effort delivery failure text, or null. */
   deliveryError: string | null;
-  /** True when a delivery error is recorded — the `! undelivered` marker. */
+  /** True when a delivery error is recorded. */
   hasDeliveryError: boolean;
 }
 
@@ -144,6 +169,8 @@ export interface DetailView {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  /** `key=value` summary of the Session's mux coordinates (Technical). */
+  muxRefSummary: string;
   /** Operator attach hint; filled by the host from `get_session` when known. */
   attachHint: string | null;
 }
@@ -164,14 +191,14 @@ export interface RelatedSessionRef {
  * each Session's location separately.
  */
 export interface RelationshipView {
-  /** The selected Session's own location (`worktree_root`). */
-  location: string;
   /** Resolved parent Session, or null when the Session is a Workspace root. */
   parent: RelatedSessionRef | null;
   /** Raw parent id even when the parent is out of scope, else null. */
   parentSessionId: string | null;
-  /** Other Sessions sharing the same parent (self excluded), in row order. */
-  siblings: RelatedSessionRef[];
+  /** The selected Session itself, with its own location. */
+  selected: RelatedSessionRef;
+  /** Sessions supervised by the selected Session, in row order. */
+  children: RelatedSessionRef[];
   /** Human note that parent/report semantics are same-Workspace. */
   scopeNote: string;
 }
@@ -230,6 +257,7 @@ export type CockpitAction =
   | { type: "requestClose" }
   | { type: "requestDelete" }
   | { type: "confirm" }
+  | { type: "toggleExpand" }
   | { type: "toggleHelp" }
   | { type: "quit" };
 
@@ -268,6 +296,17 @@ export interface CockpitState {
   selectedSessionId: string | null;
   activeTab: CockpitTab;
   baseline: ReadonlySet<string>;
+  /**
+   * Ids of ordinary Messages whose full bodies are expanded (spec "Messages").
+   * Ephemeral local UI state toggled by `toggleExpand`: never persisted and
+   * never a read/unread receipt.
+   */
+  expandedMessageIds: ReadonlySet<string>;
+  /**
+   * Whether the Detail tab's collapsed Technical section is expanded (spec
+   * "Detail"). Ephemeral local UI state toggled by `toggleExpand`.
+   */
+  technicalExpanded: boolean;
   modal: CockpitModal;
   /**
    * Recent in-memory activity rows derived by diffing snapshots on refresh

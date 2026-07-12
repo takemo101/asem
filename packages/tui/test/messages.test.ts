@@ -104,6 +104,97 @@ describe("messageRows", () => {
     expect(messageRows(messages, "sel", [sel])).toHaveLength(total);
   });
 
+  test("derives direction and counterpart relative to the selected Session", () => {
+    const sel = makeSession({ id: "sel", name: "reviewer-1" });
+    const parent = makeSession({ id: "p", name: "parent" });
+    const incoming = makeMessage({
+      id: "m1",
+      fromSessionId: "p",
+      toSessionId: "sel",
+    });
+    const outgoing = makeMessage({
+      id: "m2",
+      fromSessionId: "sel",
+      toSessionId: "p",
+    });
+
+    const rows = messageRows([incoming, outgoing], "sel", [sel, parent]);
+    const inRow = rows.find((r) => r.message.id === "m1")!;
+    const outRow = rows.find((r) => r.message.id === "m2")!;
+    expect(inRow.direction).toBe("in");
+    expect(inRow.counterpartLabel).toBe("parent");
+    expect(outRow.direction).toBe("out");
+    expect(outRow.counterpartLabel).toBe("parent");
+  });
+
+  test("reports are expanded by default; ordinary Messages are previews", () => {
+    const report = makeMessage({
+      id: "r1",
+      toSessionId: "sel",
+      kind: "report",
+      body: "line1\nline2",
+    });
+    const ordinary = makeMessage({
+      id: "m1",
+      toSessionId: "sel",
+      body: "first\nsecond",
+    });
+
+    const rows = messageRows([report, ordinary], "sel", []);
+    expect(rows.find((r) => r.message.id === "r1")!.expanded).toBe(true);
+    expect(rows.find((r) => r.message.id === "m1")!.expanded).toBe(false);
+  });
+
+  test("ordinary Messages expand through ephemeral expansion ids", () => {
+    const ordinary = makeMessage({ id: "m1", toSessionId: "sel", body: "hi" });
+    const rows = messageRows([ordinary], "sel", [], {
+      expandedMessageIds: new Set(["m1"]),
+    });
+    expect(rows[0]!.expanded).toBe(true);
+  });
+
+  test("previewLabel compacts the body to one truncated line", () => {
+    const short = makeMessage({ id: "a", toSessionId: "sel", body: "hi" });
+    const multiline = makeMessage({
+      id: "b",
+      toSessionId: "sel",
+      body: "first\nsecond",
+    });
+    const long = makeMessage({
+      id: "c",
+      toSessionId: "sel",
+      body: "x".repeat(80),
+    });
+
+    const rows = messageRows([short, multiline, long], "sel", []);
+    expect(rows.find((r) => r.message.id === "a")!.previewLabel).toBe("hi");
+    expect(rows.find((r) => r.message.id === "b")!.previewLabel).toBe("first…");
+    const longPreview = rows.find((r) => r.message.id === "c")!.previewLabel;
+    expect(longPreview.length).toBeLessThanOrEqual(61);
+    expect(longPreview.endsWith("…")).toBe(true);
+  });
+
+  test("a delivery error yields the exact durable failed notice", () => {
+    const failed = makeMessage({
+      id: "f",
+      toSessionId: "sel",
+      deliveryError: "pane gone",
+    });
+    const ok = makeMessage({
+      id: "d",
+      toSessionId: "sel",
+      deliveredAt: "2026-06-05T12:00:05.000Z",
+    });
+
+    const rows = messageRows([failed, ok], "sel", []);
+    expect(rows.find((r) => r.message.id === "f")!.failedNoticeLabel).toBe(
+      "Notification failed · Message is stored · no auto-resend",
+    );
+    expect(
+      rows.find((r) => r.message.id === "d")!.failedNoticeLabel,
+    ).toBeNull();
+  });
+
   test("relatedMessages includes both sent and received", () => {
     const to = makeMessage({ id: "a", toSessionId: "sel" });
     const from = makeMessage({

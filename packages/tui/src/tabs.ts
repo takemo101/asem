@@ -31,6 +31,7 @@ export function detailView(
         session.parentSessionId);
 
   return {
+    muxRefSummary: summarizeMuxRef(session.muxRef),
     id: session.id,
     name: session.name,
     status: session.status,
@@ -70,11 +71,12 @@ function byCreatedThenId(a: Session, b: Session): number {
 }
 
 /**
- * Build the Workspace relationship card for the selected Session. Parent and
- * siblings are resolved across the whole in-scope Session set (not just the same
- * `worktree_root`), because after ADR 0008 the Workspace is the parent/report
- * boundary. Each related Session keeps its own location so the card can explain
- * "who supervises whom" and "where each runs" separately.
+ * Build the relationship card for the selected Session, ordered parent →
+ * selected → children (spec "Context"). Links are resolved across the whole
+ * in-scope Session set (not just the same `worktree_root`), because after ADR
+ * 0008 the Workspace is the parent/report boundary. Each related Session keeps
+ * its own location so the card can explain "who supervises whom" and "where
+ * each runs" separately.
  */
 function relationshipView(
   selected: Session,
@@ -85,20 +87,16 @@ function relationshipView(
     parentId === null
       ? null
       : (sessions.find((s) => s.id === parentId) ?? null);
-  const siblings =
-    parentId === null
-      ? []
-      : sessions
-          .filter((s) => s.parentSessionId === parentId && s.id !== selected.id)
-          .sort(byCreatedThenId)
-          .map((s) => ({
-            id: s.id,
-            name: s.name,
-            location: s.worktreeRoot,
-          }));
+  const children = sessions
+    .filter((s) => s.parentSessionId === selected.id)
+    .sort(byCreatedThenId)
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      location: s.worktreeRoot,
+    }));
 
   return {
-    location: selected.worktreeRoot,
     parentSessionId: parentId,
     parent:
       parent === null
@@ -106,7 +104,12 @@ function relationshipView(
           ? null
           : { id: parentId, name: null, location: null }
         : { id: parent.id, name: parent.name, location: parent.worktreeRoot },
-    siblings,
+    selected: {
+      id: selected.id,
+      name: selected.name,
+      location: selected.worktreeRoot,
+    },
+    children,
     scopeNote:
       "parent and report delivery are same-Workspace (by workspace_id), independent of worktree_root",
   };

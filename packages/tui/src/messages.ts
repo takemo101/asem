@@ -46,32 +46,76 @@ export function timeLabel(createdAt: string): string {
 }
 
 /**
+ * The durable failed-notification notice (spec "timeline ledger"). `failed`
+ * means the pane notification failed while the Message remains stored; the
+ * wording deliberately implies no Agent acceptance, no Message loss, no
+ * acknowledgement, and no resend action.
+ */
+export const MESSAGE_FAILED_NOTICE =
+  "Notification failed · Message is stored · no auto-resend";
+
+/** Maximum characters of a collapsed entry's one-line body preview. */
+export const MESSAGE_PREVIEW_MAX = 60;
+
+/** One-line compact preview of a Message body, `…`-suffixed when it elides. */
+export function messagePreviewLabel(body: string): string {
+  const firstLine = body.split("\n", 1)[0] ?? "";
+  const clipped = firstLine.slice(0, MESSAGE_PREVIEW_MAX);
+  return clipped.length < body.length ? `${clipped}…` : clipped;
+}
+
+/** Presentation options for {@link messageRows}. */
+export interface MessageRowsOptions {
+  /**
+   * Ids of ordinary Messages expanded through local UI state. Ephemeral only:
+   * never persisted and never a read/unread receipt.
+   */
+  expandedMessageIds?: ReadonlySet<string>;
+}
+
+/**
  * Build the chronological-ascending Messages-tab rows for a Session, resolving
  * sender/recipient labels from the snapshot's Session names. A human-originated
- * Message (`from_session_id === null`) is labeled `external`.
+ * Message (`from_session_id === null`) is labeled `external`. Report bodies are
+ * expanded by default; ordinary Messages stay compact previews unless their id
+ * is in `expandedMessageIds`.
  */
 export function messageRows(
   messages: Message[],
   sessionId: string,
   sessions: Session[],
+  options: MessageRowsOptions = {},
 ): MessageRow[] {
   const nameById = new Map(sessions.map((s) => [s.id, s.name]));
   const label = (id: string | null): string =>
     id === null ? "external" : (nameById.get(id) ?? id);
+  const expandedIds = options.expandedMessageIds ?? new Set<string>();
 
   return relatedMessages(messages, sessionId)
     .slice()
     .sort(byCreatedThenId)
-    .map((message) => ({
-      message,
-      timeLabel: timeLabel(message.createdAt),
-      fromLabel: label(message.fromSessionId),
-      toLabel: label(message.toSessionId),
-      kind: message.kind,
-      delivered: message.deliveredAt !== null,
-      deliveryError: message.deliveryError,
-      hasDeliveryError: message.deliveryError !== null,
-    }));
+    .map((message) => {
+      const direction = message.toSessionId === sessionId ? "in" : "out";
+      return {
+        message,
+        timeLabel: timeLabel(message.createdAt),
+        fromLabel: label(message.fromSessionId),
+        toLabel: label(message.toSessionId),
+        kind: message.kind,
+        direction,
+        counterpartLabel:
+          direction === "in"
+            ? label(message.fromSessionId)
+            : label(message.toSessionId),
+        expanded: message.kind === "report" || expandedIds.has(message.id),
+        previewLabel: messagePreviewLabel(message.body),
+        failedNoticeLabel:
+          message.deliveryError === null ? null : MESSAGE_FAILED_NOTICE,
+        delivered: message.deliveredAt !== null,
+        deliveryError: message.deliveryError,
+        hasDeliveryError: message.deliveryError !== null,
+      };
+    });
 }
 
 /** Seed a baseline from every Message id so nothing is "new" at TUI start. */

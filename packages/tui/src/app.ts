@@ -81,6 +81,9 @@ export class CockpitApp {
   view(): CockpitView {
     return renderCockpitView(this.state, {
       notice: this.notice,
+      // The app is the impure edge: it injects the clock so the render
+      // projection stays pure (dossier relative update label).
+      now: new Date().toISOString(),
       ...(this.host.nextKeyOrTick !== undefined
         ? { autoRefreshMs: this.autoRefreshMs }
         : {}),

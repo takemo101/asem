@@ -21,6 +21,7 @@ export const ERROR_MODAL_MAX_LINES = 10;
 const HELP_LINES: readonly string[] = [
   "↑/k, ↓/j   select previous / next Session",
   "Tab        switch Messages / Detail / Context",
+  "e          expand/collapse Message bodies (Messages) or Technical (Detail)",
   "a          attach to the selected Session",
   "s          send a Message (Ctrl+Enter send, Esc cancel)",
   "c          close the selected Session",

@@ -127,6 +127,8 @@ function normalAction(event: KeyEvent): CockpitAction | null {
       return { type: "requestDelete" };
     case "r":
       return { type: "refresh" };
+    case "e":
+      return { type: "toggleExpand" };
     case "f":
       return { type: "cycleFilter" };
     case "?":

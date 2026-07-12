@@ -106,6 +106,32 @@ describe("renderFrame", () => {
     expect(frame).toContain("│");
   });
 
+  test("paints the Session dossier header above the tab bar", () => {
+    const state = createCockpitState(makeEnv(), {
+      sessions: [
+        makeSession({
+          id: "s1",
+          name: "one",
+          status: "running",
+          profile: "reviewer",
+          updatedAt: "2026-06-05T12:00:00.000Z",
+        }),
+      ],
+      messages: [],
+    });
+    const frame = renderFrame(
+      renderCockpitView(state, { now: "2026-06-05T12:05:00.000Z" }),
+    );
+    const lines = frame.split("\n");
+
+    const dossierAt = lines.findIndex((l) => l.includes("● one · running"));
+    const tabsAt = lines.findIndex((l) => l.includes("[Messages]"));
+    expect(dossierAt).toBeGreaterThanOrEqual(0);
+    expect(tabsAt).toBeGreaterThan(dossierAt);
+    expect(frame).toContain("agent claude · mux herdr · profile reviewer");
+    expect(frame).toContain("updated 5m ago");
+  });
+
   test("clips pane content to reserve the bottom keybar", () => {
     let state = createCockpitState(makeEnv(), {
       sessions: [makeSession({ id: "s1", name: "one" })],
@@ -113,15 +139,15 @@ describe("renderFrame", () => {
     });
     state = dispatchCockpit(state, { type: "switchTab" }).state;
     const frame = renderFrame(renderCockpitView(state), {
-      rows: 8,
+      rows: 10,
       columns: 160,
     });
     const lines = frame.split("\n");
 
-    expect(lines).toHaveLength(8);
+    expect(lines).toHaveLength(10);
     expect(lines.at(-1)).toContain("[q] quit");
     expect(frame).toContain("[Detail]");
-    expect(frame).toContain("id:");
+    expect(frame).toContain("status:");
     expect(frame).not.toContain("attach_hint:");
   });
 

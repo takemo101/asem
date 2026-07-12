@@ -19,7 +19,7 @@ import { COCKPIT_TABS } from "./types.ts";
 import { type ActivityRowView, activityRow } from "./view/activity-row.ts";
 import { type ModalView, modalView } from "./view/modal.ts";
 import { rightLines } from "./view/right-pane.ts";
-import { badgeFor, sessionTree } from "./view-model.ts";
+import { badgeFor, selectedSession, sessionTree } from "./view-model.ts";
 
 /** Status symbols for the left pane (design "Status symbols"). */
 export const STATUS_SYMBOLS: Record<SessionStatus, string> = {
@@ -100,6 +100,54 @@ export interface HeaderView {
 }
 
 /**
+ * Persistent right-pane dossier header for the selected Session (spec "Shared
+ * Session dossier header"). Pure presentation data: process/connection status,
+ * identity, and a relative update label — never a work outcome and never
+ * persistent state.
+ */
+export interface DossierView {
+  status: SessionStatus;
+  /** The status symbol from {@link STATUS_SYMBOLS}. */
+  symbol: string;
+  name: string;
+  agent: string;
+  mux: string;
+  /** Agent Profile id, or null when the Session was created without one. */
+  profile: string | null;
+  /** Relative update label, e.g. `updated 5m ago`. */
+  updatedLabel: string;
+}
+
+/**
+ * Relative `updated …` label for the dossier header. `now` is injected (an ISO
+ * timestamp) so rendering stays pure and deterministic; without a clock, or
+ * when either timestamp does not parse, the stored timestamp is shown verbatim.
+ */
+export function relativeUpdatedLabel(
+  updatedAt: string,
+  now: string | null,
+): string {
+  const fallback = `updated ${updatedAt}`;
+  if (now === null) {
+    return fallback;
+  }
+  const elapsedMs = Date.parse(now) - Date.parse(updatedAt);
+  if (Number.isNaN(elapsedMs) || elapsedMs < 0) {
+    return fallback;
+  }
+  if (elapsedMs < 60_000) {
+    return "updated just now";
+  }
+  if (elapsedMs < 3_600_000) {
+    return `updated ${Math.floor(elapsedMs / 60_000)}m ago`;
+  }
+  if (elapsedMs < 86_400_000) {
+    return `updated ${Math.floor(elapsedMs / 3_600_000)}h ago`;
+  }
+  return `updated ${Math.floor(elapsedMs / 86_400_000)}d ago`;
+}
+
+/**
  * Transient, renderer-neutral cockpit feedback. Distinct from a Message,
  * Report, Activity row, durable event, or unread state — it is the cockpit's
  * own ephemeral "what just happened" signal, projected per-renderer (OpenTUI
@@ -114,6 +162,8 @@ export type CockpitNotice =
 export interface CockpitView {
   header: HeaderView;
   left: LeftPaneView;
+  /** Selected-Session dossier header for the right pane, or null. */
+  dossier: DossierView | null;
   tabs: TabHeader[];
   /** Rendered lines for the active tab. */
   right: string[];
@@ -129,6 +179,7 @@ export interface CockpitView {
 export const KEYBAR: readonly KeybarItem[] = [
   { key: "↑↓", label: "select" },
   { key: "Tab", label: "switch" },
+  { key: "e", label: "expand" },
   { key: "a", label: "attach" },
   { key: "s", label: "send" },
   { key: "c", label: "close" },
@@ -184,8 +235,18 @@ export function renderCockpitView(
     attachHint?: string | null;
     notice?: CockpitNotice | null;
     autoRefreshMs?: number;
+    /**
+     * Ephemeral ids of ordinary Messages expanded through local UI state
+     * (spec "Messages"). Never persisted; never a read/unread receipt.
+     */
+    expandedMessageIds?: ReadonlySet<string>;
+    /** Ephemeral flag expanding the Detail tab's Technical section. */
+    technicalExpanded?: boolean;
+    /** ISO clock reading for the dossier's relative update label. */
+    now?: string;
   } = {},
 ): CockpitView {
+  const selected = selectedSession(state);
   return {
     header: {
       product: "asem",
@@ -202,12 +263,35 @@ export function renderCockpitView(
       filterLabel: `filter: ${state.filter}`,
       rows: leftRows(state),
     },
+    dossier:
+      selected === null
+        ? null
+        : {
+            status: selected.status,
+            symbol: STATUS_SYMBOLS[selected.status],
+            name: selected.name,
+            agent: selected.agent,
+            mux: selected.mux,
+            profile: selected.profile,
+            updatedLabel: relativeUpdatedLabel(
+              selected.updatedAt,
+              options.now ?? null,
+            ),
+          },
     tabs: COCKPIT_TABS.map((tab) => ({
       tab,
       title: TAB_TITLES[tab],
       active: tab === state.activeTab,
     })),
-    right: rightLines(state, options.attachHint ?? null),
+    right: rightLines(state, {
+      attachHint: options.attachHint ?? null,
+      ...(options.expandedMessageIds === undefined
+        ? {}
+        : { expandedMessageIds: options.expandedMessageIds }),
+      ...(options.technicalExpanded === undefined
+        ? {}
+        : { technicalExpanded: options.technicalExpanded }),
+    }),
     activity: state.activity.map(activityRow),
     keybar: [...KEYBAR],
     modal: modalView(state),

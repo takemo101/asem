@@ -13,8 +13,10 @@ import type { Session } from "@asem/core";
 import { appendActivity, diffSnapshots } from "./activity.ts";
 import {
   badgeCount as badgeCountFor,
+  type MessageRowsOptions,
   messageRows,
   observeSession,
+  relatedMessages,
   seedBaseline,
 } from "./messages.ts";
 import { contextView, detailView } from "./tabs.ts";
@@ -77,6 +79,8 @@ export function createCockpitState(
     selectedSessionId: null,
     activeTab,
     baseline,
+    expandedMessageIds: new Set(),
+    technicalExpanded: false,
     modal: { kind: "none" },
     activity: [],
   };
@@ -146,7 +150,10 @@ export function selectedSession(state: CockpitState): Session | null {
 }
 
 /** Messages-tab rows for the selected Session (empty when none selected). */
-export function messagesTab(state: CockpitState): MessageRow[] {
+export function messagesTab(
+  state: CockpitState,
+  options: MessageRowsOptions = {},
+): MessageRow[] {
   if (state.selectedSessionId === null) {
     return [];
   }
@@ -154,6 +161,12 @@ export function messagesTab(state: CockpitState): MessageRow[] {
     state.snapshot.messages,
     state.selectedSessionId,
     state.snapshot.sessions,
+    {
+      // The state's ephemeral expansion set is the runtime default; an
+      // explicit option still overrides it (render-time previews in tests).
+      expandedMessageIds:
+        options.expandedMessageIds ?? state.expandedMessageIds,
+    },
   );
 }
 
@@ -385,6 +398,41 @@ export function dispatchCockpit(
       const { action: confirmed, sessionId } = state.modal;
       const closed: CockpitState = { ...state, modal: { kind: "none" } };
       return withEffect(closed, { kind: confirmed, sessionId });
+    }
+    case "toggleExpand": {
+      // Ephemeral presentation state only (spec "Interaction"): expansion is
+      // never persisted and never becomes a read/unread receipt.
+      if (state.activeTab === "detail") {
+        return {
+          state: { ...state, technicalExpanded: !state.technicalExpanded },
+        };
+      }
+      if (state.activeTab !== "messages" || state.selectedSessionId === null) {
+        return unchanged(state);
+      }
+      const ordinaryIds = relatedMessages(
+        state.snapshot.messages,
+        state.selectedSessionId,
+      )
+        .filter((m) => m.kind !== "report")
+        .map((m) => m.id);
+      if (ordinaryIds.length === 0) {
+        return unchanged(state);
+      }
+      // Expand every ordinary entry of the open timeline; collapse once all
+      // are expanded. Reports never enter the set — they are always expanded.
+      const allExpanded = ordinaryIds.every((id) =>
+        state.expandedMessageIds.has(id),
+      );
+      const expandedMessageIds = new Set(state.expandedMessageIds);
+      for (const id of ordinaryIds) {
+        if (allExpanded) {
+          expandedMessageIds.delete(id);
+        } else {
+          expandedMessageIds.add(id);
+        }
+      }
+      return { state: { ...state, expandedMessageIds } };
     }
     case "toggleHelp": {
       if (state.modal.kind === "help") {

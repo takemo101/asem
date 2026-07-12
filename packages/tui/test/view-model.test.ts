@@ -373,3 +373,76 @@ describe("applySnapshot", () => {
     expect(state.selectedSessionId).toBe("a");
   });
 });
+
+describe("ephemeral expansion (toggleExpand)", () => {
+  test("starts collapsed: no expanded Messages, Technical collapsed", () => {
+    const state = createCockpitState(makeEnv(), snapshot([makeSession()]));
+    expect(state.expandedMessageIds.size).toBe(0);
+    expect(state.technicalExpanded).toBe(false);
+  });
+
+  test("on Messages expands the selected Session's ordinary bodies and toggles back", () => {
+    const s = makeSession({ id: "s1" });
+    const report = makeMessage({ id: "r1", toSessionId: "s1", kind: "report" });
+    const ordinary = makeMessage({ id: "m1", toSessionId: "s1" });
+    let state = createCockpitState(
+      makeEnv(),
+      snapshot([s], [report, ordinary]),
+    );
+
+    const expanded = dispatchCockpit(state, { type: "toggleExpand" });
+    expect(expanded.effect).toBeUndefined();
+    state = expanded.state;
+    // Only ordinary Messages enter the set; reports are always expanded.
+    expect([...state.expandedMessageIds]).toEqual(["m1"]);
+    expect(
+      messagesTab(state).find((r) => r.message.id === "m1")?.expanded,
+    ).toBe(true);
+
+    state = dispatchCockpit(state, { type: "toggleExpand" }).state;
+    expect(state.expandedMessageIds.size).toBe(0);
+    expect(
+      messagesTab(state).find((r) => r.message.id === "m1")?.expanded,
+    ).toBe(false);
+  });
+
+  test("is a no-op on Messages when only reports exist", () => {
+    const s = makeSession({ id: "s1" });
+    const report = makeMessage({ id: "r1", toSessionId: "s1", kind: "report" });
+    const state = createCockpitState(makeEnv(), snapshot([s], [report]));
+    const result = dispatchCockpit(state, { type: "toggleExpand" });
+    expect(result.state).toBe(state);
+    expect(result.effect).toBeUndefined();
+  });
+
+  test("on Detail toggles the Technical section without an effect", () => {
+    let state = createCockpitState(makeEnv(), snapshot([makeSession()]));
+    state = dispatchCockpit(state, { type: "setTab", tab: "detail" }).state;
+    const result = dispatchCockpit(state, { type: "toggleExpand" });
+    expect(result.effect).toBeUndefined();
+    expect(result.state.technicalExpanded).toBe(true);
+    expect(
+      dispatchCockpit(result.state, { type: "toggleExpand" }).state
+        .technicalExpanded,
+    ).toBe(false);
+  });
+
+  test("is a no-op on Context", () => {
+    let state = createCockpitState(makeEnv(), snapshot([makeSession()]));
+    state = dispatchCockpit(state, { type: "setTab", tab: "context" }).state;
+    const result = dispatchCockpit(state, { type: "toggleExpand" });
+    expect(result.state).toBe(state);
+  });
+
+  test("expansion is in-memory only and survives a snapshot refresh untouched", () => {
+    const s = makeSession({ id: "s1" });
+    const ordinary = makeMessage({ id: "m1", toSessionId: "s1" });
+    let state = createCockpitState(makeEnv(), snapshot([s], [ordinary]));
+    state = dispatchCockpit(state, { type: "toggleExpand" }).state;
+    state = applySnapshot(state, snapshot([s], [ordinary]));
+    expect([...state.expandedMessageIds]).toEqual(["m1"]);
+    expect(state.technicalExpanded).toBe(false);
+    // The Message row itself is untouched: expansion never reaches the store.
+    expect(state.snapshot.messages[0]).toEqual(ordinary);
+  });
+});

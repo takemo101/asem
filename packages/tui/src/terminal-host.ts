@@ -189,6 +189,23 @@ function footerLines(view: CockpitView): string[] {
   return lines;
 }
 
+/**
+ * The persistent Session dossier header painted above the right-pane tab bar
+ * (spec "Shared Session dossier header"). Empty when nothing is selected.
+ */
+function dossierLines(view: CockpitView): string[] {
+  const dossier = view.dossier;
+  if (dossier === null) {
+    return [];
+  }
+  const profile =
+    dossier.profile === null ? "" : ` · profile ${dossier.profile}`;
+  return [
+    `${dossier.symbol} ${dossier.name} · ${dossier.status}`,
+    `agent ${dossier.agent} · mux ${dossier.mux}${profile} · ${dossier.updatedLabel}`,
+  ];
+}
+
 /** Render a {@link CockpitView} to a single frame string. */
 export function renderFrame(
   view: CockpitView,
@@ -204,7 +221,7 @@ export function renderFrame(
   const tabBar = view.tabs
     .map((t) => (t.active ? `[${t.title}]` : ` ${t.title} `))
     .join(" ");
-  const right: string[] = [tabBar, "", ...view.right];
+  const right: string[] = [...dossierLines(view), tabBar, "", ...view.right];
   const footer = footerLines(view);
 
   const unconstrainedPaneHeight = Math.max(left.length, right.length);

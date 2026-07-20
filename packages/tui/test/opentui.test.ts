@@ -1,13 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { type Renderable, ScrollBoxRenderable } from "@opentui/core";
+import { testRender } from "@opentui/react/test-utils";
 import {
   Children,
+  createElement,
   isValidElement,
   type ReactElement,
   type ReactNode,
 } from "react";
-import { KEYBAR, type LeftRow, type TabHeader } from "../src/index.ts";
+import {
+  KEYBAR,
+  type LeftPaneView,
+  type LeftRow,
+  type TabHeader,
+} from "../src/index.ts";
 import { DetailPane } from "../src/opentui/components/detail-pane.tsx";
 import {
   FOOTER_HEIGHT,
@@ -16,9 +24,11 @@ import {
 import {
   desiredSessionListScrollTop,
   rowText,
+  SessionList,
   SessionRowsScrollBox,
   scrollDirectionToSelectionKey,
   selectedRowElementId,
+  sessionListInnerWidth,
   sessionListWidthForTerminal,
 } from "../src/opentui/components/session-list.tsx";
 import {
@@ -175,6 +185,20 @@ function isReactElement(node: ReactNode): node is ReactElement {
   return isValidElement(node);
 }
 
+/** Depth-first search for the first rendered ScrollBox in a renderable tree. */
+function findScrollBox(node: Renderable): ScrollBoxRenderable | null {
+  if (node instanceof ScrollBoxRenderable) {
+    return node;
+  }
+  for (const child of node.getChildren()) {
+    const found = findScrollBox(child);
+    if (found !== null) {
+      return found;
+    }
+  }
+  return null;
+}
+
 describe("session list rows", () => {
   test("renders group headers and marked session rows", () => {
     const group: LeftRow = { kind: "group", worktreeRoot: "/repo/b" };
@@ -211,17 +235,18 @@ describe("session list rows", () => {
     const scrollbox = SessionRowsScrollBox({
       rows,
       bodyRows: 3,
+      innerWidth: 30,
     }) as ReactElement;
 
     expect(scrollbox.type).toBe("scrollbox");
-    expect(scrollbox.props).toMatchObject({ scrollY: true, scrollX: false });
+    expect(scrollbox.props).toMatchObject({ scrollY: true, scrollX: true });
     expect(reactChildren(reactProps(scrollbox).children)).toHaveLength(
       rows.length,
     );
     expect(selectedRowElementId(rows)).toBe("session-list-row:s4");
   });
 
-  test("clips long Session rows to one visible line", () => {
+  test("keeps long Session rows scrollable while truncating group headers", () => {
     const rows: LeftRow[] = [
       {
         kind: "session",
@@ -235,31 +260,221 @@ describe("session list rows", () => {
         isNew: false,
         location: "/repo/bookmark-ai-extension-with-a-very-long-name",
       },
+      { kind: "group", worktreeRoot: "/repo/a-very-long-worktree-root" },
     ];
     const scrollbox = SessionRowsScrollBox({
       rows,
-      bodyRows: 1,
+      bodyRows: 2,
+      innerWidth: 30,
     }) as ReactElement;
-    const rowBox = reactChildren(reactProps(scrollbox).children).at(0);
-    if (!isReactElement(rowBox)) {
-      throw new Error("expected a Session row box");
+    const [sessionRow, groupRow] = reactChildren(
+      reactProps(scrollbox).children,
+    );
+    if (!isReactElement(sessionRow) || !isReactElement(groupRow)) {
+      throw new Error("expected Session and group row boxes");
     }
-    const rowTextElement = reactChildren(reactProps(rowBox).children).at(0);
-    if (!isReactElement(rowTextElement)) {
-      throw new Error("expected a Session row text element");
+    const sessionText = reactChildren(reactProps(sessionRow).children).at(0);
+    const groupText = reactChildren(reactProps(groupRow).children).at(0);
+    if (!isReactElement(sessionText) || !isReactElement(groupText)) {
+      throw new Error("expected row text elements");
     }
 
-    expect(rowBox.props).toMatchObject({
+    expect(scrollbox.props).toMatchObject({ scrollY: true, scrollX: true });
+    // Rows stay one terminal line high and clip vertically; only the shared
+    // scroll viewport moves sideways.
+    // Session rows use `minWidth` so they fill a short panel yet may grow past
+    // the viewport; group headings take an explicit numeric width so they stay
+    // pinned to the panel even after a long Session row grows the content box.
+    expect(sessionRow.props).toMatchObject({
       height: 1,
       overflow: "hidden",
-      width: "100%",
+      minWidth: "100%",
     });
-    expect(rowTextElement.props).toMatchObject({
+    expect(groupRow.props).toMatchObject({
+      height: 1,
+      overflow: "hidden",
+      width: 30,
+    });
+    expect(groupRow.props).not.toHaveProperty("minWidth");
+    expect(sessionText.props).toMatchObject({
+      height: 1,
+      truncate: false,
+      width: "100%",
+      wrapMode: "none",
+    });
+    expect(groupText.props).toMatchObject({
       height: 1,
       truncate: true,
       width: "100%",
       wrapMode: "none",
     });
+  });
+
+  test("renders Session rows wider than the viewport so scrollX can move", async () => {
+    const rows: LeftRow[] = [
+      {
+        kind: "session",
+        sessionId: "s1",
+        name: "very-long-worker-name-that-would-overflow-the-left-panel",
+        depth: 0,
+        status: "running",
+        symbol: "●",
+        selected: true,
+        badge: 0,
+        isNew: false,
+        location: "/repo/bookmark-ai-extension-with-a-very-long-name",
+      },
+      { kind: "group", worktreeRoot: "/repo/a-very-long-worktree-root" },
+    ];
+    const viewportWidth = 30;
+    const { renderer, renderOnce } = await testRender(
+      SessionRowsScrollBox({ rows, bodyRows: 2, innerWidth: 30 }) as ReactNode,
+      { width: viewportWidth, height: 6 },
+    );
+    await renderOnce();
+
+    const scrollbox = findScrollBox(renderer.root);
+    if (scrollbox === null) {
+      throw new Error("expected a rendered ScrollBoxRenderable");
+    }
+
+    // The whole point of scrollX: content must be wider than the viewport,
+    // otherwise there is no horizontal range to scroll through.
+    expect(scrollbox.viewport.width).toBe(viewportWidth);
+    expect(scrollbox.scrollWidth).toBeGreaterThan(viewportWidth);
+    expect(scrollbox.scrollWidth).toBeGreaterThanOrEqual(
+      rowText(rows[0] as LeftRow).length,
+    );
+  });
+
+  test("still stretches short Session rows to the full panel width", async () => {
+    const rows: LeftRow[] = [
+      {
+        kind: "session",
+        sessionId: "s1",
+        name: "a",
+        depth: 0,
+        status: "running",
+        symbol: "●",
+        selected: true,
+        badge: 0,
+        isNew: false,
+        location: "/repo",
+      },
+    ];
+    const { renderer, renderOnce } = await testRender(
+      SessionRowsScrollBox({ rows, bodyRows: 2, innerWidth: 30 }) as ReactNode,
+      { width: 40, height: 4 },
+    );
+    await renderOnce();
+
+    const scrollbox = findScrollBox(renderer.root);
+    const rowBox = renderer.root.findDescendantById("session-list-row:s1");
+    if (scrollbox === null || rowBox === undefined) {
+      throw new Error("expected a rendered scrollbox and Session row");
+    }
+
+    // Regression guard: dropping the content width must not shrink-wrap rows,
+    // or the selected-row highlight would stop spanning the panel.
+    expect(scrollbox.scrollWidth).toBe(scrollbox.viewport.width);
+    expect(rowBox.width).toBe(scrollbox.viewport.width);
+  });
+
+  test.each([
+    36, 56,
+  ])("keeps long group headings inside a %i-wide panel and out of the scroll range", async (panelWidth) => {
+    const worktreeRoot = "/repo/a-very-long-worktree-root-that-overflows-badly";
+    const left: LeftPaneView = {
+      title: "Sessions",
+      scopeLabel: "workspace",
+      filterLabel: "all",
+      rows: [
+        { kind: "group", worktreeRoot },
+        {
+          kind: "session",
+          sessionId: "s1",
+          name: "a",
+          depth: 0,
+          status: "running",
+          symbol: "●",
+          selected: true,
+          badge: 0,
+          isNew: false,
+          location: "/repo",
+        },
+      ],
+    };
+    const { renderer, renderOnce, captureCharFrame } = await testRender(
+      createElement(SessionList, {
+        left,
+        maxVisibleRows: 5,
+        width: panelWidth,
+      }),
+      { width: 80, height: 8 },
+    );
+    await renderOnce();
+
+    const scrollbox = findScrollBox(renderer.root);
+    const groupBox = renderer.root.findDescendantById(
+      `session-list-group:${worktreeRoot}`,
+    );
+    if (scrollbox === null || groupBox === undefined) {
+      throw new Error("expected a rendered scrollbox and group heading");
+    }
+
+    // Group headings stay pinned to the panel's inner width — they must never
+    // widen the shared content box, or short Session rows would gain a
+    // horizontal scroll range that has nothing to reveal.
+    expect(groupBox.width).toBe(sessionListInnerWidth(panelWidth));
+    expect(groupBox.width).toBe(scrollbox.viewport.width);
+    expect(scrollbox.scrollWidth).toBe(scrollbox.viewport.width);
+    expect(captureCharFrame()).toContain("...");
+  });
+
+  test("lets a long Session row scroll even when a group heading is present", async () => {
+    const worktreeRoot = "/repo/a-very-long-worktree-root-that-overflows-badly";
+    const panelWidth = 36;
+    const left: LeftPaneView = {
+      title: "Sessions",
+      scopeLabel: "workspace",
+      filterLabel: "all",
+      rows: [
+        { kind: "group", worktreeRoot },
+        {
+          kind: "session",
+          sessionId: "s1",
+          name: "very-long-worker-name-that-would-overflow-the-left-panel",
+          depth: 0,
+          status: "running",
+          symbol: "●",
+          selected: true,
+          badge: 0,
+          isNew: false,
+          location: "/repo/bookmark-ai-extension-with-a-very-long-name",
+        },
+      ],
+    };
+    const { renderer, renderOnce } = await testRender(
+      createElement(SessionList, {
+        left,
+        maxVisibleRows: 5,
+        width: panelWidth,
+      }),
+      { width: 80, height: 8 },
+    );
+    await renderOnce();
+
+    const scrollbox = findScrollBox(renderer.root);
+    const groupBox = renderer.root.findDescendantById(
+      `session-list-group:${worktreeRoot}`,
+    );
+    if (scrollbox === null || groupBox === undefined) {
+      throw new Error("expected a rendered scrollbox and group heading");
+    }
+
+    // Constraining group headings must not cost Session rows their scroll range.
+    expect(scrollbox.scrollWidth).toBeGreaterThan(scrollbox.viewport.width);
+    expect(groupBox.width).toBe(sessionListInnerWidth(panelWidth));
   });
 
   test("maps mouse scroll direction to selection movement", () => {

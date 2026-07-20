@@ -1,0 +1,37 @@
+{
+  "runId": "287c9aed",
+  "agent": "scout",
+  "task": "Investigate only (do not edit) why `asem report parent` in /Users/takemo101/Desktop/workspace/experiment/radio can persist a report with both delivered_at and delivery_error NULL when target mux is herdr. Compare current source in /Users/takemo101/Desktop/workspace/asem and the live radio config/state. Identify exact control-flow cause with file/line evidence, or state uncertainty.\n\n---\n**Output:**\nWrite your findings to exactly this path: /Users/takemo101/Desktop/workspace/asem/.pi-subagents/artifacts/outputs/287c9aed/context.md\nThis path is authoritative for this run.\nIgnore any other output filename or output path mentioned elsewhere, including output destinations in the base agent prompt, system prompt, or task instructions.",
+  "exitCode": 1,
+  "usage": {
+    "input": 53897,
+    "output": 4998,
+    "cacheRead": 165888,
+    "cacheWrite": 0,
+    "cost": 0.25118450000000003,
+    "turns": 9
+  },
+  "model": "openai-codex/gpt-5.6-terra:low",
+  "attemptedModels": ["openai-codex/gpt-5.6-terra:low"],
+  "modelAttempts": [
+    {
+      "model": "openai-codex/gpt-5.6-terra:low",
+      "success": false,
+      "exitCode": 1,
+      "error": "Subagent timed out after 120000ms.",
+      "usage": {
+        "input": 53897,
+        "output": 4998,
+        "cacheRead": 165888,
+        "cacheWrite": 0,
+        "cost": 0.25118450000000003,
+        "turns": 9
+      }
+    }
+  ],
+  "durationMs": 120029,
+  "toolCount": 30,
+  "error": "Subagent timed out after 120000ms.",
+  "transcriptPath": "/Users/takemo101/Desktop/workspace/asem/.pi-subagents/artifacts/287c9aed_scout_0_transcript.jsonl",
+  "timestamp": 1784249903216
+}

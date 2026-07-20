@@ -1,27 +1,28 @@
-# Session-row horizontal scroll design
+# Session-row truncation design
 
 ## Goal
 
-Allow an operator to read the complete text of each Session row in the Cockpit's left `Sessions` panel by horizontal scrolling, without widening the panel or truncating the row label.
+Keep the Cockpit's left `Sessions` panel vertically scrollable while preventing horizontal scrolling. Long Session labels are ellipsized to the panel width so the visible tree indentation continues to show the parent-child relationship.
 
 ## Scope
 
-- Apply only to Session rows.
-- Keep workspace/worktree group headings at their current truncation behavior.
-- Preserve the existing fixed/proportional left-panel width and vertical row scrolling.
+- Disable horizontal scrolling for the entire Session-list viewport.
+- Truncate both Session rows and workspace/worktree group headings.
+- Preserve one-row height, `wrapMode="none"`, the fixed/proportional panel width, row background fill, and vertical selection scrolling.
 
 ## Design
 
-`SessionRowsScrollBox` will enable horizontal scrolling. Session-row text will no longer set OpenTUI's `truncate` property, so its intrinsic content width remains available to the scroll viewport. Group headings retain their current `truncate` setting.
+`SessionRowsScrollBox` uses only vertical scrolling and keeps its content constrained to the viewport width. Every row box and text element uses `width="100%"`; every row text element sets `truncate={true}`. OpenTUI's `TextRenderable` still handles left/right gestures even for truncated text, so each row places a transparent mouse-event overlay above its text and stops those gestures before they reach the text renderable. This keeps a long label from increasing the scroll content width, so neither the tree indent nor the group header moves horizontally.
 
-The row container remains one terminal row high with wrapping disabled. Thus long labels do not alter vertical layout, and the operator can scroll sideways to inspect the full Session name, badges, and location badge.
+The horizontal-scroll-specific `innerWidth` contract and panel-chrome width calculation are removed because no row needs a distinct numeric width.
 
 ## Testing
 
-Add a component-projection test that distinguishes the two row kinds:
+Replace rendered horizontal-overflow tests with a focused regression test that renders a long Session row and asserts:
 
-- a Session row renders without truncation;
-- a group heading remains truncated;
-- the Session-list scrollbox enables horizontal scrolling.
+- `scrollX` is false;
+- `scrollWidth` equals the viewport width;
+- the captured frame contains an ellipsis;
+- the row remains one line, clipped, and full panel width.
 
-Run the focused TUI test suite, then the repository's typecheck, test, and check commands.
+Retain the existing vertical-selection behavior tests. Run the focused TUI test, typecheck, full test suite, and repository check.

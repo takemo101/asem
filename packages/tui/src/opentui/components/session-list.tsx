@@ -21,23 +21,6 @@ export function sessionListWidthForTerminal(totalWidth: number): number {
   );
 }
 
-/**
- * Panel chrome the Session list spends before row content: the single border
- * (2), `paddingX` (2), and the vertical scrollbar column (1).
- *
- * The renderer releases that scrollbar column once a long Session row turns on
- * horizontal scrolling, so the viewport is one wider in that state. We
- * deliberately assume the narrower case: a group heading one column short of
- * the viewport leaves a blank column, whereas one column too wide would give
- * short Session rows a horizontal scroll range with nothing to reveal.
- */
-const SESSION_LIST_CHROME_WIDTH = 5;
-
-/** Inner content width of the Session-list panel, i.e. the scroll viewport. */
-export function sessionListInnerWidth(panelWidth: number): number {
-  return Math.max(1, panelWidth - SESSION_LIST_CHROME_WIDTH);
-}
-
 /** Compact location label (the worktree root's last path segment). */
 export function locationBadge(worktreeRoot: string): string {
   const segments = worktreeRoot.split("/").filter((s) => s.length > 0);
@@ -128,15 +111,18 @@ export function scrollDirectionToSelectionKey(
   }
 }
 
+function stopHorizontalScroll(event: MouseEvent): void {
+  if (
+    event.scroll?.direction === "left" ||
+    event.scroll?.direction === "right"
+  ) {
+    event.stopPropagation();
+  }
+}
+
 export function SessionRowsScrollBox(props: {
   rows: LeftRow[];
   bodyRows: number;
-  /**
-   * Scroll-viewport width, used to pin group headings to the panel. A
-   * percentage cannot do this: once a long Session row grows the shared content
-   * box, `100%` resolves against that grown width instead of the viewport.
-   */
-  innerWidth: number;
   scrollRef?: Ref<ScrollBoxRenderable>;
   onScrollSelection?: (event: KeyEvent) => void;
 }): ReactNode {
@@ -144,12 +130,12 @@ export function SessionRowsScrollBox(props: {
     <scrollbox
       ref={props.scrollRef}
       scrollY={true}
-      scrollX={true}
+      scrollX={false}
       height={props.bodyRows}
       flexGrow={1}
       minHeight={0}
       viewportOptions={{ backgroundColor: theme.panel }}
-      contentOptions={{ flexDirection: "column" }}
+      contentOptions={{ flexDirection: "column", width: "100%" }}
       onMouseScroll={(event) => {
         const key = scrollDirectionToSelectionKey(event.scroll?.direction);
         if (key !== null) {
@@ -167,21 +153,27 @@ export function SessionRowsScrollBox(props: {
             backgroundColor={rowBackground(row, index)}
             height={1}
             overflow="hidden"
-            // Group headings stay at the viewport width so they truncate and
-            // add no scroll range; Session rows may grow past it.
-            {...(row.kind === "group"
-              ? { width: props.innerWidth }
-              : { minWidth: "100%" as const })}
+            width="100%"
+            onMouseScroll={stopHorizontalScroll}
           >
             <text
               fg={rowColor(row)}
               height={1}
-              truncate={row.kind === "group"}
+              truncate={true}
               width="100%"
               wrapMode="none"
             >
               {rowText(row)}
             </text>
+            <box
+              position="absolute"
+              top={0}
+              left={0}
+              height={1}
+              width="100%"
+              zIndex={1}
+              onMouseScroll={stopHorizontalScroll}
+            />
           </box>
         );
       })}
@@ -238,7 +230,6 @@ export function SessionList(props: {
         <SessionRowsScrollBox
           rows={left.rows}
           bodyRows={bodyRows}
-          innerWidth={sessionListInnerWidth(props.width)}
           scrollRef={scrollboxRef}
           onScrollSelection={props.onScrollSelection}
         />
